@@ -1,0 +1,46 @@
+[project]
+name = "detectforge"
+version = "0.1.0"
+description = "Measure and raise the evasion resistance of Sigma detection rules, with human approval."
+readme = "README.md"
+authors = [
+    { name = "Marwa Deeb", email = "marwadeeb.md4@gmail.com" },
+    { name = "Laure Mohsen" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.14.1,<3",
+    "pydantic-settings>=2.16.1,<3",
+    # The harness walks pySigma's parsed condition tree, so pin the major version.
+    "pysigma>=1.5.1,<2",
+    "pysigma-backend-elasticsearch>=2.1.1,<3",
+]
+
+[project.scripts]
+detectforge = "detectforge.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.22,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["detectforge"]
+known-local-folder = ["conftest"]

@@ -1,0 +1,24 @@
+title: Scheduled Task Creation via Schtasks (fixture, behavior-based)
+id: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c02
+status: experimental
+description: >
+  Fixture rule keyed on the binary and the create verb rather than exact argument spelling.
+  For harness tests only.
+author: DetectForge fixtures
+date: 2026-10-23
+tags:
+  - attack.persistence
+  - attack.t1053.005
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: '\schtasks.exe'
+    - OriginalFileName: 'schtasks.exe'
+  selection_cli:
+    CommandLine|contains: 'create'
+  condition: all of selection_*
+falsepositives:
+  - Software installers that register update tasks
+level: medium

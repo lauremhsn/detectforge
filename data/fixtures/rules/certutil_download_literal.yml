@@ -1,0 +1,26 @@
+title: File Download via Certutil (fixture, literal)
+id: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c03
+status: experimental
+description: >
+  Fixture rule written in the style of community rules. Requires the literal " -urlcache "
+  argument and an http URL. For harness tests only.
+author: DetectForge fixtures
+date: 2026-10-23
+tags:
+  - attack.command-and-control
+  - attack.t1105
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: '\certutil.exe'
+    - OriginalFileName: 'CertUtil.exe'
+  selection_cli:
+    CommandLine|contains|all:
+      - ' -urlcache '
+      - 'http://'
+  condition: all of selection_*
+falsepositives:
+  - Administrators fetching certificates over HTTP
+level: high
