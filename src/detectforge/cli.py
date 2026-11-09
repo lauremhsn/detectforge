@@ -1,4 +1,4 @@
-"""Command line: `detectforge {validate,convert,harness,sigmahq} ...`. Prints JSON to stdout."""
+"""Command line: `detectforge {validate,convert,harness,compare,sigmahq} ...`. Prints JSON to stdout."""
 
 import argparse
 import json
@@ -8,6 +8,7 @@ from pathlib import Path
 from detectforge.config import get_settings
 from detectforge.events import load_events
 from detectforge.harness import run
+from detectforge.harness.compare import compare
 from detectforge.reference import sigmahq
 from detectforge.reference.index import MAX_LIMIT, ReferenceIndex
 from detectforge.rules.convert import TARGETS, convert_rule
@@ -32,6 +33,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("rule", type=Path)
     p.add_argument("events", type=Path)
     p.set_defaults(handler=_harness)
+
+    p = sub.add_parser("compare", help="before/after report for two versions of a rule on the same events")
+    p.add_argument("before", type=Path)
+    p.add_argument("after", type=Path)
+    p.add_argument("events", type=Path)
+    p.add_argument("--split", choices=["tune", "heldout"], help="only score events from this split")
+    p.add_argument("--technique", help="only score events for this technique")
+    p.set_defaults(handler=_compare)
 
     sigma_sub = sub.add_parser("sigmahq", help="SigmaHQ reference rules").add_subparsers(
         dest="sigmahq_command", required=True
@@ -71,6 +80,18 @@ def _harness(args: argparse.Namespace) -> int:
     scorecard = run(args.rule.read_text(encoding="utf-8"), load_events(args.events))
     print(scorecard.model_dump_json(indent=2))
     return 0 if scorecard.valid else 1
+
+
+def _compare(args: argparse.Namespace) -> int:
+    events = [
+        e
+        for e in load_events(args.events)
+        if (args.split is None or e.split == args.split)
+        and (args.technique is None or e.technique == args.technique)
+    ]
+    report = compare(args.before.read_text(encoding="utf-8"), args.after.read_text(encoding="utf-8"), events)
+    print(report.model_dump_json(indent=2))
+    return 0 if report.valid else 1
 
 
 def _sigmahq_dir() -> Path:
