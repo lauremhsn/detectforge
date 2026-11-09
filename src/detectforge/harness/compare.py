@@ -56,8 +56,8 @@ def compare(before_yaml: str, after_yaml: str, events: list[Event]) -> Hardening
         return [e.event_id for e in events if e.label == label and e.event_id in b - a]
 
     mutated_attacks = sum(e.label == "attack" and e.transform != "none" for e in events)
-    resistance_before = _mutation_resistance(before, mutated_attacks) if valid else None
-    resistance_after = _mutation_resistance(after, mutated_attacks) if valid else None
+    resistance_before = evasion_resistance(before) if valid else None
+    resistance_after = evasion_resistance(after) if valid else None
 
     return HardeningReport(
         valid=valid,
@@ -81,10 +81,13 @@ def compare(before_yaml: str, after_yaml: str, events: list[Event]) -> Hardening
     )
 
 
-def _mutation_resistance(card: Scorecard, mutated_attacks: int) -> float | None:
-    if not mutated_attacks:
+def evasion_resistance(card: Scorecard) -> float | None:
+    """Fraction of mutated attack events the rule still detects; None if invalid or no mutations."""
+    if not card.valid:
         return None
-    return sum(card.per_transform[t].hits for t in TRANSFORMS if t != "none") / mutated_attacks
+    mutated = [card.per_transform[t] for t in TRANSFORMS if t != "none"]
+    attacks = sum(b.attacks for b in mutated)
+    return sum(b.hits for b in mutated) / attacks if attacks else None
 
 
 def _transform_delta(
