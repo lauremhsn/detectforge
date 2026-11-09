@@ -28,6 +28,9 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.2",
 ]
+ui = [
+    "streamlit>=1.40",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

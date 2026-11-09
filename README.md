@@ -55,6 +55,16 @@ card = run(open("rule.yml").read(), load_events("events.jsonl"))
 print(card.hits, card.misses, card.false_alarms, card.per_transform["insertion"])
 ```
 
+## UI
+
+A minimal local UI over the same library functions (find → validate → harden, before/after):
+
+```bash
+uv run --group ui python -m streamlit run src/detectforge/ui/app.py
+```
+
+It opens at http://localhost:8501 and is bound to localhost only.
+
 ## Layout
 
 ```
@@ -65,10 +75,12 @@ src/detectforge/
   rules/            parse (scope + size limits), validate (pySigma), convert (Elastic backends)
   harness/          matcher (Sigma semantics over events), run() -> Scorecard
   reference/        SigmaHQ release fetch + index, search_reference_rules backend
+  ui/               Streamlit UI (optional `ui` dependency group)
   cli.py
 data/fixtures/      synthetic events and fixture rules (see its README)
 docs/interfaces.md  interface contract and open questions
 tests/
 ```
 
-See [docs/interfaces.md](docs/interfaces.md) for the event format, harness contract, and matching semantics.
+See [docs/code-walkthrough.md](docs/code-walkthrough.md) for a guided tour of the code and
+[docs/interfaces.md](docs/interfaces.md) for the event format, harness contract, and matching semantics.
