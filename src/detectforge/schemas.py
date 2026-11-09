@@ -1,6 +1,7 @@
-"""Frozen cross-team interfaces (CLAUDE.md section 7, docs/interfaces.md).
+"""Shared interfaces between the pipeline components (documented in docs/interfaces.md).
 
-Any change here needs agreement from both Marwa and Laure.
+Changes here affect every component that reads events, scorecards or rule records; agree them as
+a team before changing.
 """
 
 from typing import Literal, Self, get_args

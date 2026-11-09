@@ -1,5 +1,6 @@
 """Smoke tests: the UI renders and its numbers match the library on the fixture rules."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,13 @@ def app(monkeypatch):
 def test_renders_without_errors(app):
     assert not app.exception
     assert [t.label for t in app.tabs] == ["1 · Find", "2 · Validate", "3 · Harden"]
+
+
+def test_pipeline_status_shows_done_or_pending_only(app):
+    sidebar = [m.value for m in app.sidebar.markdown]
+    assert any("✅" in s for s in sidebar) and any(s.endswith("— pending") for s in sidebar)
+    page_text = " ".join(e.value for e in [*app.markdown, *app.caption, *app.sidebar.markdown])
+    assert not re.search(r"\bW\d\b|\bweek\b", page_text, re.IGNORECASE)
 
 
 def test_fixture_rule_flows_to_validate_and_harden(app):

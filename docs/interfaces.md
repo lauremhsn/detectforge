@@ -1,7 +1,7 @@
-# Interfaces (week 1 freeze)
+# Interfaces
 
 Source of truth: [`src/detectforge/schemas.py`](../src/detectforge/schemas.py). Any change needs
-agreement from both Marwa and Laure. Status: **draft, waiting on Laure's sign-off.**
+team agreement. Status: **draft, pending team sign-off.**
 
 ## Event
 
@@ -76,11 +76,12 @@ metrics module, not the harness).
 `rule_yaml`, `source` (`community`|`adapted`|`written`), `technique`, `trace_id`, `version` (≥ 1),
 `status` (`proposed`|`approved`|`rejected`, default `proposed`).
 
-## Open questions for Laure
+## Open questions
 
 1. **Base IDs**: OK with unmutated events having `base_id == event_id` (rather than null)?
-2. **Extra Sysmon fields (added as optional, please confirm)**: `original_file_name` and
-   `parent_command_line` are now optional event fields. Can you capture them from Sysmon for every event?
+2. **Extra Sysmon fields (added as optional, pending confirmation)**: `original_file_name` and
+   `parent_command_line` are now optional event fields. Can the attack-data pipeline capture them from
+   Sysmon for every event?
    Measured on SigmaHQ r2026-07-01: before, 717 of 1,297 Windows process-creation rules used a field we
    lacked (`OriginalFileName` in 559, `ParentCommandLine` in 75). With the two fields: 175 still use a
    missing field; 117 of those are harmless, 58 can never fire (mostly `IntegrityLevel`, `User`).

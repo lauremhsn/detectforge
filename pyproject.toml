@@ -5,7 +5,6 @@ description = "Measure and raise the evasion resistance of Sigma detection rules
 readme = "README.md"
 authors = [
     { name = "Marwa Deeb", email = "marwadeeb.md4@gmail.com" },
-    { name = "Laure Mohsen" },
 ]
 requires-python = ">=3.12"
 dependencies = [

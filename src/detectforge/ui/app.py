@@ -29,15 +29,15 @@ from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
 
 PIPELINE = [
-    ("Find existing rules", "done", "SigmaHQ search"),
-    ("Adversarially validate", "done", "harness scorecard"),
-    ("Harden", "manual", "edit by hand; agent loop lands W4"),
-    ("Re-validate (before/after)", "done", "compare"),
-    ("Write new rule (fallback)", "todo", "W6"),
-    ("Approve", "todo", "review UI v1, W5"),
-    ("Tune false alarms", "todo", "Laure's FP tuning module"),
+    ("Find existing rules", True),
+    ("Adversarially validate", True),
+    ("Harden by hand", True),
+    ("Harden with the agent", False),
+    ("Re-validate (before/after)", True),
+    ("Write new rule (fallback)", False),
+    ("Approve", False),
+    ("Tune false alarms", False),
 ]
-STATUS_ICON = {"done": "✅", "manual": "🟡", "todo": "⏳"}
 
 
 @st.cache_resource(show_spinner="Downloading and indexing SigmaHQ (first launch only, ~20 s)…")
@@ -115,8 +115,8 @@ def sidebar() -> list[Event]:
     st.sidebar.caption(f"{len(filtered)} events in scope: {attacks} attack, {len(filtered) - attacks} benign")
 
     st.sidebar.subheader("Pipeline")
-    for step, status, note in PIPELINE:
-        st.sidebar.markdown(f"{STATUS_ICON[status]} **{step}** — {note}")
+    for step, done in PIPELINE:
+        st.sidebar.markdown(f"✅ **{step}**" if done else f"⏳ **{step}** — pending")
     return filtered
 
 
@@ -145,7 +145,7 @@ def find_tab(index: ReferenceIndex | str) -> None:
             st.error(str(e))
             hits = []
         if not any(h.rule.usable for h in hits):
-            st.warning("No usable rule found — this is where the write-new-rule fallback would start.")
+            st.warning("No usable rule found — the write-new-rule fallback (pending) would start here.")
         if hits:
             table(
                 [
@@ -272,7 +272,7 @@ def harden_tab(events: list[Event]) -> None:
     if not before:
         st.info("Pick a rule in the Find tab first.")
         return
-    st.caption("Manual for now: edit the rule on the right. In W4 the agent fills this editor.")
+    st.caption("Edit the candidate on the right; every edit is re-validated on the same events.")
     left, right = st.columns(2)
     left.markdown("**Before (as-is)**")
     left.code(before, language="yaml")
