@@ -27,7 +27,18 @@ uv run detectforge harness data/fixtures/rules/schtasks_create_literal.yml data/
 
 # Convert to an Elastic query (lucene or eql)
 uv run detectforge convert data/fixtures/rules/certutil_download_literal.yml --target lucene
+
+# Download the pinned SigmaHQ release (r2026-07-01, checksum-verified) and index its
+# Windows process-creation rules into data/sigmahq/ (not committed)
+uv run detectforge sigmahq fetch
+
+# Search reference rules by ATT&CK technique and/or text; --exclude-technique drops the
+# whole technique family plus untagged rules (used for the "written" arm)
+uv run detectforge sigmahq search --technique T1053.005 --query "schtasks create"
 ```
+
+Each indexed rule records whether the harness can evaluate it and which of its fields are missing
+from the event schema (`unmapped_fields`).
 
 From Python:
 
@@ -48,6 +59,7 @@ src/detectforge/
   config.py         settings from env / .env
   rules/            parse (scope + size limits), validate (pySigma), convert (Elastic backends)
   harness/          matcher (Sigma semantics over events), run() -> Scorecard
+  reference/        SigmaHQ release fetch + index, search_reference_rules backend
   cli.py
 data/fixtures/      synthetic events and fixture rules (see its README)
 docs/interfaces.md  interface contract and open questions

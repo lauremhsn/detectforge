@@ -75,6 +75,8 @@ metrics module, not the harness).
    `ParentCommandLine`, `User`, `IntegrityLevel`, `CurrentDirectory`. Today the harness treats them as absent, which
    can make community rules look weaker than they are in a real SIEM. Should we add `original_file_name`
    and `parent_command_line` to the event now, while it is cheap?
+   Measured on SigmaHQ r2026-07-01: 717 of 1,297 Windows process-creation rules use at least one
+   unmapped field; `OriginalFileName` appears in 559, `ParentCommandLine` in 75.
 3. **Behavior verification**: should events carry a flag recording whether the mutation was confirmed in the VM?
 4. **Binary renaming** (optional extension): it changes `image`, not just `command_line`. Use a separate
    transform value (e.g. `renaming`), reported separately from the five Uetz types?
