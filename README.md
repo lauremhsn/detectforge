@@ -25,6 +25,11 @@ uv run detectforge validate data/fixtures/rules/schtasks_create_literal.yml
 # Score a rule against labeled events (prints a Scorecard as JSON)
 uv run detectforge harness data/fixtures/rules/schtasks_create_literal.yml data/fixtures/events.jsonl
 
+# Before/after report for two versions of the same rule (evasion resistance per transform,
+# newly detected / lost attacks, false-alarm changes); optional --split / --technique filters
+uv run detectforge compare data/fixtures/rules/schtasks_create_literal.yml \
+  data/fixtures/rules/schtasks_create_robust.yml data/fixtures/events.jsonl --technique T1053.005
+
 # Convert to an Elastic query (lucene or eql)
 uv run detectforge convert data/fixtures/rules/certutil_download_literal.yml --target lucene
 
