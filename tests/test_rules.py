@@ -24,10 +24,16 @@ def test_validate_reports_parse_errors():
     assert not result.valid and result.errors
 
 
-def test_validate_warns_on_fields_outside_event_schema():
-    result = validate_rule(make_rule("  sel:\n    User: 'SYSTEM'\n  condition: sel"))
+def test_validate_warns_when_missing_field_is_harmless():
+    result = validate_rule(make_rule("  sel:\n    - Image: x\n    - User: 'SYSTEM'\n  condition: sel"))
     assert result.valid
-    assert any("'User'" in w for w in result.warnings)
+    assert any("'User'" in w and "harmless" in w for w in result.warnings)
+
+
+def test_validate_rejects_rule_that_can_never_fire():
+    result = validate_rule(make_rule("  sel:\n    User: 'SYSTEM'\n  condition: sel"))
+    assert not result.valid
+    assert any("can never fire" in e and "'User'" in e for e in result.errors)
 
 
 def test_validate_surfaces_pysigma_validator_issues():

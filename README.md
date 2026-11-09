@@ -60,10 +60,21 @@ print(card.hits, card.misses, card.false_alarms, card.per_transform["insertion"]
 A minimal local UI over the same library functions (find → validate → harden, before/after):
 
 ```bash
-uv run --group ui python -m streamlit run src/detectforge/ui/app.py
+uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 ```
 
-It opens at http://localhost:8501 and is bound to localhost only.
+It opens at http://localhost:8501, bound to localhost only. On first launch without an index it
+downloads and indexes the pinned SigmaHQ release (~20 s).
+
+### Deploy (Streamlit Community Cloud, free)
+
+1. Sign in at https://share.streamlit.io with GitHub (you need admin rights on the repo, e.g. your fork).
+2. Create app → repository, branch, main file path `src/detectforge/ui/app.py`; Python 3.12 under
+   Advanced settings.
+3. Cloud installs `src/detectforge/ui/requirements.txt` (keep it in sync with `pyproject.toml`; a test
+   checks this) and runs from the repo root, so `data/fixtures/` is found.
+
+The app holds no secrets and only shows public SigmaHQ rules and synthetic fixture events.
 
 ## Layout
 

@@ -28,3 +28,6 @@ Thumbs.db
 
 CLAUDE.md
 .claude/
+
+# Planning spreadsheets are shared directly, not versioned
+*.xlsx

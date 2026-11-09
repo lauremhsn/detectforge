@@ -13,8 +13,14 @@ from pathlib import Path
 
 import yaml
 
-from detectforge.harness.matcher import compile_rule, rule_fields
-from detectforge.reference.index import INDEX_FILE, META_FILE, ReferenceRule, techniques_from_tags
+from detectforge.harness.matcher import can_fire, compile_rule, rule_fields
+from detectforge.reference.index import (
+    INDEX_FILE,
+    INDEX_FORMAT,
+    META_FILE,
+    ReferenceRule,
+    techniques_from_tags,
+)
 from detectforge.rules.parse import SCOPE_CATEGORY, SCOPE_PRODUCT, RuleError, load_rule
 from detectforge.schemas import SIGMA_FIELD_MAP
 
@@ -45,6 +51,16 @@ def download_release(dest: Path, url: str = RELEASE_URL, timeout_s: float = 60.0
     return dest
 
 
+def fetch_and_build(out_dir: Path, zip_path: Path | None = None) -> dict:
+    """Download the pinned release if needed (or use zip_path), verify it, and build the index."""
+    if zip_path is None:
+        zip_path = out_dir / RELEASE_ASSET
+        if not zip_path.exists():
+            download_release(zip_path)
+    verify_sha256(zip_path.read_bytes(), RELEASE_SHA256)
+    return build_index(zip_path, out_dir)
+
+
 def verify_sha256(data: bytes, expected: str) -> None:
     actual = hashlib.sha256(data).hexdigest()
     if actual != expected:
@@ -73,9 +89,12 @@ def build_index(zip_path: Path, out_dir: Path, release: str = RELEASE_TAG) -> di
         for rule in rules:
             f.write(rule.model_dump_json() + "\n")
     meta = {
+        "format": INDEX_FORMAT,
         "release": release,
         "rules_indexed": len(rules),
         "evaluable": sum(r.evaluable for r in rules),
+        "usable": sum(r.usable for r in rules),
+        "uses_missing_fields": sum(bool(r.unmapped_fields) for r in rules),
         "skipped": dict(sorted(skipped.items())),
     }
     (out_dir / META_FILE).write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
@@ -100,10 +119,11 @@ def _index_rule(path: str, text: str) -> tuple[ReferenceRule | None, str | None]
     except RuleError:
         return None, "invalid_sigma"
 
-    harness_error = None
+    harness_error, fires = None, False
     try:
         compile_rule(sigma_rule)
         fields = rule_fields(sigma_rule)
+        fires = can_fire(sigma_rule)
     except RuleError as e:
         harness_error, fields = str(e), set()
 
@@ -120,6 +140,7 @@ def _index_rule(path: str, text: str) -> tuple[ReferenceRule | None, str | None]
             fields=sorted(fields),
             unmapped_fields=sorted(fields - SIGMA_FIELD_MAP.keys()),
             evaluable=harness_error is None,
+            can_fire=fires,
             harness_error=harness_error,
             detection_text=yaml.safe_dump(doc.get("detection"), sort_keys=False),
             rule_yaml=text,

@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="DETECTFORGE_", extra="ignore")
 
     data_dir: Path = Path("data")
+    # UI: build the SigmaHQ index on first launch if missing (needed on a fresh cloud deploy).
+    ui_auto_fetch_index: bool = True
 
     # LLM (agent loop, week 2). The API key uses the provider's standard variable name.
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

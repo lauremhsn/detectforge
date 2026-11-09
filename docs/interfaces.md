@@ -13,6 +13,8 @@ One JSON object per line (JSONL, UTF-8). Unknown keys are rejected.
 | `image` | string | Sysmon `Image` (full path). |
 | `command_line` | string | Sysmon `CommandLine`. |
 | `parent_image` | string | Sysmon `ParentImage`. |
+| `original_file_name` | string, optional | Sysmon `OriginalFileName` (name compiled into the binary; survives renaming). Omit or `null` if not captured. |
+| `parent_command_line` | string, optional | Sysmon `ParentCommandLine`. Omit or `null` if not captured. |
 | `label` | `attack` \| `benign` | |
 | `technique` | `T####` or `T####.###` | For benign events: the technique the event resembles. |
 | `transform` | `none` \| `insertion` \| `substitution` \| `omission` \| `reordering` \| `recoding` | Uetz et al. taxonomy. |
@@ -20,8 +22,14 @@ One JSON object per line (JSONL, UTF-8). Unknown keys are rejected.
 | `split` | `tune` \| `heldout` | |
 
 Sigma field mapping used by the harness: `Image → image`, `CommandLine → command_line`,
-`ParentImage → parent_image`. Every other Sigma field (e.g. `OriginalFileName`, `User`) is treated as
-absent: it never matches a value, matches `null`, and matches `|exists: false`.
+`ParentImage → parent_image`, `OriginalFileName → original_file_name`,
+`ParentCommandLine → parent_command_line`. A field that is `null`/omitted, and every other Sigma field
+(e.g. `User`, `IntegrityLevel`), is treated as absent: it never matches a value, matches `null`, and
+matches `|exists: false`.
+
+`validate_rule` tells the two cases apart: if the rule can still match through other fields, a missing
+field is a warning ("harmless"); if the rule depends on it (AND, or alone), it is an error ("can never
+fire") and the rule is not a usable candidate for hardening.
 
 ## Harness
 
@@ -71,12 +79,11 @@ metrics module, not the harness).
 ## Open questions for Laure
 
 1. **Base IDs**: OK with unmutated events having `base_id == event_id` (rather than null)?
-2. **Extra Sysmon fields**: many SigmaHQ process-creation rules also use `OriginalFileName`,
-   `ParentCommandLine`, `User`, `IntegrityLevel`, `CurrentDirectory`. Today the harness treats them as absent, which
-   can make community rules look weaker than they are in a real SIEM. Should we add `original_file_name`
-   and `parent_command_line` to the event now, while it is cheap?
-   Measured on SigmaHQ r2026-07-01: 717 of 1,297 Windows process-creation rules use at least one
-   unmapped field; `OriginalFileName` appears in 559, `ParentCommandLine` in 75.
+2. **Extra Sysmon fields (added as optional, please confirm)**: `original_file_name` and
+   `parent_command_line` are now optional event fields. Can you capture them from Sysmon for every event?
+   Measured on SigmaHQ r2026-07-01: before, 717 of 1,297 Windows process-creation rules used a field we
+   lacked (`OriginalFileName` in 559, `ParentCommandLine` in 75). With the two fields: 175 still use a
+   missing field; 117 of those are harmless, 58 can never fire (mostly `IntegrityLevel`, `User`).
 3. **Behavior verification**: should events carry a flag recording whether the mutation was confirmed in the VM?
 4. **Binary renaming** (optional extension): it changes `image`, not just `command_line`. Use a separate
    transform value (e.g. `renaming`), reported separately from the five Uetz types?

@@ -80,6 +80,38 @@ def rule_fields(rule: SigmaRule) -> set[str]:
     return fields
 
 
+def can_fire(rule: SigmaRule) -> bool:
+    """False if the rule can never match any event because it depends on fields events lack.
+
+    Every check on a field missing from the event schema has a fixed outcome (the field is
+    absent); every other check is treated as "could go either way". The verdict "can never
+    fire" is therefore always correct; "can fire" may be optimistic for rules whose checks on
+    known fields contradict each other.
+    """
+    try:
+        return any(_possible(c.parsed)[0] for c in rule.detection.parsed_condition)
+    except SigmaError as e:
+        raise RuleError(f"invalid condition: {e}") from e
+
+
+def _possible(node: object) -> tuple[bool, bool]:
+    """(can be true, can be false) for a condition node, given which fields events have."""
+    match node:
+        case ConditionAND(args=args):
+            parts = [_possible(a) for a in args]
+            return all(t for t, _ in parts), any(f for _, f in parts)
+        case ConditionOR(args=args):
+            parts = [_possible(a) for a in args]
+            return any(t for t, _ in parts), all(f for _, f in parts)
+        case ConditionNOT(args=[arg]):
+            t, f = _possible(arg)
+            return f, t
+        case ConditionFieldEqualsValueExpression(field=field, value=value) if field not in SIGMA_FIELD_MAP:
+            fixed = _compile_value(value)(None)
+            return fixed, not fixed
+    return True, True
+
+
 def _field_value(event: Event, field: str) -> str | None:
     attr = SIGMA_FIELD_MAP.get(field)
     return getattr(event, attr) if attr else None

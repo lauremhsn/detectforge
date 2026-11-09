@@ -99,18 +99,12 @@ def _sigmahq_dir() -> Path:
 
 
 def _sigmahq_fetch(args: argparse.Namespace) -> int:
-    out_dir = _sigmahq_dir()
-    zip_path = args.zip
-    if zip_path is None:
-        zip_path = out_dir / sigmahq.RELEASE_ASSET
-        if not zip_path.exists():
-            sigmahq.download_release(zip_path)
     try:
-        sigmahq.verify_sha256(zip_path.read_bytes(), sigmahq.RELEASE_SHA256)
+        meta = sigmahq.fetch_and_build(_sigmahq_dir(), args.zip)
     except sigmahq.ReleaseIntegrityError as e:
-        print(f"error: {zip_path}: {e}", file=sys.stderr)
+        print(f"error: {e}", file=sys.stderr)
         return 1
-    print(json.dumps(sigmahq.build_index(zip_path, out_dir), indent=2))
+    print(json.dumps(meta, indent=2))
     return 0
 
 
