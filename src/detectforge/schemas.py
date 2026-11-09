@@ -1,6 +1,7 @@
-"""Frozen cross-team interfaces (CLAUDE.md section 7, docs/interfaces.md).
+"""Shared interfaces between the pipeline components (documented in docs/interfaces.md).
 
-Any change here needs agreement from both Marwa and Laure.
+Changes here affect every component that reads events, scorecards or rule records; agree them as
+a team before changing.
 """
 
 from typing import Literal, Self, get_args
@@ -21,6 +22,8 @@ SIGMA_FIELD_MAP: dict[str, str] = {
     "Image": "image",
     "CommandLine": "command_line",
     "ParentImage": "parent_image",
+    "OriginalFileName": "original_file_name",
+    "ParentCommandLine": "parent_command_line",
 }
 
 
@@ -33,6 +36,9 @@ class Event(BaseModel):
     image: str
     command_line: str
     parent_image: str
+    # Optional: older event files without them stay valid; None means "not captured".
+    original_file_name: str | None = None
+    parent_command_line: str | None = None
     label: Label
     technique: str = Field(pattern=TECHNIQUE_PATTERN)
     transform: Transform

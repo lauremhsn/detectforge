@@ -2,7 +2,7 @@
 
 import pytest
 
-from detectforge.harness.matcher import compile_rule
+from detectforge.harness.matcher import can_fire, compile_rule
 from detectforge.rules.parse import RuleError, load_rule
 
 from conftest import make_event, make_rule
@@ -93,11 +93,41 @@ def test_list_of_maps_is_or_and_map_is_and():
     assert not fires(detection, command_line="dir")
 
 
-def test_unknown_field_is_absent():
-    assert not fires("  sel:\n    OriginalFileName: 'cmd.exe'\n  condition: sel")
-    assert fires("  sel:\n    OriginalFileName: null\n  condition: sel")
-    assert fires("  sel:\n    OriginalFileName|exists: false\n  condition: sel")
+def test_field_outside_schema_is_absent():
+    assert not fires("  sel:\n    User: 'SYSTEM'\n  condition: sel")
+    assert fires("  sel:\n    User: null\n  condition: sel")
+    assert fires("  sel:\n    User|exists: false\n  condition: sel")
     assert fires("  sel:\n    Image|exists: true\n  condition: sel")
+
+
+def test_optional_sysmon_fields_match_when_captured():
+    detection = "  sel:\n    OriginalFileName: 'schtasks.exe'\n  condition: sel"
+    assert fires(detection, original_file_name="schtasks.exe")
+    assert not fires(detection)  # not captured -> absent
+    assert fires(
+        "  sel:\n    ParentCommandLine|contains: 'winword'\n  condition: sel",
+        parent_command_line='"C:\\Program Files\\Office\\WINWORD.EXE" /n',
+    )
+
+
+@pytest.mark.parametrize(
+    ("detection", "expected"),
+    [
+        # Missing field only as an alternative (OR): still fires through Image.
+        ("  sel:\n    - Image|endswith: '\\x.exe'\n    - User: 'SYSTEM'\n  condition: sel", True),
+        # Missing field required (AND, or alone): can never fire.
+        ("  sel:\n    Image|endswith: '\\x.exe'\n    User: 'SYSTEM'\n  condition: sel", False),
+        ("  sel:\n    User: 'SYSTEM'\n  condition: sel", False),
+        # In a filter: "not <always false>" is always true, so the rule still fires.
+        ("  sel:\n    Image: x\n  filter:\n    User: 'SYSTEM'\n  condition: sel and not filter", True),
+        # Checking that the absent field is null is always true.
+        ("  sel:\n    User: null\n  condition: sel", True),
+        ("  sel:\n    Image: x\n  condition: sel", True),
+    ],
+    ids=["or-branch", "and-required", "alone", "in-filter", "null-check", "no-missing-field"],
+)
+def test_can_fire(detection, expected):
+    assert can_fire(load_rule(make_rule(detection))) is expected
 
 
 def test_invalid_regex_is_rule_error():

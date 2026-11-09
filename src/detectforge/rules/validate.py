@@ -4,7 +4,7 @@ from sigma.validation import SigmaValidator
 from sigma.validators.base import SigmaValidationIssue, SigmaValidationIssueSeverity
 from sigma.validators.core import validators as core_validators
 
-from detectforge.harness.matcher import compile_rule, rule_fields
+from detectforge.harness.matcher import can_fire, compile_rule, rule_fields
 from detectforge.rules.parse import RuleError, load_rule
 from detectforge.schemas import SIGMA_FIELD_MAP, ValidationResult
 
@@ -26,7 +26,8 @@ def validate_rule(rule_yaml: str) -> ValidationResult:
     try:
         rule = load_rule(rule_yaml)
         compile_rule(rule)
-        fields = rule_fields(rule)
+        missing = sorted(rule_fields(rule) - SIGMA_FIELD_MAP.keys())
+        fires = can_fire(rule)
     except RuleError as e:
         return ValidationResult(valid=False, errors=[str(e)])
 
@@ -34,10 +35,18 @@ def validate_rule(rule_yaml: str) -> ValidationResult:
     issues = validator.validate_rule(rule) + validator.finalize()
     errors = [_describe(i) for i in issues if i.severity == SigmaValidationIssueSeverity.HIGH]
     warnings = [_describe(i) for i in issues if i.severity != SigmaValidationIssueSeverity.HIGH]
-    warnings += [
-        f"field '{f}' is not in the event schema ({', '.join(SIGMA_FIELD_MAP)}); it never matches a value"
-        for f in sorted(fields - SIGMA_FIELD_MAP.keys())
-    ]
+    if missing:
+        names = ", ".join(f"'{f}'" for f in missing)
+        if fires:
+            warnings.append(
+                f"fields {names} are not in the event schema and never match; harmless here, the rule "
+                "can still match through other fields, but it loses whatever those checks detect"
+            )
+        else:
+            errors.append(
+                f"rule can never fire on our events: it depends on fields {names}, which are not in "
+                f"the event schema ({', '.join(SIGMA_FIELD_MAP)})"
+            )
     return ValidationResult(valid=not errors, errors=errors, warnings=warnings)
 
 

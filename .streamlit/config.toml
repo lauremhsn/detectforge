@@ -1,6 +1,6 @@
-# Local-only: bind to this machine, no telemetry.
+# No usage telemetry. Locally, bind to localhost with --server.address localhost (see README);
+# that is not set here because Streamlit Community Cloud needs its own server settings.
 [server]
-address = "localhost"
 headless = true
 
 [browser]

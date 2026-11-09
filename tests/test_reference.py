@@ -40,7 +40,7 @@ RULES = {
         "00000000-0000-4000-8000-000000000002",
         "Scheduled Task Generic",
         ["attack.t1053"],
-        "  sel:\n    OriginalFileName: 'schtasks.exe'\n  condition: sel",
+        "  sel:\n    User: 'SYSTEM'\n  condition: sel",
     ),
     "rules-emerging-threats/2024/Malware/apt_tasks.yml": rule_doc(
         "00000000-0000-4000-8000-000000000003",
@@ -107,16 +107,21 @@ def ids(hits):
 def test_build_index_filters_scope_and_reports_skips(release_zip, tmp_path):
     meta = build_index(release_zip, tmp_path / "idx", release="test-release")
     assert meta == {
+        "format": 2,
         "release": "test-release",
         "rules_indexed": 6,
         "evaluable": 5,
+        "usable": 4,
+        "uses_missing_fields": 1,
         "skipped": {"excluded_status": 1, "invalid_sigma": 1, "invalid_yaml": 1},
     }
 
 
 def test_index_records_harness_compatibility(index):
     by_id = {r.id[-1]: r for r in index.rules}
-    assert by_id["2"].unmapped_fields == ["OriginalFileName"]
+    assert by_id["2"].unmapped_fields == ["User"]
+    assert not by_id["2"].can_fire and not by_id["2"].usable  # depends only on a missing field
+    assert by_id["1"].usable
     assert not by_id["6"].evaluable and "unsupported" in by_id["6"].harness_error
     assert by_id["1"].techniques == ["T1053.005"]
     assert "schtasks" in by_id["1"].rule_yaml
@@ -167,6 +172,13 @@ def test_verify_sha256_rejects_tampered_release():
 
 def test_missing_index_has_actionable_error(tmp_path):
     with pytest.raises(FileNotFoundError, match="sigmahq fetch"):
+        ReferenceIndex.load(tmp_path)
+
+
+def test_old_index_format_must_be_rebuilt(release_zip, tmp_path):
+    build_index(release_zip, tmp_path, release="test-release")
+    (tmp_path / "meta.json").write_text(json.dumps({"release": "test-release"}), encoding="utf-8")
+    with pytest.raises(FileNotFoundError, match="old format"):
         ReferenceIndex.load(tmp_path)
 
 

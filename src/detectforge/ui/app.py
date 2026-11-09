@@ -1,13 +1,20 @@
 """Minimal DetectForge UI: find an existing rule, validate it adversarially, harden it, compare.
 
-Run from the repo root:  uv run --group ui streamlit run src/detectforge/ui/app.py
+Run from the repo root:
+    uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 
 Read-only over the library: every number on screen comes from the same functions the CLI and
 tests use (search, validate_rule, run, compare). The UI shows held-out events to the human; the
 agent never uses this UI.
 """
 
+import sys
 from pathlib import Path
+
+try:
+    import detectforge  # noqa: F401
+except ModuleNotFoundError:  # a plain checkout without the package installed (Streamlit Cloud)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import streamlit as st
 import yaml
@@ -16,28 +23,37 @@ from detectforge.config import get_settings
 from detectforge.events import EventFileError, load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare, evasion_resistance
+from detectforge.reference import sigmahq
 from detectforge.reference.index import ReferenceIndex, techniques_from_tags
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
 
 PIPELINE = [
-    ("Find existing rules", "done", "SigmaHQ search"),
-    ("Adversarially validate", "done", "harness scorecard"),
-    ("Harden", "manual", "edit by hand; agent loop lands W4"),
-    ("Re-validate (before/after)", "done", "compare"),
-    ("Write new rule (fallback)", "todo", "W6"),
-    ("Approve", "todo", "review UI v1, W5"),
-    ("Tune false alarms", "todo", "Laure's FP tuning module"),
+    ("Find existing rules", True),
+    ("Adversarially validate", True),
+    ("Harden by hand", True),
+    ("Harden with the agent", False),
+    ("Re-validate (before/after)", True),
+    ("Write new rule (fallback)", False),
+    ("Approve", False),
+    ("Tune false alarms", False),
 ]
-STATUS_ICON = {"done": "✅", "manual": "🟡", "todo": "⏳"}
 
 
-@st.cache_resource
-def load_index(index_dir: str) -> ReferenceIndex | None:
+@st.cache_resource(show_spinner="Downloading and indexing SigmaHQ (first launch only, ~20 s)…")
+def load_index(index_dir: str, auto_fetch: bool) -> ReferenceIndex | str:
+    """The index, or a message explaining why there is none."""
+    path = Path(index_dir)
     try:
-        return ReferenceIndex.load(Path(index_dir))
-    except FileNotFoundError:
-        return None
+        return ReferenceIndex.load(path)
+    except FileNotFoundError as e:
+        if not auto_fetch:
+            return str(e)
+    try:
+        sigmahq.fetch_and_build(path)
+        return ReferenceIndex.load(path)
+    except (OSError, sigmahq.ReleaseIntegrityError) as e:
+        return f"Could not build the SigmaHQ index: {e}"
 
 
 @st.cache_data
@@ -99,15 +115,15 @@ def sidebar() -> list[Event]:
     st.sidebar.caption(f"{len(filtered)} events in scope: {attacks} attack, {len(filtered) - attacks} benign")
 
     st.sidebar.subheader("Pipeline")
-    for step, status, note in PIPELINE:
-        st.sidebar.markdown(f"{STATUS_ICON[status]} **{step}** — {note}")
+    for step, done in PIPELINE:
+        st.sidebar.markdown(f"✅ **{step}**" if done else f"⏳ **{step}** — pending")
     return filtered
 
 
-def find_tab(index: ReferenceIndex | None) -> None:
+def find_tab(index: ReferenceIndex | str) -> None:
     st.subheader("1 · Find existing rules")
-    if index is None:
-        st.info("No SigmaHQ index yet. Run `uv run detectforge sigmahq fetch`, then reload.")
+    if isinstance(index, str):
+        st.info(index)
     else:
         st.caption(f"SigmaHQ {index.release} — {len(index.rules)} Windows process-creation rules")
         c1, c2, c3 = st.columns([1, 2, 1])
@@ -128,9 +144,9 @@ def find_tab(index: ReferenceIndex | None) -> None:
         except ValueError as e:
             st.error(str(e))
             hits = []
-        if not hits:
-            st.warning("No usable rule found — this is where the write-new-rule fallback would start.")
-        else:
+        if not any(h.rule.usable for h in hits):
+            st.warning("No usable rule found — the write-new-rule fallback (pending) would start here.")
+        if hits:
             table(
                 [
                     {
@@ -140,7 +156,7 @@ def find_tab(index: ReferenceIndex | None) -> None:
                         "status": h.rule.status,
                         "level": h.rule.level,
                         "techniques": ", ".join(h.rule.techniques),
-                        "evaluable": h.rule.evaluable,
+                        "usable": "yes" if h.rule.usable else "NO (can never fire)",
                         "fields missing from events": ", ".join(h.rule.unmapped_fields),
                     }
                     for h in hits
@@ -256,7 +272,7 @@ def harden_tab(events: list[Event]) -> None:
     if not before:
         st.info("Pick a rule in the Find tab first.")
         return
-    st.caption("Manual for now: edit the rule on the right. In W4 the agent fills this editor.")
+    st.caption("Edit the candidate on the right; every edit is re-validated on the same events.")
     left, right = st.columns(2)
     left.markdown("**Before (as-is)**")
     left.code(before, language="yaml")
@@ -311,7 +327,8 @@ def harden_tab(events: list[Event]) -> None:
 def main() -> None:
     st.set_page_config(page_title="DetectForge", page_icon="🛡️", layout="wide")
     events = sidebar()
-    index = load_index(str(get_settings().data_dir / "sigmahq"))
+    settings = get_settings()
+    index = load_index(str(settings.data_dir / "sigmahq"), settings.ui_auto_fetch_index)
     find, validate, harden = st.tabs(["1 · Find", "2 · Validate", "3 · Harden"])
     with find:
         find_tab(index)

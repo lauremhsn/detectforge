@@ -1,0 +1,8 @@
+# Used only by Streamlit Community Cloud, which reads the requirements file next to the
+# entrypoint (app.py) before the repo root. Local development uses pyproject.toml + uv.lock.
+# Keep in sync with [project].dependencies and the `ui` group (tests/test_ui.py checks this).
+pydantic>=2.14.1,<3
+pydantic-settings>=2.16.1,<3
+pysigma>=1.5.1,<2
+pysigma-backend-elasticsearch>=2.1.1,<3
+streamlit>=1.40

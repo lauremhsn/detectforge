@@ -15,6 +15,8 @@ from detectforge.schemas import TECHNIQUE_PATTERN
 
 INDEX_FILE = "index.jsonl"
 META_FILE = "meta.json"
+# Bump when ReferenceRule or the event schema changes; older indexes must be rebuilt.
+INDEX_FORMAT = 2
 MAX_LIMIT = 20
 
 MatchKind = Literal["technique", "related_technique", "query"]
@@ -38,9 +40,15 @@ class ReferenceRule(BaseModel):
     fields: list[str]
     unmapped_fields: list[str] = Field(description="Fields the event schema lacks; they never match.")
     evaluable: bool = Field(description="The harness can run this rule.")
+    can_fire: bool = Field(description="False if it depends on fields events lack, so it never matches.")
     harness_error: str | None = None
     detection_text: str
     rule_yaml: str
+
+    @property
+    def usable(self) -> bool:
+        """A candidate for hardening. If no technique match is usable, the write-new-rule fallback runs."""
+        return self.evaluable and self.can_fire
 
 
 class ReferenceHit(BaseModel):
@@ -75,16 +83,18 @@ class ReferenceIndex:
 
     @classmethod
     def load(cls, index_dir: Path) -> "ReferenceIndex":
-        index_path = index_dir / INDEX_FILE
-        if not index_path.exists():
-            raise FileNotFoundError(f"no reference index at {index_path}; run `detectforge sigmahq fetch`")
+        index_path, meta_path = index_dir / INDEX_FILE, index_dir / META_FILE
+        if not index_path.exists() or not meta_path.exists():
+            raise FileNotFoundError(f"no reference index at {index_dir}; run `detectforge sigmahq fetch`")
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if meta.get("format") != INDEX_FORMAT:
+            raise FileNotFoundError(
+                f"reference index at {index_dir} is an old format; "
+                "rebuild it with `detectforge sigmahq fetch`"
+            )
         with open(index_path, encoding="utf-8") as f:
             rules = [ReferenceRule.model_validate_json(line) for line in f if line.strip()]
-        meta_path = index_dir / META_FILE
-        release = (
-            json.loads(meta_path.read_text(encoding="utf-8"))["release"] if meta_path.exists() else "unknown"
-        )
-        return cls(rules, release)
+        return cls(rules, meta["release"])
 
     def search(
         self,
@@ -141,7 +151,7 @@ class ReferenceIndex:
         hits.sort(
             key=lambda h: (
                 -h.score,
-                not h.rule.evaluable,
+                not h.rule.usable,
                 h.rule.path.startswith(_CAMPAIGN_DIRS),
                 len(h.rule.techniques),
                 _STATUS_RANK.get(h.rule.status, 9),

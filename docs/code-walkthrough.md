@@ -1,6 +1,6 @@
 # DetectForge — Code Walkthrough
 
-*Status as of Nov 9, 2026. Written so that both of us can follow every design decision, see what
+*Status as of Nov 9, 2026 (updated with the missing-field fixes and cloud deploy). Written so that the whole team can follow every design decision, see what
 exists versus what is planned, and decide what comes next.*
 
 ---
@@ -17,7 +17,7 @@ reachable three ways: Python functions, a command line (`detectforge ...`), and 
 ```
                          ┌──────────────── exists today ────────────────┐   ┌──── next ────┐
  request ──► FIND ──────► VALIDATE ──────────► HARDEN ──────► RE-VALIDATE ──► APPROVE ► TUNE
- (technique)  SigmaHQ      harness run()        (manual in UI;  compare()       review UI   Laure's
+ (technique)  SigmaHQ      harness run()        (manual in UI;  compare()       review UI   FP tuning
               search       → Scorecard          agent = W4)     → before/after  (W5)        module
                                                                                       ▲
                      no usable rule ──► WRITE NEW RULE (fallback, W6) ────────────────┘
@@ -29,7 +29,7 @@ reachable three ways: Python functions, a command line (`detectforge ...`), and 
 
 ```
 src/detectforge/
-  schemas.py          The shared data shapes (the contract with Laure): Event, Scorecard, RuleRecord
+  schemas.py          The shared data shapes (the interface contract): Event, Scorecard, RuleRecord
   events.py           Read/write event files (one JSON object per line)
   config.py           All settings in one place (.env / environment variables)
   rules/
@@ -46,8 +46,8 @@ src/detectforge/
   ui/app.py           The Streamlit UI (Find → Validate → Harden tabs)
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
-docs/interfaces.md    The interface contract and open questions for Laure
-tests/                99 automated tests (run on every push by GitHub Actions)
+docs/interfaces.md    The interface contract and open questions
+tests/                109 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -72,7 +72,8 @@ Stored one per line in a `.jsonl` file:
 
 | Field | Meaning |
 |---|---|
-| `image`, `command_line`, `parent_image` | What actually ran. These are the only 3 Sysmon fields we keep. |
+| `image`, `command_line`, `parent_image` | What actually ran (required). |
+| `original_file_name`, `parent_command_line` | Optional Sysmon fields. `original_file_name` is the name compiled into the binary, so it survives renaming (`schtasks.exe` copied to `notepad.exe` still says `schtasks.exe`). |
 | `label` | `attack` or `benign` (benign = "hard negative": legit activity that looks suspicious). |
 | `technique` | ATT&CK id, e.g. `T1053.005` = scheduled task. |
 | `transform` | Which Uetz mutation produced it: `none` (original) or one of the 5 types. |
@@ -80,17 +81,19 @@ Stored one per line in a `.jsonl` file:
 | `split` | `tune` (the agent may see it) or `heldout` (only for final evaluation). |
 
 The model **rejects** bad events on load (unknown fields, wrong labels, a mutation that claims to be
-its own base, etc.) and tells you the exact line number. This catches mistakes in Laure's data early.
+its own base, etc.) and tells you the exact line number. This catches mistakes in the attack data early.
 
 **Design choice — `base_id` points to itself for originals** (rather than being empty). Grouping by
-`base_id` then gives "the original + all its variants" with no special case. *Open question for Laure.*
+`base_id` then gives "the original + all its variants" with no special case. *Open question, pending team sign-off.*
 
-**Design choice — only 3 Sysmon fields.** Simple and matches CLAUDE.md. **Measured cost:** 717 of the
-1,297 SigmaHQ rules also use fields we don't have (`OriginalFileName` in 559). See §9.
+**Design choice — 5 Sysmon fields, 2 of them optional.** We started with 3 (as in CLAUDE.md), then
+measured that 717 of the 1,297 SigmaHQ rules used a field we didn't have (`OriginalFileName` in 559,
+`ParentCommandLine` in 75). Adding those two drops it to 175. They're optional so older event files stay
+valid; `null` means "not captured". *Pending: confirm the attack-data pipeline can capture them.*
 
 ### 3.2 The fixture dataset (`data/fixtures/`)
 
-Hand-written, synthetic, **not** VM-verified. Only for building and testing until Laure's real
+Hand-written, synthetic, **not** VM-verified. Only for building and testing until the real
 mutations exist. 17 events:
 
 | Technique | Attacks | Benign (hard negatives) |
@@ -126,7 +129,17 @@ The answer to "can we use this rule?". It checks, in order:
 1. it parses and is in scope (above);
 2. our harness can actually evaluate it (some rare Sigma features aren't supported — see 5.1);
 3. pySigma's own quality checks (≈25 of them, e.g. "a detection is defined but never used");
-4. a warning for every field the rule uses that our events don't have.
+4. fields the rule uses that our events don't have (e.g. `User`, `IntegrityLevel`), split into two cases:
+   - **harmless → warning**: the field is only an alternative (OR), so the rule still matches through
+     other fields; it just loses whatever that branch would catch;
+   - **blocking → error**: the rule *requires* the field (AND, or alone), so it **can never fire** on our
+     events. Its score would measure a missing column, not evasion resistance.
+
+**How "can never fire" is decided** (`matcher.can_fire`): each check on a missing field has a known
+outcome (the field is absent, so "equals X" is false and "is null" is true); every other check is
+treated as "could go either way"; the AND/OR/NOT tree is then evaluated. If it can't be true, the rule
+can't fire. This is never wrong when it says "can never fire"; it can only be over-optimistic for
+odd rules whose other checks contradict each other.
 
 **Design choice — two pySigma checks are switched off** (ATT&CK and D3FEND tag checks) because they
 download MITRE data from the internet at runtime. A validator that depends on the network is not
@@ -153,7 +166,8 @@ Sigma semantics we implement (from the Sigma spec):
 - modifiers like `contains`, `startswith`, `endswith`, `windash`, `base64` are expanded by pySigma
   into wildcards/lists before we see them, so we inherit the official behavior;
 - `re` (regex), `cased`, `exists`, `null`, number comparisons, `1 of` / `all of` / `them`, `not`;
-- **fields we don't have** (e.g. `OriginalFileName`) are treated as *absent*: they never match a value.
+- **fields we don't have** (e.g. `User`), or optional fields left empty, are treated as *absent*:
+  they never match a value.
 
 Not supported (the rule comes back as invalid with a clear message): `fieldref`, `cidr`, `expand`,
 correlation rules. None of the 1,297 SigmaHQ process-creation rules needs them.
@@ -165,7 +179,7 @@ behaviors down so they can't drift.
 
 ### 5.2 `run.py → run(rule_yaml, events) → Scorecard`
 
-The frozen interface Laure uses directly. For one rule and a list of events:
+The frozen interface the evaluation uses directly. For one rule and a list of events:
 
 | Scorecard field | Meaning |
 |---|---|
@@ -194,7 +208,7 @@ On the fixtures, literal → robust schtasks rule: evasion resistance **25% → 
 caught, 0 lost, false alarms unchanged (1).
 
 **Design choice — evasion resistance counts mutations only.** Catching the original attack is the
-bare minimum; the question the project answers is "does it still catch the variants?". *Laure's
+bare minimum; the question the project answers is "does it still catch the variants?". *The
 metrics module should use the same definition, or we should agree on a different one.*
 
 ---
@@ -208,10 +222,13 @@ metrics module should use the same definition, or we should agree on a different
 - Reads the zip **in memory**, never unpacks it to disk.
 - Keeps only Windows process-creation rules, drops deprecated ones, and for each rule records: id,
   title, techniques (from its `attack.tXXXX` tags), false-positive notes, which fields it uses,
-  which of those our events lack, and whether our harness can run it.
-- Writes the result to `data/sigmahq/index.jsonl` (not committed to git).
+  which of those our events lack, whether our harness can run it, and whether it **can fire** at all.
+  A rule is **usable** (a candidate for hardening) if both are true.
+- Writes the result to `data/sigmahq/index.jsonl` (not committed to git). The UI builds it
+  automatically on first launch if it's missing.
 
-Result: **1,297 rules indexed, all evaluable** by our harness.
+Result: **1,297 rules indexed, all evaluable, 1,239 usable.** 175 rules still use a field we don't
+have: 117 harmlessly, 58 can never fire (mostly `IntegrityLevel`, `User`). Unusable rules sort last.
 
 **Design choices.** Pinning a release makes experiments reproducible and lets the memorization probe
 compare against a fixed set. The checksum and in-memory reading are supply-chain hygiene: the zip is
@@ -223,7 +240,7 @@ external input. Rule text is explicitly marked untrusted (it will be shown to th
   (e.g. `T1053` for `T1053.005`) as "related".
 - **By keywords**: scores word overlap with title (counts double), description and detection logic.
   With a technique, keywords only re-order the results.
-- **Tie-breaks**: general rules before campaign-specific ones (SigmaHQ's "emerging threats" folder),
+- **Tie-breaks**: usable rules first, then general rules before campaign-specific ones (SigmaHQ's "emerging threats" folder),
   rules with fewer techniques first (focused beats "APT kitchen sink"), then status and severity.
 - **`exclude_technique`** (for the secondary "written" arm only): hides the whole technique family
   *and* every rule with no ATT&CK tag. The second part fixes a real leak we found: some untagged
@@ -236,10 +253,12 @@ external input. Rule text is explicitly marked untrusted (it will be shown to th
 Start it from the repo root:
 
 ```bash
-uv run --group ui python -m streamlit run src/detectforge/ui/app.py
+uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 ```
 
-Opens at http://localhost:8501 (bound to your machine only, telemetry off).
+Opens at http://localhost:8501 (bound to your machine only, telemetry off). It can also be deployed
+for free on Streamlit Community Cloud (see the README): there it builds the SigmaHQ index itself on
+first launch, and `src/detectforge/ui/requirements.txt` lists its dependencies.
 
 | Area | What it shows |
 |---|---|
@@ -269,7 +288,7 @@ the story DetectForge tells — but note this is on fixtures, not evidence yet.
 
 ```bash
 uv sync                                   # install
-uv run pytest                             # 99 tests
+uv run pytest                             # 109 tests
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl
 uv run detectforge compare BEFORE.yml AFTER.yml EVENTS.jsonl --split heldout --technique T1053.005
@@ -291,14 +310,15 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 ## 9. Known limitations (be ready to explain these)
 
 1. **No agent yet.** Hardening is manual. This is the critical path for W4.
-2. **Fixture data only.** 17 synthetic events; real results need Laure's mutations + VM checks.
-3. **Missing Sysmon fields.** 55% of SigmaHQ rules use a field we drop. Community rules can look
-   weaker in our harness than in a real SIEM → arm 1 could be unfair. Proposed fix: add
-   `original_file_name` and `parent_command_line` to events (needs Laure).
+2. **Fixture data only.** 17 synthetic events; real results need the real mutations + VM checks.
+3. **Missing Sysmon fields.** Mostly fixed: with the two optional fields, 175 of 1,297 rules still use
+   a field we don't have; 117 harmlessly, and the 58 that can never fire are excluded as unusable.
+   Only real if the attack data actually captures the two fields.
 4. **Regex timeouts.** A pathological regex written by the agent could make the harness hang
    (Python regexes have no timeout). Planned for the W6 security work.
 5. **Keyword search is simple** word overlap, not semantic search. Fine for technique-driven search.
-6. **"Usable rule" not defined yet**, so nothing triggers the write-new-rule fallback (see §10).
+6. **"Usable rule" is defined but not yet wired to a fallback**: usable = evaluable and can fire. The
+   UI shows "No usable rule found" when no result is usable; the write-new-rule path itself is W6.
 
 ---
 
@@ -306,11 +326,11 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
 | # | Decision | My recommendation | Who |
 |---|---|---|---|
-| 1 | `base_id == event_id` for originals | Yes | Laure to confirm |
-| 2 | Add `original_file_name`, `parent_command_line` to events | Yes, now | Laure (can she capture them?) |
+| 1 | `base_id == event_id` for originals | Yes | Team sign-off |
+| 2 | `original_file_name`, `parent_command_line` added as optional event fields | Done in code | Confirm the attack data captures them |
 | 3 | Add `derived_from` (SigmaHQ id) to RuleRecord | Yes — links each "after" to its "before" | Both |
-| 4 | Evasion resistance = mutated attacks only | Yes | Laure's metrics must match |
-| 5 | What counts as a "usable" existing rule | Evaluable + tagged with the technique (exact, or parent/child too?) | Us |
+| 4 | Evasion resistance = mutated attacks only | Yes | Metrics module must match |
+| 5 | What counts as a "usable" existing rule | Implemented: evaluable + can fire. Open: count parent/child technique matches too? | Us |
 | 6 | Who decides harden vs write-new | Deterministic code, not the LLM | Us |
 | 7 | Which LLM / provider and budget per rule | Decide before W4 agent work | Us |
 
@@ -321,5 +341,5 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 2. **Agent loop v1** for the hardening path: given an existing rule and its tuning scorecard, propose
    a revision, re-validate, repeat up to the budget; output = best version + before/after report.
 3. **Tracing** (Langfuse) of every model and tool call.
-4. **Integration test** on Laure's real mutations for 2 techniques (needs her data by ~Nov 13).
+4. **Integration test** on the real mutations for 2 techniques (needs the data by ~Nov 13).
 5. The UI's Harden tab gets an "ask the agent" button that fills the editor.
