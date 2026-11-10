@@ -18,6 +18,7 @@ htmlcov/
 # Data that must not be committed (raw VM captures, large event sets)
 data/raw/
 data/sigmahq/
+data/atomic-red-team/
 *.evtx
 
 # Editors / OS
