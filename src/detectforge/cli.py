@@ -1,4 +1,7 @@
-"""Command line: `detectforge {validate,convert,harness,compare,sigmahq} ...`. Prints JSON to stdout."""
+"""Command line: `detectforge {validate,convert,harness,compare,sigmahq,dataset} ...`.
+
+Prints JSON to stdout.
+"""
 
 import argparse
 import json
@@ -6,6 +9,7 @@ import sys
 from pathlib import Path
 
 from detectforge.config import get_settings
+from detectforge.dataset import argfuscator, atomic, mutate, selection
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -56,6 +60,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=5, choices=range(1, MAX_LIMIT + 1), metavar=f"1-{MAX_LIMIT}")
     p.add_argument("--show-yaml", action="store_true")
     p.set_defaults(handler=_sigmahq_search)
+
+    dataset_sub = sub.add_parser("dataset", help="evaluation dataset").add_subparsers(
+        dest="dataset_command", required=True
+    )
+    p = dataset_sub.add_parser("select", help="build the rule set and base attacks from a selection config")
+    p.add_argument("--config", type=Path, default=Path("data/eval/selection_config.yml"))
+    p.set_defaults(handler=_dataset_select)
+
+    p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
+    p.set_defaults(handler=_dataset_mutate)
 
     args = parser.parse_args(argv)
     return args.handler(args)
@@ -117,4 +131,64 @@ def _sigmahq_search(args: argparse.Namespace) -> int:
         return 1
     exclude = None if args.show_yaml else {"rule": {"rule_yaml", "detection_text"}}
     print(json.dumps([h.model_dump(exclude=exclude) for h in hits], indent=2))
+    return 0
+
+
+def _dataset_select(args: argparse.Namespace) -> int:
+    data_dir = get_settings().data_dir
+    try:
+        result = selection.build_selection(
+            selection.load_config(args.config),
+            ReferenceIndex.load(_sigmahq_dir()),
+            data_dir / "atomic-red-team",
+        )
+    except (selection.SelectionError, atomic.AtomicFetchError, FileNotFoundError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    selection.write_selection(
+        result, data_dir / "eval" / "selection.yml", data_dir / "eval" / "base_events.jsonl"
+    )
+    splits = [r.split for r in result.rules]
+    print(
+        json.dumps(
+            {
+                "rules": len(result.rules),
+                "dev_rules": splits.count("dev"),
+                "test_rules": splits.count("test"),
+                "techniques": len({r.technique for r in result.rules}),
+                "base_attacks": len(result.base_attacks),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _dataset_mutate(args: argparse.Namespace) -> int:
+    import collections
+
+    data_dir = get_settings().data_dir
+    base = load_events(data_dir / "eval" / "base_events.jsonl")
+    try:
+        mutations = mutate.build_mutations(base, data_dir / "argfuscator")
+    except argfuscator.ArgfuscatorFetchError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    out_path = data_dir / "eval" / "mutations.jsonl"
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        for event in mutations:
+            f.write(event.model_dump_json(exclude_none=True) + "\n")
+    per_transform = collections.Counter(m.transform for m in mutations)
+    per_split = collections.Counter(m.split for m in mutations)
+    print(
+        json.dumps(
+            {
+                "base_attacks": len(base),
+                "mutations": len(mutations),
+                "per_transform": dict(per_transform),
+                "per_split": dict(per_split),
+            },
+            indent=2,
+        )
+    )
     return 0
