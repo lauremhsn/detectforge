@@ -86,7 +86,7 @@ its own base, etc.) and tells you the exact line number. This catches mistakes i
 **Design choice — `base_id` points to itself for originals** (rather than being empty). Grouping by
 `base_id` then gives "the original + all its variants" with no special case. *Open question, pending team sign-off.*
 
-**Design choice — 5 Sysmon fields, 2 of them optional.** We started with 3 (as in CLAUDE.md), then
+**Design choice — 5 Sysmon fields, 2 of them optional.** We started with 3 (the original design), then
 measured that 717 of the 1,297 SigmaHQ rules used a field we didn't have (`OriginalFileName` in 559,
 `ParentCommandLine` in 75). Adding those two drops it to 175. They're optional so older event files stay
 valid; `null` means "not captured". *Pending: confirm the attack-data pipeline can capture them.*
@@ -192,7 +192,7 @@ The frozen interface the evaluation uses directly. For one rule and a list of ev
 Two safety properties:
 - a bad rule **never crashes** the harness — you get `valid: false` and a reason;
 - error messages describe the **rule only, never event contents**. This matters because the agent must
-  never see held-out data, "including in error messages" (CLAUDE.md §8).
+  never see held-out data, "including in error messages" (agent design rule).
 
 ### 5.3 `compare.py → compare(before_yaml, after_yaml, events) → HardeningReport` *(new)*
 
