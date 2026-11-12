@@ -44,10 +44,12 @@ src/detectforge/
     sigmahq.py        Download the pinned SigmaHQ release and build our index of rules
     index.py          Search that index by technique / keywords
   ui/app.py           The Streamlit UI (Find → Validate → Harden tabs)
+  agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
+  gate.py             Quality gate: accept, or "needs human review" with reasons
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                109 automated tests (run on every push by GitHub Actions)
+tests/                134 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -284,11 +286,48 @@ the story DetectForge tells — but note this is on fixtures, not evidence yet.
 
 ---
 
+## 7b. The agent's tools and the quality gate (`agent/tools.py`, `gate.py`) *(new)*
+
+The LLM loop doesn't exist yet, but everything it will be allowed to *do* does. The model never
+touches data or code directly: it can only call these five tools, each with a typed (Pydantic) input
+and output that becomes the JSON schema the model sees (`tool_schemas()`).
+
+| Tool | What the agent gets |
+|---|---|
+| `search_reference_rules(technique?, query?, limit≤10)` | Community rules' detection logic, usable flag, missing fields, documented false positives. |
+| `inspect_schema()` | The 5 usable fields with descriptions, the required logsource, 3 example attack and 3 benign tuning events. |
+| `validate_rule(rule_yaml)` | Errors/warnings (same as §4.2). Free to call. |
+| `run_tuning_set(rule_yaml)` | On the **tuning split only**: detections, evasion resistance per transform, the missed attacks and false alarms (with command lines), and the comparison with the original rule. **Budgeted** (default 5 runs). |
+| `submit(rule_yaml, rationale)` | Hands the rule to the quality gate; returns which checks passed. Max 3 submissions. |
+
+**Least privilege is structural, not a promise in the prompt.** The runner builds a `ToolContext`
+with only tuning events; giving it a held-out event raises an error. So no tool, output or error
+message *can* reveal held-out data. Empty per-transform rows are hidden too, otherwise they would
+name the held-out mutation types. The written-arm exclusion is set by the runner; the agent has no
+argument for it. There is no tool to deploy, choose a split or pass events.
+
+**Every call goes through `dispatch()`**, which never crashes: an unknown tool, malformed JSON, a
+wrong or extra argument, an exhausted budget, or an unexpected bug all come back as an error result
+the model can read. An unexpected bug says only "internal error in <tool>", with no details. Each
+call is recorded (tool, ok, latency, error), which is what tracing will build on.
+
+**Quality gate (`gate.check`)**, runs every check so the reviewer sees all reasons at once:
+- valid (§4.2), and detects every *unmutated* attack;
+- evasion resistance ≥ 80% on the mutations (configurable);
+- hardening: **no attack the original caught is lost, and no new false alarms** (existing ones are
+  left for the tuning step); writing a new rule: false alarms ≤ 0 (configurable).
+
+Failing the gate is not a dead end: the rule still goes to a human as "needs human review" with the
+failed checks listed. Example on the fixtures: the literal schtasks rule fails (33% resistance on
+tuning mutations, 1 false alarm); the robust version hardened from it passes.
+
+---
+
 ## 8. Command line, tests, CI
 
 ```bash
-uv sync                                   # install
-uv run pytest                             # 109 tests
+uv sync --all-groups                      # install (incl. UI)
+uv run pytest                             # 134 tests
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl
 uv run detectforge compare BEFORE.yml AFTER.yml EVENTS.jsonl --split heldout --technique T1053.005
@@ -301,7 +340,8 @@ Tests by file: `test_matcher` (Sigma semantics), `test_harness` (scorecards on f
 no data leaks in errors), `test_compare` (before/after numbers, regressions reported), `test_reference`
 (index building, search ranking, exclusion, tampered zip rejected), `test_rules` (validate/convert/CLI),
 `test_schemas` (bad events rejected), `test_fixtures` (data sanity + "hard negatives must cause false
-alarms"), `test_ui` (UI renders and its numbers match the library), `test_config`.
+alarms"), `test_ui` (UI renders and its numbers match the library), `test_agent_tools` (contracts,
+held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_config`.
 
 GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
@@ -309,7 +349,7 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
 ## 9. Known limitations (be ready to explain these)
 
-1. **No agent yet.** Hardening is manual. This is the critical path for W4.
+1. **No LLM loop yet.** The tools and gate exist; hardening is still manual. Critical path for W4.
 2. **Fixture data only.** 17 synthetic events; real results need the real mutations + VM checks.
 3. **Missing Sysmon fields.** Mostly fixed: with the two optional fields, 175 of 1,297 rules still use
    a field we don't have; 117 harmlessly, and the 58 that can never fire are excluded as unusable.
@@ -336,8 +376,7 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
 ## 11. What's next (W4, Nov 10–16)
 
-1. **Agent tools** as typed functions: `inspect_schema`, `validate_rule`, `run_tuning_set` (tuning
-   split only — enforced in code), `submit`.
+1. ~~Agent tools~~ — done (§7b), plus quality gate v0.
 2. **Agent loop v1** for the hardening path: given an existing rule and its tuning scorecard, propose
    a revision, re-validate, repeat up to the budget; output = best version + before/after report.
 3. **Tracing** (Langfuse) of every model and tool call.
