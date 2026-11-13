@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     max_tokens_per_rule: int = Field(default=400_000, ge=1_000, description="prompt + completion tokens")
     max_output_tokens: int = Field(default=4_096, ge=256, description="per LLM response")
 
-    # Tracing (Langfuse).
-    langfuse_host: str | None = None
+    # Tracing (Langfuse): enabled when both keys are set. Cloud (free tier) or self-hosted URL.
+    langfuse_host: str = Field(default="https://cloud.langfuse.com", validation_alias="LANGFUSE_HOST")
     langfuse_public_key: SecretStr | None = Field(default=None, validation_alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: SecretStr | None = Field(default=None, validation_alias="LANGFUSE_SECRET_KEY")
 

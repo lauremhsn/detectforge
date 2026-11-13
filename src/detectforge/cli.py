@@ -16,6 +16,7 @@ from detectforge.reference.index import MAX_LIMIT, ReferenceIndex
 from detectforge.rules.convert import TARGETS, convert_rule
 from detectforge.rules.parse import RuleError
 from detectforge.rules.validate import validate_rule
+from detectforge.tracing import make_tracer
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,7 +126,9 @@ def _harden(args: argparse.Namespace) -> int:
     events = [e for path in args.events for e in load_events(path)]
     try:
         client = OpenAICompatibleClient.from_settings(settings)
-        outcome = run_hardening(rule_yaml, args.technique, events, client, settings.model, index, args.out)
+        outcome = run_hardening(
+            rule_yaml, args.technique, events, client, settings.model, index, args.out, make_tracer(settings)
+        )
     except (LLMError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -150,6 +153,9 @@ def _harden(args: argparse.Namespace) -> int:
         f"{run.tuning_runs_used} tuning runs, {run.duration_s}s"
     )
     print(f"saved:        {outcome.saved_to}")
+    print(
+        f"trace:        {outcome.trace_url or 'tracing off (set LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY)'}"
+    )
     return 0
 
 
