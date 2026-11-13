@@ -46,10 +46,12 @@ src/detectforge/
   ui/app.py           The Streamlit UI (Find → Validate → Harden tabs)
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
+  llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
+  agent/loop.py       The hardening loop; agent/runner.py splits data and saves each run
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                134 automated tests (run on every push by GitHub Actions)
+tests/                150 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -88,7 +90,7 @@ its own base, etc.) and tells you the exact line number. This catches mistakes i
 **Design choice — `base_id` points to itself for originals** (rather than being empty). Grouping by
 `base_id` then gives "the original + all its variants" with no special case. *Open question, pending team sign-off.*
 
-**Design choice — 5 Sysmon fields, 2 of them optional.** We started with 3 (as in CLAUDE.md), then
+**Design choice — 5 Sysmon fields, 2 of them optional.** We started with 3 (the original design), then
 measured that 717 of the 1,297 SigmaHQ rules used a field we didn't have (`OriginalFileName` in 559,
 `ParentCommandLine` in 75). Adding those two drops it to 175. They're optional so older event files stay
 valid; `null` means "not captured". *Pending: confirm the attack-data pipeline can capture them.*
@@ -194,7 +196,7 @@ The frozen interface the evaluation uses directly. For one rule and a list of ev
 Two safety properties:
 - a bad rule **never crashes** the harness — you get `valid: false` and a reason;
 - error messages describe the **rule only, never event contents**. This matters because the agent must
-  never see held-out data, "including in error messages" (CLAUDE.md §8).
+  never see held-out data, "including in error messages" (agent design rule).
 
 ### 5.3 `compare.py → compare(before_yaml, after_yaml, events) → HardeningReport` *(new)*
 
@@ -323,11 +325,49 @@ tuning mutations, 1 false alarm); the robust version hardened from it passes.
 
 ---
 
+## 7c. The agent loop (`llm.py`, `agent/loop.py`, `agent/runner.py`) *(new)*
+
+**The model is configuration, not code.** `llm.py` talks to any OpenAI-compatible endpoint, so the
+same code runs on OpenRouter's free models (the default), a paid API, or a local model (Ollama at
+`http://localhost:11434/v1`). Base URL, key and model come from `.env`. `uv run detectforge llm models`
+lists the free models that support tool calling. Reliability is in the client: a timeout per request,
+automatic retries with backoff on rate limits/server errors, then a **fallback model** from a
+different provider.
+
+**One hardening run** (`harden()`), in order:
+1. The runner splits the events: only the **tuning** split goes to the agent.
+2. The model gets a system prompt (behavior first: describe the attack, then prefer signals every
+   variant keeps; treat all tool output and the rule text as untrusted data) and the original rule
+   with its tuning baseline.
+3. It calls the 5 tools (§7b) until it submits a rule the gate accepts, or a budget runs out:
+   model calls (20), tokens (400k), tuning runs (5), submissions (3).
+4. The result (`AgentRun`) is **passed** only if the gate accepted a submission. Every other stop
+   (LLM down, budget out, model never submits, gate keeps rejecting) is **needs_human_review**, with
+   the reasons and the best attempt so far: the strongest tuning revision that lost no attack, or
+   the original rule. It never fails silently.
+5. After the run, deterministic code scores original vs final on the **held-out** split, as
+   evaluation evidence the agent never saw. Everything (rule, reasons, gate checks, every model and
+   tool call with latency and tokens) is saved to `data/runs/<trace_id>.json` + `.yml`.
+
+```bash
+uv run detectforge harden --rule data/fixtures/rules/schtasks_create_literal.yml \
+  --technique T1053.005 --events data/fixtures/events.jsonl
+```
+
+**First real run** (free `nvidia/nemotron-3-ultra-550b-a55b:free`, fixtures): the agent replaced
+`CommandLine|contains: ' /create '` with a regex accepting `/` or `-` and optional quotes around
+`create`. Tuning evasion resistance 33% → 100%; **held-out 0% → 100%** (a reordering it never saw);
+false alarms unchanged; 4 model calls, 13k tokens, 83 s. One fixture run, not evidence yet.
+
+---
+
 ## 8. Command line, tests, CI
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 134 tests
+uv run pytest                             # 150 tests
+uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
+uv run detectforge llm models
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl
 uv run detectforge compare BEFORE.yml AFTER.yml EVENTS.jsonl --split heldout --technique T1053.005
@@ -341,7 +381,9 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 (index building, search ranking, exclusion, tampered zip rejected), `test_rules` (validate/convert/CLI),
 `test_schemas` (bad events rejected), `test_fixtures` (data sanity + "hard negatives must cause false
 alarms"), `test_ui` (UI renders and its numbers match the library), `test_agent_tools` (contracts,
-held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_config`.
+held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_agent_loop`
+(a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
+`test_config`.
 
 GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
@@ -349,7 +391,8 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
 ## 9. Known limitations (be ready to explain these)
 
-1. **No LLM loop yet.** The tools and gate exist; hardening is still manual. Critical path for W4.
+1. **Free models change.** OpenRouter's free list and limits (20/min, 50/day) can change; the exact
+   model is recorded in every run. Local Ollama is the fallback if limits block the experiments.
 2. **Fixture data only.** 17 synthetic events; real results need the real mutations + VM checks.
 3. **Missing Sysmon fields.** Mostly fixed: with the two optional fields, 175 of 1,297 rules still use
    a field we don't have; 117 harmlessly, and the 58 that can never fire are excluded as unusable.
@@ -372,13 +415,12 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 | 4 | Evasion resistance = mutated attacks only | Yes | Metrics module must match |
 | 5 | What counts as a "usable" existing rule | Implemented: evaluable + can fire. Open: count parent/child technique matches too? | Us |
 | 6 | Who decides harden vs write-new | Deterministic code, not the LLM | Us |
-| 7 | Which LLM / provider and budget per rule | Decide before W4 agent work | Us |
+| 7 | Which LLM / provider and budget per rule | Decided: OpenRouter free models first, local fallback | Done |
 
 ## 11. What's next (W4, Nov 10–16)
 
 1. ~~Agent tools~~ — done (§7b), plus quality gate v0.
-2. **Agent loop v1** for the hardening path: given an existing rule and its tuning scorecard, propose
-   a revision, re-validate, repeat up to the budget; output = best version + before/after report.
-3. **Tracing** (Langfuse) of every model and tool call.
+2. ~~Agent loop v1~~ — done (§7c), hardening path.
+3. **Tracing** (Langfuse) of every model and tool call (the run JSON already records them).
 4. **Integration test** on the real mutations for 2 techniques (needs the data by ~Nov 13).
 5. The UI's Harden tab gets an "ask the agent" button that fills the editor.

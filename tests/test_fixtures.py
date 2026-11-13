@@ -20,7 +20,7 @@ def test_every_mutation_points_at_an_unmutated_attack(fixture_events):
 
 
 def test_split_is_by_transform_type(fixture_events):
-    """Held-out mutations use transform types never seen in tuning (CLAUDE.md section 4)."""
+    """Held-out mutations use transform types never seen in tuning (see the evaluation design)."""
     tune = {e.transform for e in fixture_events if e.split == "tune" and e.transform != "none"}
     heldout = {e.transform for e in fixture_events if e.split == "heldout" and e.transform != "none"}
     assert tune and heldout and not tune & heldout
