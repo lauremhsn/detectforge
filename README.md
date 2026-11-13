@@ -87,6 +87,8 @@ src/detectforge/
   harness/          matcher (Sigma semantics over events), run() -> Scorecard
   reference/        SigmaHQ release fetch + index, search_reference_rules backend
   ui/               Streamlit UI (optional `ui` dependency group)
+  agent/            typed agent tools (least privilege, tuning split only)
+  gate.py           quality gate for submitted rules
   cli.py
 data/fixtures/      synthetic events and fixture rules (see its README)
 docs/interfaces.md  interface contract and open questions
