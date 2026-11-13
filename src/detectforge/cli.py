@@ -1,19 +1,22 @@
-"""Command line: `detectforge {validate,convert,harness,compare,sigmahq} ...`. Prints JSON to stdout."""
+"""Command line: `detectforge {validate,convert,harness,compare,sigmahq,harden,llm} ...`."""
 
 import argparse
 import json
 import sys
 from pathlib import Path
 
+from detectforge.agent.runner import run_hardening
 from detectforge.config import get_settings
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
+from detectforge.llm import LLMError, OpenAICompatibleClient, list_free_tool_models
 from detectforge.reference import sigmahq
 from detectforge.reference.index import MAX_LIMIT, ReferenceIndex
 from detectforge.rules.convert import TARGETS, convert_rule
 from detectforge.rules.parse import RuleError
 from detectforge.rules.validate import validate_rule
+from detectforge.tracing import make_tracer
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -57,6 +60,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--show-yaml", action="store_true")
     p.set_defaults(handler=_sigmahq_search)
 
+    p = sub.add_parser("harden", help="run the agent to harden an existing rule (tuning split only)")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--rule", type=Path, help="Sigma rule file")
+    source.add_argument("--rule-id", help="SigmaHQ rule id from the reference index")
+    p.add_argument("--technique", required=True, help="ATT&CK technique whose events to use")
+    p.add_argument("--events", type=Path, action="append", required=True, help="events JSONL (repeatable)")
+    p.add_argument("--out", type=Path, default=Path("data/runs"), help="where to save the run and rule")
+    p.set_defaults(handler=_harden)
+
+    llm_sub = sub.add_parser("llm", help="LLM provider helpers").add_subparsers(
+        dest="llm_command", required=True
+    )
+    p = llm_sub.add_parser("models", help="list free models that support tool calling (OpenRouter)")
+    p.set_defaults(handler=_llm_models)
+
     args = parser.parse_args(argv)
     return args.handler(args)
 
@@ -92,6 +110,70 @@ def _compare(args: argparse.Namespace) -> int:
     report = compare(args.before.read_text(encoding="utf-8"), args.after.read_text(encoding="utf-8"), events)
     print(report.model_dump_json(indent=2))
     return 0 if report.valid else 1
+
+
+def _harden(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    index = _load_index_or_none()
+    if args.rule_id:
+        rule = next((r for r in index.rules if r.id == args.rule_id), None) if index else None
+        if rule is None:
+            print(f"error: rule {args.rule_id} not in the SigmaHQ index", file=sys.stderr)
+            return 1
+        rule_yaml = rule.rule_yaml
+    else:
+        rule_yaml = args.rule.read_text(encoding="utf-8")
+    events = [e for path in args.events for e in load_events(path)]
+    try:
+        client = OpenAICompatibleClient.from_settings(settings)
+        outcome = run_hardening(
+            rule_yaml, args.technique, events, client, settings.model, index, args.out, make_tracer(settings)
+        )
+    except (LLMError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    run, evaluation = outcome.run, outcome.heldout_evaluation
+    print(f"status:       {run.status} ({run.final_source})")
+    for reason in run.reasons:
+        print(f"  - {reason}")
+    print(
+        f"tuning:       evasion resistance {_pct(run.tuning_evasion_resistance_before)} -> "
+        f"{_pct(run.tuning_evasion_resistance_after)}, false alarms "
+        f"{run.tuning_false_alarms_before} -> {run.tuning_false_alarms_after}"
+    )
+    if evaluation is not None:
+        print(
+            f"held-out:     evasion resistance {_pct(evaluation.evasion_resistance_before)} -> "
+            f"{_pct(evaluation.evasion_resistance_after)} (evaluation only; never shown to the agent)"
+        )
+    print(
+        f"cost:         {len(run.model_calls)} model calls, "
+        f"{run.prompt_tokens + run.completion_tokens} tokens, "
+        f"{run.tuning_runs_used} tuning runs, {run.duration_s}s"
+    )
+    print(f"saved:        {outcome.saved_to}")
+    print(
+        f"trace:        {outcome.trace_url or 'tracing off (set LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY)'}"
+    )
+    return 0
+
+
+def _llm_models(args: argparse.Namespace) -> int:
+    for model in list_free_tool_models(get_settings().llm_base_url):
+        print(f"{model['id']}  (context {model['context_length']})")
+    return 0
+
+
+def _pct(value: float | None) -> str:
+    return "n/a" if value is None else f"{value:.0%}"
+
+
+def _load_index_or_none() -> ReferenceIndex | None:
+    try:
+        return ReferenceIndex.load(_sigmahq_dir())
+    except FileNotFoundError:
+        return None
 
 
 def _sigmahq_dir() -> Path:
