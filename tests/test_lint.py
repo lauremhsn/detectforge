@@ -156,3 +156,28 @@ def test_gate_rejects_memorised_characters_but_only_warns_on_copied_strings(tuni
     warning = next(c for c in result.checks if c.name == "no_copied_test_strings")
     assert not warning.passed and not warning.blocking
     assert result.passed  # a warning never fails the gate
+
+
+def test_gate_warns_when_hardening_adds_a_required_field(tuning, load_rule_text):
+    original = load_rule_text("schtasks_create_literal.yml")
+    both_required = load_rule_text("schtasks_create_robust.yml").replace(
+        "    - Image|endswith: '\\schtasks.exe'\n    - OriginalFileName: 'schtasks.exe'\n",
+        "    Image|endswith: '\\schtasks.exe'\n    OriginalFileName: 'schtasks.exe'\n",
+    )
+    result = check(both_required, tuning, original_yaml=original)
+    warning = next(c for c in result.checks if c.name == "no_new_required_fields")
+    assert not warning.passed and not warning.blocking and "OriginalFileName" in warning.detail
+    assert result.passed  # a warning, not a rejection
+
+
+def test_gate_reports_a_rule_too_slow_to_evaluate(monkeypatch):
+    from detectforge.harness import matcher
+
+    from conftest import make_event
+
+    monkeypatch.setattr(matcher, "REGEX_TIMEOUT_S", 0.05)
+    slow = make_rule("  sel:\n    CommandLine|re: '(a|aa)+$'\n  condition: sel")
+    events = [make_event(command_line="a" * 40 + "!")]  # classic catastrophic-backtracking input
+    result = check(slow, events)
+    assert not result.passed and result.checks[-1].name == "evaluable"
+    assert "catastrophic backtracking" in result.checks[-1].detail

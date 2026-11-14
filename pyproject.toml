@@ -15,6 +15,7 @@ dependencies = [
     # The harness walks pySigma's parsed condition tree, so pin the major version.
     "pysigma>=1.5.1,<2",
     "pysigma-backend-elasticsearch>=2.1.1,<3",
+    "regex>=2024.11.6",
 ]
 
 [project.scripts]
