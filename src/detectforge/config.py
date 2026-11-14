@@ -14,18 +14,23 @@ class Settings(BaseSettings):
     # UI: build the SigmaHQ index on first launch if missing (needed on a fresh cloud deploy).
     ui_auto_fetch_index: bool = True
 
-    # LLM for the agent loop. The API key uses the provider's standard variable name.
-    anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
-    model: str = "claude-sonnet-5-5"
-    fallback_model: str = "claude-haiku-5-5"
+    # LLM for the agent loop: any OpenAI-compatible endpoint. Default is OpenRouter's free tier;
+    # for a local model use llm_base_url=http://localhost:11434/v1 (Ollama) and any non-empty key.
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_api_key: SecretStr | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
+    model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    fallback_model: str | None = "google/gemma-4-31b-it:free"
+    llm_timeout_s: float = Field(default=120.0, gt=0)
+    llm_max_retries: int = Field(default=3, ge=0)
 
     # Per-rule budgets for the agent loop.
-    max_iterations: int = Field(default=5, ge=1)
-    max_cost_usd_per_rule: float = Field(default=1.0, gt=0)
-    tool_timeout_s: float = Field(default=30.0, gt=0)
+    max_iterations: int = Field(default=5, ge=1, description="run_tuning_set calls per rule")
+    max_model_calls: int = Field(default=20, ge=1, description="LLM requests per rule")
+    max_tokens_per_rule: int = Field(default=400_000, ge=1_000, description="prompt + completion tokens")
+    max_output_tokens: int = Field(default=4_096, ge=256, description="per LLM response")
 
-    # Tracing (Langfuse).
-    langfuse_host: str | None = None
+    # Tracing (Langfuse): enabled when both keys are set. Cloud (free tier) or self-hosted URL.
+    langfuse_host: str = Field(default="https://cloud.langfuse.com", validation_alias="LANGFUSE_HOST")
     langfuse_public_key: SecretStr | None = Field(default=None, validation_alias="LANGFUSE_PUBLIC_KEY")
     langfuse_secret_key: SecretStr | None = Field(default=None, validation_alias="LANGFUSE_SECRET_KEY")
 

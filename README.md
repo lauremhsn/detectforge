@@ -30,6 +30,12 @@ uv run detectforge harness data/fixtures/rules/schtasks_create_literal.yml data/
 uv run detectforge compare data/fixtures/rules/schtasks_create_literal.yml \
   data/fixtures/rules/schtasks_create_robust.yml data/fixtures/events.jsonl --technique T1053.005
 
+# Run the agent to harden an existing rule (needs OPENROUTER_API_KEY in .env; free models by default).
+# Only the tuning split reaches the agent; the held-out split is scored afterwards for evaluation.
+uv run detectforge harden --rule data/fixtures/rules/schtasks_create_literal.yml \
+  --technique T1053.005 --events data/fixtures/events.jsonl
+uv run detectforge llm models   # free models that support tool calling
+
 # Convert to an Elastic query (lucene or eql)
 uv run detectforge convert data/fixtures/rules/certutil_download_literal.yml --target lucene
 
@@ -87,6 +93,10 @@ src/detectforge/
   harness/          matcher (Sigma semantics over events), run() -> Scorecard
   reference/        SigmaHQ release fetch + index, search_reference_rules backend
   ui/               Streamlit UI (optional `ui` dependency group)
+  agent/            typed tools, hardening loop, runner (tuning split only)
+  gate.py           quality gate for submitted rules
+  llm.py            provider-agnostic LLM client (OpenRouter free models by default)
+  tracing.py        Langfuse tracing of runs (off unless LANGFUSE_* keys are set)
   cli.py
 data/fixtures/      synthetic events and fixture rules (see its README)
 docs/interfaces.md  interface contract and open questions
