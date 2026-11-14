@@ -15,12 +15,14 @@ from detectforge.harness.compare import HardeningReport, compare
 from detectforge.llm import ChatClient
 from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event
+from detectforge.tracing import NoopTracer, Tracer
 
 
 class HardeningOutcome(BaseModel):
     run: AgentRun
     heldout_evaluation: HardeningReport | None
     saved_to: str | None = None
+    trace_url: str | None = None
 
 
 def run_hardening(
@@ -31,6 +33,7 @@ def run_hardening(
     model_name: str,
     index: ReferenceIndex | None = None,
     out_dir: Path | None = None,
+    tracer: Tracer | None = None,
 ) -> HardeningOutcome:
     """events may contain both splits; only the tuning part reaches the agent."""
     in_scope = [e for e in events if e.technique == technique]
@@ -39,9 +42,14 @@ def run_hardening(
     if not any(e.label == "attack" for e in tuning):
         raise ValueError(f"no tuning attack events for {technique}")
 
-    run = harden(rule_yaml, technique, tuning, client, model_name, index=index)
+    tracer = tracer or NoopTracer()
+    run = harden(rule_yaml, technique, tuning, client, model_name, index=index, tracer=tracer)
+    tracer.flush()  # short-lived CLI runs must export before exiting
     evaluation = compare(rule_yaml, run.final_rule_yaml, heldout) if heldout else None
-    outcome = HardeningOutcome(run=run, heldout_evaluation=evaluation)
+    # Evaluation on held-out data happens outside the traced run and is never sent to the tracer.
+    outcome = HardeningOutcome(
+        run=run, heldout_evaluation=evaluation, trace_url=tracer.trace_url(run.trace_id)
+    )
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
         path = out_dir / f"{run.trace_id}.json"

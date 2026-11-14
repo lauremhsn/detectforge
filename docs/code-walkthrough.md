@@ -48,10 +48,11 @@ src/detectforge/
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
   agent/loop.py       The hardening loop; agent/runner.py splits data and saves each run
+  tracing.py          Langfuse tracing of every model and tool call (no-op when not configured)
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                150 automated tests (run on every push by GitHub Actions)
+tests/                160 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -361,11 +362,36 @@ false alarms unchanged; 4 model calls, 13k tokens, 83 s. One fixture run, not ev
 
 ---
 
+## 7d. Tracing (`tracing.py`) *(new)*
+
+Every run is one **trace** in Langfuse, using the run's own `trace_id` (the same id as the file in
+`data/runs/`), so a saved run and its dashboard view always match:
+
+```
+harden (agent)            input: technique + original rule; output: status, reasons, final rule
+├── llm (generation)      messages in, content/tool calls out, model, token usage, fallback flag
+├── tool:run_tuning_set   arguments in, result out; ERROR level if the call failed
+├── llm (generation)
+├── tool:submit
+└── quality_gate          (only when no submission was accepted) why it failed
+```
+
+- **On only when configured**: set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` (and `LANGFUSE_HOST`
+  for a self-hosted server; the default is Langfuse's free cloud). Without them it's a no-op, and the
+  run file still records every call with latency and tokens.
+- **Can never break a run**: if Langfuse is down or misconfigured, the error is logged once and the
+  run continues. A real error in our own code is still raised, never hidden by tracing.
+- **No held-out data and no secrets** in traces: only what the agent itself sees is traced; the held-out
+  evaluation runs after the trace ends.
+- `detectforge harden` prints the trace link at the end.
+
+---
+
 ## 8. Command line, tests, CI
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 150 tests
+uv run pytest                             # 160 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
@@ -383,7 +409,8 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 alarms"), `test_ui` (UI renders and its numbers match the library), `test_agent_tools` (contracts,
 held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
-`test_config`.
+`test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting
+to memory, a broken backend never breaking a run), `test_config`.
 
 GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
@@ -421,6 +448,6 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 
 1. ~~Agent tools~~ — done (§7b), plus quality gate v0.
 2. ~~Agent loop v1~~ — done (§7c), hardening path.
-3. **Tracing** (Langfuse) of every model and tool call (the run JSON already records them).
+3. ~~Tracing~~ — done (§7d).
 4. **Integration test** on the real mutations for 2 techniques (needs the data by ~Nov 13).
 5. The UI's Harden tab gets an "ask the agent" button that fills the editor.

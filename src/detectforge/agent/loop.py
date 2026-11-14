@@ -20,6 +20,7 @@ from detectforge.harness.compare import compare, evasion_resistance
 from detectforge.llm import ChatClient, LLMError, ModelCallRecord, openai_tool_definitions
 from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event, RuleRecord
+from detectforge.tracing import NoopTracer, Tracer
 
 PROMPT_VERSION = "harden-v1"
 
@@ -91,11 +92,69 @@ def harden(
     index: ReferenceIndex | None = None,
     settings: Settings | None = None,
     gate_config: GateConfig | None = None,
+    tracer: Tracer | None = None,
 ) -> AgentRun:
+    """Run the hardening loop; the whole run is one trace (root "harden" + one child per call)."""
     settings = settings or get_settings()
-    started = time.perf_counter()
+    tracer = tracer or NoopTracer()
     trace_id = uuid.uuid4().hex
-    ctx = ToolContext(
+    with tracer.observe(
+        "harden",
+        "agent",
+        trace_id=trace_id,
+        input={"technique": technique, "original_rule_yaml": rule_yaml},
+        metadata={
+            "prompt_version": PROMPT_VERSION,
+            "model": model_name,
+            "budgets": {
+                "model_calls": settings.max_model_calls,
+                "tokens": settings.max_tokens_per_rule,
+                "tuning_runs": settings.max_iterations,
+            },
+        },
+    ) as root:
+        run = _run(
+            rule_yaml,
+            technique,
+            tuning_events,
+            client,
+            model_name,
+            index,
+            settings,
+            gate_config,
+            tracer,
+            trace_id,
+        )
+        root.update(
+            output={
+                "status": run.status,
+                "final_source": run.final_source,
+                "reasons": run.reasons,
+                "tuning_evasion_resistance": [
+                    run.tuning_evasion_resistance_before,
+                    run.tuning_evasion_resistance_after,
+                ],
+                "final_rule_yaml": run.final_rule_yaml,
+            },
+            level="WARNING" if run.status != "passed" else None,
+        )
+    return run
+
+
+def _run(
+    rule_yaml: str,
+    technique: str,
+    tuning_events: list[Event],
+    client: ChatClient,
+    model_name: str,
+    index: ReferenceIndex | None,
+    settings: Settings,
+    gate_config: GateConfig | None,
+    tracer: Tracer,
+    trace_id: str,
+) -> AgentRun:
+    started = time.perf_counter()
+    ctx = ToolContext(  # tuning events only: held-out data never reaches tools or traces
         technique,
         tuning_events,
         index,
@@ -123,12 +182,25 @@ def harden(
         if ctx.submissions_left == 0:
             stop_reason = "quality gate rejected every submission"
             break
-        try:
-            response = client.chat(messages, tools)
-        except LLMError as e:
-            model_calls.append(ModelCallRecord(model=model_name, ok=False, latency_ms=0.0, error=str(e)))
-            stop_reason = f"LLM unavailable: {e}"
-            break
+        with tracer.observe("llm", "generation", model=model_name, input=list(messages)) as generation:
+            try:
+                response = client.chat(messages, tools)
+            except LLMError as e:
+                generation.update(level="ERROR", status_message=str(e))
+                model_calls.append(ModelCallRecord(model=model_name, ok=False, latency_ms=0.0, error=str(e)))
+                stop_reason = f"LLM unavailable: {e}"
+                break
+            generation.update(
+                model=response.model,
+                output={
+                    "content": response.content,
+                    "tool_calls": [
+                        {"name": tc.name, "arguments": tc.arguments} for tc in response.tool_calls
+                    ],
+                },
+                usage_details={"input": response.prompt_tokens, "output": response.completion_tokens},
+                metadata={"used_fallback": response.used_fallback, "latency_ms": response.latency_ms},
+            )
         model_calls.append(
             ModelCallRecord(
                 model=response.model,
@@ -161,7 +233,13 @@ def harden(
             }
         )
         for cid, tc in calls:
-            result = dispatch(ctx, tc.name, tc.arguments)
+            with tracer.observe(f"tool:{tc.name}", "tool", input=tc.arguments) as span:
+                result = dispatch(ctx, tc.name, tc.arguments)
+                span.update(
+                    output=result.model_dump(),
+                    level=None if result.ok else "ERROR",
+                    status_message=result.error,
+                )
             best = _track_best(best, tc.name, tc.arguments, result.model_dump())
             messages.append({"role": "tool", "tool_call_id": cid, "content": result.model_dump_json()})
             if ctx.accepted is not None:
@@ -174,11 +252,12 @@ def harden(
     else:
         final_yaml, source, rationale = rule_yaml, "original", None
 
-    gate = (
-        ctx.last_gate
-        if source == "accepted" and ctx.last_gate
-        else check(final_yaml, tuning_events, rule_yaml, ctx.gate_config)
-    )
+    if source == "accepted" and ctx.last_gate:
+        gate = ctx.last_gate
+    else:
+        with tracer.observe("quality_gate", "evaluator", input={"final_source": source}) as evaluation:
+            gate = check(final_yaml, tuning_events, rule_yaml, ctx.gate_config)
+            evaluation.update(output=gate.model_dump(), level=None if gate.passed else "WARNING")
     report = compare(rule_yaml, final_yaml, tuning_events)
     reasons = [] if source == "accepted" else [stop_reason or "no accepted submission"]
     reasons += [f"{c.name}: {c.detail}" for c in gate.checks if not c.passed]

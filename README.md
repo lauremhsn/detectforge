@@ -96,6 +96,7 @@ src/detectforge/
   agent/            typed tools, hardening loop, runner (tuning split only)
   gate.py           quality gate for submitted rules
   llm.py            provider-agnostic LLM client (OpenRouter free models by default)
+  tracing.py        Langfuse tracing of runs (off unless LANGFUSE_* keys are set)
   cli.py
 data/fixtures/      synthetic events and fixture rules (see its README)
 docs/interfaces.md  interface contract and open questions
