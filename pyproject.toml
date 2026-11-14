@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "openai>=1.60,<3",
     "pydantic>=2.14.1,<3",
     "pydantic-settings>=2.16.1,<3",
     # The harness walks pySigma's parsed condition tree, so pin the major version.
