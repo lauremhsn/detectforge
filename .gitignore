@@ -19,6 +19,7 @@ htmlcov/
 data/raw/
 data/sigmahq/
 data/atomic-red-team/
+data/runs/
 *.evtx
 
 # Editors / OS
@@ -27,8 +28,6 @@ data/atomic-red-team/
 .DS_Store
 Thumbs.db
 
-CLAUDE.md
-.claude/
 
 # Planning spreadsheets are shared directly, not versioned
 *.xlsx
