@@ -1,10 +1,11 @@
-"""Command line: `detectforge {validate,convert,harness,compare,sigmahq,harden,llm} ...`."""
+"""Command line: `detectforge {validate,convert,harness,compare,sigmahq,harden,harden-selection,llm} ...`."""
 
 import argparse
 import json
 import sys
 from pathlib import Path
 
+from detectforge.agent.batch import harden_selection, load_selection
 from detectforge.agent.runner import run_hardening
 from detectforge.config import get_settings
 from detectforge.events import load_events
@@ -59,6 +60,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=5, choices=range(1, MAX_LIMIT + 1), metavar=f"1-{MAX_LIMIT}")
     p.add_argument("--show-yaml", action="store_true")
     p.set_defaults(handler=_sigmahq_search)
+
+    p = sub.add_parser("harden-selection", help="harden every rule of an evaluation selection (e.g. dev)")
+    p.add_argument("--selection", type=Path, default=Path("data/eval/selection.yml"))
+    p.add_argument(
+        "--events", type=Path, action="append", help="events JSONL (repeatable; default: data/eval)"
+    )
+    p.add_argument("--split", default="dev", choices=["dev", "test"])
+    p.add_argument("--all", action="store_true", help="also run rules that already detect every mutation")
+    p.add_argument("--limit", type=int, help="at most this many agent runs (saves the free model quota)")
+    p.set_defaults(handler=_harden_selection)
 
     p = sub.add_parser("harden", help="run the agent to harden an existing rule (tuning split only)")
     source = p.add_mutually_exclusive_group(required=True)
@@ -163,6 +174,49 @@ def _harden(args: argparse.Namespace) -> int:
     print(
         f"trace:        {outcome.trace_url or 'tracing off (set LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY)'}"
     )
+    return 0
+
+
+def _harden_selection(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    index = _load_index_or_none()
+    if index is None:
+        print("error: no SigmaHQ index; run `detectforge sigmahq fetch`", file=sys.stderr)
+        return 1
+    paths = args.events or [Path("data/eval/base_events.jsonl"), Path("data/eval/mutations.jsonl")]
+    try:
+        events = [e for path in paths for e in load_events(path)]
+        selection = load_selection(args.selection)
+        client = OpenAICompatibleClient.from_settings(settings)
+    except (OSError, LLMError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    items = harden_selection(
+        selection,
+        events,
+        index,
+        client,
+        settings.model,
+        settings.runs_dir,
+        make_tracer(settings),
+        split=args.split,
+        only_improvable=not args.all,
+        limit=args.limit,
+    )
+    print(f"{'technique':10} {'tuning':>15} {'held-out':>15} {'calls':>5}  result  rule")
+    for i in items:
+        tuning = (
+            f"{_pct(i.tuning_before)} -> {_pct(i.tuning_after)}"
+            if i.action == "hardened"
+            else _pct(i.tuning_before)
+        )
+        heldout = f"{_pct(i.heldout_before)} -> {_pct(i.heldout_after)}" if i.action == "hardened" else ""
+        result = i.status if i.action == "hardened" else i.action
+        print(f"{i.technique:10} {tuning:>15} {heldout:>15} {i.model_calls:>5}  {result}  {i.title[:50]}")
+        if i.note:
+            print(f"{'':10} {i.note}")
+    calls = sum(i.model_calls for i in items)
+    print(f"\n{calls} model calls; runs saved to {settings.runs_dir} (see the Review tab)")
     return 0
 
 

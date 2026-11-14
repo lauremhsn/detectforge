@@ -36,6 +36,9 @@ uv run detectforge harden --rule data/fixtures/rules/schtasks_create_literal.yml
   --technique T1053.005 --events data/fixtures/events.jsonl
 uv run detectforge llm models   # free models that support tool calling
 
+# Harden every dev rule of the evaluation selection that has room to improve (data/eval)
+uv run detectforge harden-selection --split dev
+
 # Convert to an Elastic query (lucene or eql)
 uv run detectforge convert data/fixtures/rules/certutil_download_literal.yml --target lucene
 
