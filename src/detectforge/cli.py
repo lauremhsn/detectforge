@@ -10,7 +10,7 @@ from pathlib import Path
 
 from detectforge.agent.runner import run_hardening
 from detectforge.config import get_settings
-from detectforge.dataset import atomic, selection
+from detectforge.dataset import argfuscator, atomic, mutate, selection
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -84,6 +84,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p = llm_sub.add_parser("models", help="list free models that support tool calling (OpenRouter)")
     p.set_defaults(handler=_llm_models)
+
+    p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
+    p.set_defaults(handler=_dataset_mutate)
 
     args = parser.parse_args(argv)
     return args.handler(args)
@@ -235,6 +238,36 @@ def _dataset_select(args: argparse.Namespace) -> int:
                 "test_rules": splits.count("test"),
                 "techniques": len({r.technique for r in result.rules}),
                 "base_attacks": len(result.base_attacks),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _dataset_mutate(args: argparse.Namespace) -> int:
+    import collections
+
+    data_dir = get_settings().data_dir
+    base = load_events(data_dir / "eval" / "base_events.jsonl")
+    try:
+        mutations = mutate.build_mutations(base, data_dir / "argfuscator")
+    except argfuscator.ArgfuscatorFetchError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    out_path = data_dir / "eval" / "mutations.jsonl"
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        for event in mutations:
+            f.write(event.model_dump_json(exclude_none=True) + "\n")
+    per_transform = collections.Counter(m.transform for m in mutations)
+    per_split = collections.Counter(m.split for m in mutations)
+    print(
+        json.dumps(
+            {
+                "base_attacks": len(base),
+                "mutations": len(mutations),
+                "per_transform": dict(per_transform),
+                "per_split": dict(per_split),
             },
             indent=2,
         )

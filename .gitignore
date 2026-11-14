@@ -31,3 +31,4 @@ Thumbs.db
 
 # Planning spreadsheets are shared directly, not versioned
 *.xlsx
+data/argfuscator/
