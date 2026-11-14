@@ -35,6 +35,7 @@ src/detectforge/
   rules/
     parse.py          Turn rule text into a rule object; reject anything out of scope
     validate.py       "Is this rule OK?" → errors and warnings
+    lint.py           Hardening may broaden a rule, never narrow it (dropped fields/exclusions)
     convert.py        Translate a rule into an Elastic query (for a real SIEM later)
   harness/
     matcher.py        The engine: does this rule fire on this event?
@@ -52,7 +53,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                160 automated tests (run on every push by GitHub Actions)
+tests/                169 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -316,9 +317,17 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
 
 **Quality gate (`gate.check`)**, runs every check so the reviewer sees all reasons at once:
 - valid (§4.2), and detects every *unmutated* attack;
+- **deployable**: converts to an Elastic Lucene query with the official pySigma backend (configurable
+  targets). All 1,297 SigmaHQ rules pass; it catches agent rules a real SIEM can't run, e.g. the
+  `|cased` modifier, which our harness accepts but Lucene can't express;
 - evasion resistance ≥ 80% on the mutations (configurable);
 - hardening: **no attack the original caught is lost, and no new false alarms** (existing ones are
-  left for the tuning step); writing a new rule: false alarms ≤ 0 (configurable).
+  left for the tuning step); writing a new rule: false alarms ≤ 0 (configurable);
+- hardening: **broaden, never narrow** (`rules/lint.py`): every field and every exclusion of the
+  original must still be there. These cover what our scores can't see: a branch on a field our events
+  lack (e.g. `Hashes`), or a filter for a false positive our benign events don't contain. Exclusions
+  are compared by field + value (ignoring case and the filter's name), so renaming is fine; removing
+  is not.
 
 Failing the gate is not a dead end: the rule still goes to a human as "needs human review" with the
 failed checks listed. Example on the fixtures: the literal schtasks rule fails (33% resistance on
@@ -391,7 +400,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 160 tests
+uv run pytest                             # 169 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
@@ -407,7 +416,7 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 (index building, search ranking, exclusion, tampered zip rejected), `test_rules` (validate/convert/CLI),
 `test_schemas` (bad events rejected), `test_fixtures` (data sanity + "hard negatives must cause false
 alarms"), `test_ui` (UI renders and its numbers match the library), `test_agent_tools` (contracts,
-held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_agent_loop`
+held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
 `test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting
 to memory, a broken backend never breaking a run), `test_config`.

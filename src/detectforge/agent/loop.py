@@ -22,7 +22,7 @@ from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event, RuleRecord
 from detectforge.tracing import NoopTracer, Tracer
 
-PROMPT_VERSION = "harden-v1"
+PROMPT_VERSION = "harden-v2"  # v2: states the gate's scope and deployability rules
 
 SYSTEM_PROMPT = """\
 You are a detection engineer. Your job is to harden an EXISTING Sigma rule so that it keeps \
@@ -40,7 +40,10 @@ characters (e.g. ".exe"), reordering of arguments, recoding of values.
 3. Revise the rule around signals every variant must keep: the executable (Image, \
 OriginalFileName) and short essential tokens, rather than exact spellings or long literal strings. \
 Useful Sigma tools: |contains on short tokens, |windash for option prefixes, |re for tolerant \
-patterns. Keep the rule's logsource, title and intent. Never lose an attack the original caught.
+patterns. Keep the rule's logsource, title and intent. Never lose an attack the original caught. \
+Broaden, never narrow: keep every field and every exclusion (filter) of the original rule, even \
+ones these events can't exercise; add alternatives instead of removing checks. Do not use the \
+|cased modifier: the rule must also run in Elastic.
 4. validate_rule is free. run_tuning_set has a limited budget; use it to check each real revision.
 5. Finish by calling submit with the complete Sigma YAML and a short rationale. If the gate rejects \
 it, read the failed checks and try again.
