@@ -63,7 +63,7 @@ print(card.hits, card.misses, card.false_alarms, card.per_transform["insertion"]
 
 ## UI
 
-A minimal local UI over the same library functions (find → validate → harden, before/after):
+A local UI over the same library functions: find → validate → harden (by hand or with the agent) → review (approve/reject):
 
 ```bash
 uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost

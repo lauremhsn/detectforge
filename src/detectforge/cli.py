@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--rule-id", help="SigmaHQ rule id from the reference index")
     p.add_argument("--technique", required=True, help="ATT&CK technique whose events to use")
     p.add_argument("--events", type=Path, action="append", required=True, help="events JSONL (repeatable)")
-    p.add_argument("--out", type=Path, default=Path("data/runs"), help="where to save the run and rule")
+    p.add_argument("--out", type=Path, help="where to save the run and rule (default: data/runs)")
     p.set_defaults(handler=_harden)
 
     llm_sub = sub.add_parser("llm", help="LLM provider helpers").add_subparsers(
@@ -127,7 +127,14 @@ def _harden(args: argparse.Namespace) -> int:
     try:
         client = OpenAICompatibleClient.from_settings(settings)
         outcome = run_hardening(
-            rule_yaml, args.technique, events, client, settings.model, index, args.out, make_tracer(settings)
+            rule_yaml,
+            args.technique,
+            events,
+            client,
+            settings.model,
+            index,
+            args.out or settings.runs_dir,
+            make_tracer(settings),
         )
     except (LLMError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
