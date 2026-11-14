@@ -246,3 +246,11 @@ def test_tool_definitions_use_openai_function_format():
     assert defs == [
         {"type": "function", "function": {"name": "t", "description": "d", "parameters": {"type": "object"}}}
     ]
+
+
+def test_no_improvement_returns_the_original_not_a_rewritten_copy(tuning, rules, settings):
+    original = rules[0]
+    without_comments = "\n".join(line for line in original.splitlines() if not line.lstrip().startswith("#"))
+    client = ScriptedClient([tool_call("run_tuning_set", rule_yaml=without_comments), LLMError("timeout")])
+    run = harden(original, TECHNIQUE, tuning, client, "fake", settings=settings)
+    assert run.final_source == "original" and run.final_rule_yaml == original

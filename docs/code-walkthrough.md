@@ -35,7 +35,7 @@ src/detectforge/
   rules/
     parse.py          Turn rule text into a rule object; reject anything out of scope
     validate.py       "Is this rule OK?" → errors and warnings
-    lint.py           Hardening may broaden a rule, never narrow it (dropped fields/exclusions)
+    lint.py           Broaden-never-narrow and overfitting checks (unusual characters, copied strings)
     convert.py        Translate a rule into an Elastic query (for a real SIEM later)
   harness/
     matcher.py        The engine: does this rule fire on this event?
@@ -55,7 +55,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                188 automated tests (run on every push by GitHub Actions)
+tests/                194 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -341,7 +341,23 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   original must still be there. These cover what our scores can't see: a branch on a field our events
   lack (e.g. `Hashes`), or a filter for a false positive our benign events don't contain. Exclusions
   are compared by field + value (ignoring case and the filter's name), so renaming is fine; removing
-  is not.
+  is not;
+- **not overfitted** (`rules/lint.py`): the rule may not add **unusual characters** (invisible or
+  look-alike Unicode, written literally or as `\u`/`\x` escapes) that the original didn't have. Found on
+  the first real dev run: the agent "hardened" a Run-keys rule by listing the exact zero-width spaces,
+  soft hyphens and look-alike letters our mutations used, scoring 100% on tuning while memorising the
+  test. That rule is now rejected. Characters the original already had (21 SigmaHQ rules contain some)
+  are fine;
+- **warning only, `no_copied_test_strings`**: new command-line strings of 12+ characters copied verbatim
+  from the tuning attacks (e.g. a test task name or file path). Sometimes legitimate (a registry path), so
+  it's shown to the reviewer as a warning and never fails the gate by itself. Program names
+  (`Image`, `OriginalFileName`) are never flagged: naming the binary is the most legitimate signal.
+
+Checks are either **blocking** (fail the gate) or **warnings** (shown in the Review tab, never fail it).
+
+**Best attempt.** When no submission is accepted, the run returns the best revision seen on the tuning
+set, but only if it scores strictly better than the original; otherwise the original rule itself (so a
+re-sent copy with its comments stripped never masquerades as an improvement).
 
 Failing the gate is not a dead end: the rule still goes to a human as "needs human review" with the
 failed checks listed. Example on the fixtures: the literal schtasks rule fails (33% resistance on
@@ -426,7 +442,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 188 tests
+uv run pytest                             # 194 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models
@@ -443,7 +459,7 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 (index building, search ranking, exclusion, tampered zip rejected), `test_rules` (validate/convert/CLI),
 `test_schemas` (bad events rejected), `test_fixtures` (data sanity + "hard negatives must cause false
 alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_batch` (per-rule scoping, quota-saving skips, early stop), `test_agent_tools` (contracts,
-held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability), `test_agent_loop`
+held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability, memorised characters, copied strings), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
 `test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting
 to memory, a broken backend never breaking a run), `test_config`.
