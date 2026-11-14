@@ -55,7 +55,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                194 automated tests (run on every push by GitHub Actions)
+tests/                197 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -274,7 +274,7 @@ first launch, and `src/detectforge/ui/requirements.txt` lists its dependencies.
 | 1 · Find | Search SigmaHQ by technique + keywords; table of candidates with "fields missing from events"; rule details (marked untrusted); or pick a fixture rule. "No usable rule" message = where the write-new-rule fallback will start. |
 | 2 · Validate | The "before": validation errors/warnings, then the scorecard: detected, evasion resistance, false alarms, per-mutation table, and every event with DETECTED / MISSED / FALSE ALARM. |
 | 3 · Harden | Before on the left, an editable "after" on the right. Every edit re-runs `compare`: evasion resistance with delta, per-mutation before/after, and lists of newly caught / LOST attacks and false-alarm changes. **"Ask the agent"** runs the hardening loop on the selected technique and puts its proposal in the editor. |
-| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call. **Approve / Reject** with your name and a comment. |
+| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call, plus the full conversation step by step. **Approve / Reject** with your name and a comment. |
 
 It is a **thin layer over the library** (no logic of its own) and shows held-out events to the human
 only; the agent itself still receives just the tuning split.
@@ -387,7 +387,11 @@ different provider.
    the original rule. It never fails silently.
 5. After the run, deterministic code scores original vs final on the **held-out** split, as
    evaluation evidence the agent never saw. Everything (rule, reasons, gate checks, every model and
-   tool call with latency and tokens) is saved to `data/runs/<trace_id>.json` + `.yml`.
+   tool call with latency and tokens) is saved to `data/runs/<trace_id>.json` + `.yml`, together with
+   the **whole conversation**: the instructions, every message and tool call the model made, and every
+   tool result it received. It only ever holds what the agent saw (tuning data), and the Review tab can
+   replay it step by step ("Show the agent's conversation"), which is how we debug *why* a run went
+   wrong, not just *that* it did.
 
 ```bash
 uv run detectforge harden --rule data/fixtures/rules/schtasks_create_literal.yml \
@@ -442,7 +446,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 194 tests
+uv run pytest                             # 197 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models
