@@ -254,3 +254,24 @@ def test_no_improvement_returns_the_original_not_a_rewritten_copy(tuning, rules,
     client = ScriptedClient([tool_call("run_tuning_set", rule_yaml=without_comments), LLMError("timeout")])
     run = harden(original, TECHNIQUE, tuning, client, "fake", settings=settings)
     assert run.final_source == "original" and run.final_rule_yaml == original
+
+
+def test_run_keeps_the_full_conversation_without_held_out_data(events, rules, tmp_path):
+    original, robust = rules
+    client = ScriptedClient(
+        [
+            tool_call("run_tuning_set", rule_yaml=robust),
+            tool_call("submit", rule_yaml=robust, rationale="create verb"),
+        ]
+    )
+    outcome = run_hardening(original, TECHNIQUE, events, client, "fake", out_dir=tmp_path)
+    transcript = outcome.run.transcript
+
+    assert [m["role"] for m in transcript] == ["system", "user", "assistant", "tool", "assistant", "tool"]
+    assert transcript[2]["tool_calls"][0]["function"]["name"] == "run_tuning_set"
+    assert json.loads(transcript[3]["content"])["output"]["evasion_resistance"] == 1.0
+    saved = json.loads((tmp_path / f"{outcome.run.trace_id}.json").read_text(encoding="utf-8"))
+    assert saved["run"]["transcript"] == transcript
+    text = json.dumps(transcript)
+    for e in (e for e in events if e.split == "heldout"):
+        assert e.event_id not in text and e.command_line not in text

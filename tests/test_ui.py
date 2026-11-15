@@ -21,7 +21,7 @@ def data_dir(tmp_path, monkeypatch):
     shutil.copytree(FIXTURES, data / "fixtures")
     monkeypatch.setenv("DETECTFORGE_DATA_DIR", str(data))
     monkeypatch.setenv("DETECTFORGE_UI_AUTO_FETCH_INDEX", "false")  # never hit the network in tests
-    monkeypatch.delenv("DETECTFORGE_UI_ALLOW_AGENT_RUNS", raising=False)
+    monkeypatch.setenv("DETECTFORGE_UI_ALLOW_AGENT_RUNS", "false")  # never inherit a local .env
     return data
 
 
@@ -131,3 +131,35 @@ def test_agent_button_is_off_by_default(app):
     button = next(b for b in app.button if b.label == "Ask the agent to harden this rule")
     assert button.disabled
     assert any("switched off" in c.value for c in app.caption)
+
+
+def test_review_shows_the_agents_conversation(data_dir, load_rule_text, fixture_events):
+    from detectforge.config import get_settings
+
+    _saved_run(data_dir / "runs", load_rule_text, fixture_events)
+    get_settings.cache_clear()
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    toggle = next(t for t in at.toggle if t.label == "Show the agent's conversation")
+    toggle.set_value(True).run()
+    page = " ".join(m.value for m in at.markdown)
+    assert "Instructions given to the agent" in page and "Step 1: the agent" in page
+    assert "calls `run_tuning_set`" in page and "calls `submit`" in page
+    assert any(c.language == "yaml" and "CommandLine|contains: 'create'" in c.value for c in at.code)
+
+
+def test_old_runs_without_a_conversation_still_open(data_dir, load_rule_text, fixture_events):
+    import json as _json
+
+    from detectforge.config import get_settings
+
+    outcome = _saved_run(data_dir / "runs", load_rule_text, fixture_events)
+    path = data_dir / "runs" / f"{outcome.run.trace_id}.json"
+    saved = _json.loads(path.read_text(encoding="utf-8"))
+    del saved["run"]["transcript"]
+    path.write_text(_json.dumps(saved), encoding="utf-8")
+    get_settings.cache_clear()
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    assert not at.exception
+    assert any("saved before conversations were recorded" in c.value for c in at.caption)

@@ -86,6 +86,9 @@ class AgentRun(BaseModel):
     completion_tokens: int
     duration_s: float
     record: RuleRecord
+    # The whole conversation (OpenAI chat format): instructions, the model's messages and tool calls,
+    # and every tool result. Only what the agent saw, so tuning data only. Empty in older run files.
+    transcript: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def harden(
@@ -297,6 +300,7 @@ def _run(
         record=RuleRecord(
             rule_yaml=final_yaml, source="adapted", technique=technique, trace_id=trace_id, version=1
         ),
+        transcript=messages,
     )
 
 
