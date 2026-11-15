@@ -25,6 +25,24 @@ class HardeningOutcome(BaseModel):
     trace_url: str | None = None
 
 
+def scope_events(events: list[Event], technique: str, base_ids: set[str] | None = None) -> list[Event]:
+    """The events one rule is scored on.
+
+    Attacks: the rule's technique, and if base_ids is given only those base attacks and their
+    mutations (two rules for one technique can target different behaviors; testing a rule on the
+    other's attacks would push it to broaden beyond its intent).
+
+    Benign events: all of them, whatever technique they were collected for. A legitimate command is
+    a false alarm for any rule that fires on it (e.g. `reg query ...\\Run /v X`, collected for registry
+    dumping, must not trigger a Run-key persistence rule either).
+    """
+    return [
+        e
+        for e in events
+        if e.label == "benign" or (e.technique == technique and (base_ids is None or e.base_id in base_ids))
+    ]
+
+
 def run_hardening(
     rule_yaml: str,
     technique: str,
@@ -36,18 +54,8 @@ def run_hardening(
     tracer: Tracer | None = None,
     base_ids: set[str] | None = None,
 ) -> HardeningOutcome:
-    """events may contain both splits; only the tuning part reaches the agent.
-
-    base_ids limits the attack events to the base attacks this rule is meant to detect (and their
-    mutations): two rules for the same technique can target different behaviors, and testing a rule
-    on another rule's attacks would push it to broaden beyond its intent. Benign events of the
-    technique are always kept, since every rule must stay quiet on them.
-    """
-    in_scope = [
-        e
-        for e in events
-        if e.technique == technique and (e.label == "benign" or base_ids is None or e.base_id in base_ids)
-    ]
+    """events may contain both splits; only the tuning part reaches the agent (see scope_events)."""
+    in_scope = scope_events(events, technique, base_ids)
     tuning = [e for e in in_scope if e.split == "tune"]
     heldout = [e for e in in_scope if e.split == "heldout"]
     if not any(e.label == "attack" for e in tuning):

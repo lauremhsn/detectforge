@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from detectforge.agent.runner import run_hardening
+from detectforge.agent.runner import run_hardening, scope_events
 from detectforge.harness.compare import evasion_resistance
 from detectforge.harness.run import run
 from detectforge.llm import ChatClient
@@ -74,13 +74,7 @@ def harden_selection(
             item.action, item.note = "error", "rule not in the SigmaHQ index"
             continue
         bases = set(rule.base_attacks)
-        tuning = [
-            e
-            for e in events
-            if e.technique == rule.technique
-            and e.split == "tune"
-            and (e.label == "benign" or e.base_id in bases)
-        ]
+        tuning = [e for e in scope_events(events, rule.technique, bases) if e.split == "tune"]
         baseline = evasion_resistance(run(reference.rule_yaml, tuning))
         item.tuning_before = baseline
         if baseline is None:

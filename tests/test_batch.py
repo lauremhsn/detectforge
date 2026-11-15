@@ -131,3 +131,14 @@ def test_load_selection_reads_the_manifest(tmp_path):
     )
     (rule,) = load_selection(path)
     assert (rule.id, rule.split, rule.base_attacks) == ("abc", "dev", ["T1490-b01"])
+
+
+def test_every_rule_is_checked_against_all_benign_events(fixture_events):
+    """A legitimate command is a false alarm for any rule, whatever technique it was collected for."""
+    from detectforge.agent.runner import scope_events
+
+    scoped = scope_events(fixture_events, "T1053.005", base_ids={"st-001"})
+    benign = {e.event_id for e in scoped if e.label == "benign"}
+    assert {"st-101", "cu-101"} <= benign  # certutil benign events (T1105) are in scope too
+    attacks = {e.base_id for e in scoped if e.label == "attack"}
+    assert attacks == {"st-001"}  # attacks stay limited to this rule's own base attacks

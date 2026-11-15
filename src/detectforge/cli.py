@@ -10,11 +10,12 @@ from pathlib import Path
 from detectforge.agent.batch import harden_selection, load_selection
 from detectforge.agent.runner import run_hardening
 from detectforge.config import get_settings
-from detectforge.dataset import argfuscator, atomic, mutate, selection
+from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
 from detectforge.eval import arms
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
+from detectforge.intake import interpret_request
 from detectforge.llm import LLMError, OpenAICompatibleClient, list_free_tool_models
 from detectforge.reference import sigmahq
 from detectforge.reference.index import MAX_LIMIT, ReferenceIndex
@@ -65,6 +66,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--show-yaml", action="store_true")
     p.set_defaults(handler=_sigmahq_search)
 
+    p = sub.add_parser("intake", help="map a plain-language request to ATT&CK techniques")
+    p.add_argument("request", help='e.g. "detect scheduled-task persistence"')
+    p.add_argument("--no-model", action="store_true", help="keyword search only (no model call)")
+    p.set_defaults(handler=_intake)
+
     p = sub.add_parser("harden-selection", help="harden every rule of an evaluation selection (e.g. dev)")
     p.add_argument("--selection", type=Path, default=Path("data/eval/selection.yml"))
     p.add_argument(
@@ -98,6 +104,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
     p.set_defaults(handler=_dataset_mutate)
+
+    p = dataset_sub.add_parser("negatives", help="build benign hard-negative events from the config")
+    p.set_defaults(handler=_dataset_negatives)
 
     eval_sub = sub.add_parser("eval", help="run an evaluation arm").add_subparsers(
         dest="eval_command", required=True
@@ -202,7 +211,13 @@ def _harden_selection(args: argparse.Namespace) -> int:
     if index is None:
         print("error: no SigmaHQ index; run `detectforge sigmahq fetch`", file=sys.stderr)
         return 1
-    paths = args.events or [Path("data/eval/base_events.jsonl"), Path("data/eval/mutations.jsonl")]
+    # Default: attacks, their mutations, and the class-A benign look-alikes (class B, which can't be
+    # told apart from attacks by command line, is reported separately and never counted as a mistake).
+    paths = args.events or [
+        Path("data/eval/base_events.jsonl"),
+        Path("data/eval/mutations.jsonl"),
+        Path("data/eval/benign_events.jsonl"),
+    ]
     try:
         events = [e for path in paths for e in load_events(path)]
         selection = load_selection(args.selection)
@@ -236,6 +251,21 @@ def _harden_selection(args: argparse.Namespace) -> int:
             print(f"{'':10} {i.note}")
     calls = sum(i.model_calls for i in items)
     print(f"\n{calls} model calls; runs saved to {settings.runs_dir} (see the Review tab)")
+    return 0
+
+
+def _intake(args: argparse.Namespace) -> int:
+    index = _load_index_or_none()
+    if index is None:
+        print("error: no SigmaHQ index; run `detectforge sigmahq fetch`", file=sys.stderr)
+        return 1
+    client = None
+    if not args.no_model:
+        try:
+            client = OpenAICompatibleClient.from_settings(get_settings())
+        except LLMError:
+            client = None  # no key: intake degrades to keyword search
+    print(interpret_request(args.request, index, client).model_dump_json(indent=2))
     return 0
 
 
@@ -339,6 +369,18 @@ def _dataset_mutate(args: argparse.Namespace) -> int:
             indent=2,
         )
     )
+    return 0
+
+
+def _dataset_negatives(args: argparse.Namespace) -> int:
+    data_dir = get_settings().data_dir
+    config = hard_negatives.load(data_dir / "eval" / "hard_negatives.yml")
+    class_a, class_b = hard_negatives.build_events(config)
+    for events, name in ((class_a, "benign_events.jsonl"), (class_b, "benign_ambiguous.jsonl")):
+        with open(data_dir / "eval" / name, "w", encoding="utf-8", newline="\n") as f:
+            for event in events:
+                f.write(event.model_dump_json(exclude_none=True) + "\n")
+    print(json.dumps({"class_a": len(class_a), "class_b": len(class_b)}, indent=2))
     return 0
 
 

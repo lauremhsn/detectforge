@@ -46,6 +46,7 @@ src/detectforge/
     index.py          Search that index by technique / keywords
   ui/app.py           The Streamlit UI (Find → Validate → Harden → Review tabs)
   review.py           Human review: list runs, open one, record approve/reject
+  intake.py           Plain-language request → ATT&CK techniques (model, checked; keyword fallback)
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
@@ -55,7 +56,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                203 automated tests (run on every push by GitHub Actions)
+tests/                251 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -87,6 +88,7 @@ Stored one per line in a `.jsonl` file:
 | `transform` | Which Uetz mutation produced it: `none` (original) or one of the 5 types. |
 | `base_id` | Which original event it was mutated from. Originals point to themselves. |
 | `split` | `tune` (the agent may see it) or `heldout` (only for final evaluation). |
+| `verified` | Optional: `true`/`false` once the VM confirmed the command still behaves like the original; empty = not checked. |
 
 The model **rejects** bad events on load (unknown fields, wrong labels, a mutation that claims to be
 its own base, etc.) and tells you the exact line number. This catches mistakes in the attack data early.
@@ -256,6 +258,27 @@ external input. Rule text is explicitly marked untrusted (it will be shown to th
 
 ---
 
+## 6b. Intake: from a request in plain words to techniques (`intake.py`) *(new)*
+
+The first pipeline step. The user types what they want to detect ("scheduled-task persistence", or a
+pasted short threat report); intake returns the ATT&CK technique(s) it's about, with how many SigmaHQ
+rules each has, so the user goes straight to Find. Design:
+- **The model interprets, code verifies.** The model can only answer through one typed tool
+  (`propose_coverage`), and every technique it proposes must exist in the SigmaHQ index; invented or
+  mistyped ids are dropped and listed as "ignored".
+- **Vague requests get a question**, not a guess ("make us secure" → "which behaviour?").
+- **The request is untrusted** (a pasted report may contain "ignore your instructions"): it's quoted as
+  data, the model can only reply through the tool, and code validates the reply. The worst an injection
+  can do is produce a wrong *suggestion* that a human sees, never an action.
+- **Graceful degradation**: if the model is down, out of quota, or replies without the tool, intake
+  falls back to a keyword search of the index (filler words like "detect", "attackers" ignored; weak
+  matches → a question instead of a guess).
+
+`uv run detectforge intake "deleting shadow copies before ransomware"` (add `--no-model` for the
+keyword search only). In the UI: the box at the top of the Find tab.
+
+---
+
 ## 7. The UI (`ui/app.py`) *(new)*
 
 Start it from the repo root:
@@ -417,8 +440,11 @@ rule. Two design points:
 - **Each rule is tested only on its own attacks.** Two rules for the same technique can target
   different behaviours (e.g. "unusual schedule types" vs "task running as SYSTEM"). Testing one on the
   other's attacks would mark it as missing them and push the agent to broaden it beyond its intent. The
-  manifest lists each rule's base attacks; the runner keeps those (plus their mutations) and every
-  benign event of the technique.
+  manifest lists each rule's base attacks; the runner keeps those (plus their mutations).
+- **Every rule is checked against all benign events**, whatever technique they were collected for: a
+  legitimate command is a false alarm for any rule that fires on it. Example from the real data:
+  `reg query ...\Run /v OneDrive` was collected for registry dumping (T1003.002), but it's exactly what
+  an over-broad Run-keys persistence rule (T1547.001) would wrongly fire on.
 - **Model calls are spent only where they can help.** A rule with no mutations to test, or that already
   detects every tuning mutation, is skipped. `--limit` caps the number of agent runs, and the batch
   stops at the first "model unavailable" (e.g. the free daily limit) instead of failing every rule.
@@ -454,7 +480,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 203 tests
+uv run pytest                             # 251 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models

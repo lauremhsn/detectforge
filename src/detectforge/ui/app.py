@@ -29,9 +29,11 @@ from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
 from detectforge.ui.agent_panel import agent_panel
 from detectforge.ui.components import pct, table
+from detectforge.ui.intake_panel import intake_panel
 from detectforge.ui.review_tab import review_tab
 
 PIPELINE = [
+    ("Request (plain words → techniques)", True),
     ("Find existing rules", True),
     ("Adversarially validate", True),
     ("Harden by hand", True),
@@ -108,8 +110,10 @@ def find_tab(index: ReferenceIndex | str) -> None:
         st.info(index)
     else:
         st.caption(f"SigmaHQ {index.release} — {len(index.rules)} Windows process-creation rules")
+        intake_panel(index)
+        st.session_state.setdefault("find_technique", "T1053.005")
         c1, c2, c3 = st.columns([1, 2, 1])
-        technique = c1.text_input("ATT&CK technique", "T1053.005")
+        technique = c1.text_input("ATT&CK technique", key="find_technique")
         query = c2.text_input("Keywords (optional)", "schtasks create")
         limit = c3.slider("Max results", 1, 20, 8)
         exclude = st.checkbox(

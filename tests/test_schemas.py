@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from detectforge.events import EventFileError, dump_events, load_events
-from detectforge.schemas import TRANSFORMS, RuleRecord, Scorecard
+from detectforge.schemas import TRANSFORMS, Event, RuleRecord, Scorecard
 
 from conftest import make_event
 
@@ -57,3 +57,9 @@ def test_rule_record_defaults_to_proposed():
     assert record.status == "proposed"
     with pytest.raises(ValidationError):
         RuleRecord(rule_yaml="x", source="deployed", technique="T1105", trace_id="t", version=1)
+
+
+def test_verified_is_optional_and_round_trips():
+    assert make_event().verified is None  # not checked in the VM
+    checked = make_event(verified=True)
+    assert Event.model_validate_json(checked.model_dump_json()).verified is True
