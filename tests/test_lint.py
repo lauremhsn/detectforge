@@ -3,7 +3,7 @@
 import pytest
 
 from detectforge.gate import GateConfig, check
-from detectforge.rules.lint import dropped_fields, dropped_filters
+from detectforge.rules.lint import copied_literals, dropped_fields, dropped_filters, unusual_characters
 from detectforge.rules.parse import load_rule
 
 from conftest import make_rule
@@ -96,3 +96,63 @@ def test_gate_flags_narrowing_when_hardening(tuning, load_rule_text):
 def test_gate_scope_checks_only_apply_to_hardening(tuning, load_rule_text):
     result = check(load_rule_text("schtasks_create_robust.yml"), tuning)
     assert not {"keeps_original_fields", "keeps_original_filters"} & {c.name for c in result.checks}
+
+
+# ---- overfitting ----------------------------------------------------------------------------
+
+OVERFITTED = make_rule(
+    "  selection:\n"
+    "    Image|endswith: '\\reg.exe'\n"
+    "    CommandLine|re: '(?i)\\s+a[\\xad\\u200b]*d[\\xad\\u200b]*d\\s+'\n"
+    "  condition: selection"
+)
+
+
+def test_unusual_characters_found_in_escapes_and_literals():
+    found = unusual_characters(OVERFITTED)
+    assert found == ["U+00AD SOFT HYPHEN", "U+200B ZERO WIDTH SPACE"]
+    literal = make_rule("  sel:\n    CommandLine|contains: 'ᵃᵈᵈ'\n  condition: sel")
+    assert unusual_characters(literal) == ["U+1D43 MODIFIER LETTER SMALL A", "U+1D48 MODIFIER LETTER SMALL D"]
+
+
+def test_characters_the_original_already_had_are_fine():
+    assert unusual_characters(OVERFITTED, original_yaml=OVERFITTED) == []
+
+
+def test_plain_ascii_and_windash_are_not_unusual():
+    plain = make_rule(
+        "  sel:\n    CommandLine|windash|contains: ' /create '\n    CommandLine|re: '\\x2f'\n  condition: sel"
+    )
+    assert unusual_characters(plain) == []
+
+
+def test_copied_literals_only_flags_new_long_command_line_values():
+    attacks = ['schtasks /create /tn "T1053_005_OnLogon" /sc onlogon /tr "cmd.exe /c calc.exe"']
+    candidate = make_rule(
+        "  sel:\n"
+        "    Image|endswith: '\\schtasks.exe'\n"
+        "    OriginalFileName: 'schtasks.exe'\n"
+        "    CommandLine|contains:\n"
+        "      - 'T1053_005_OnLogon'\n"
+        "      - '/create'\n"
+        "    CommandLine|re: 'T1053_005_OnLogon'\n"
+        "  condition: sel"
+    )
+    assert copied_literals(candidate, attacks) == ["T1053_005_OnLogon"]
+    assert copied_literals(candidate, attacks, original_yaml=candidate) == []  # already in the original
+
+
+def test_gate_rejects_memorised_characters_but_only_warns_on_copied_strings(tuning, load_rule_text):
+    robust = load_rule_text("schtasks_create_robust.yml")
+    memorised = robust.replace("CommandLine|contains: 'create'", "CommandLine|re: 'c\u200breate|create'")
+    rejected = check(memorised, tuning)
+    assert not rejected.passed and "no_unusual_characters" in names(rejected, False)
+
+    copied = robust.replace(  # an extra alternative copied from st-001's command line
+        "CommandLine|contains: 'create'",
+        "CommandLine|contains:\n      - 'create'\n      - 'C:\\Users\\Public\\update.exe'",
+    )
+    result = check(copied, tuning, config=GateConfig(max_false_alarms=1))
+    warning = next(c for c in result.checks if c.name == "no_copied_test_strings")
+    assert not warning.passed and not warning.blocking
+    assert result.passed  # a warning never fails the gate

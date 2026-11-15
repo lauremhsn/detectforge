@@ -102,7 +102,11 @@ def run_detail(outcome: HardeningOutcome) -> None:
     st.markdown("**Quality gate**")
     table(
         [
-            {"check": c.name, "result": "pass" if c.passed else "FAIL", "detail": c.detail}
+            {
+                "check": c.name,
+                "result": "pass" if c.passed else ("FAIL" if c.blocking else "warning"),
+                "detail": c.detail,
+            }
             for c in run.gate.checks
         ]
     )

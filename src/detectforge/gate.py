@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from detectforge.harness.compare import compare, evasion_resistance
 from detectforge.harness.run import run
 from detectforge.rules.convert import convert_rule
-from detectforge.rules.lint import dropped_fields, dropped_filters
+from detectforge.rules.lint import copied_literals, dropped_fields, dropped_filters, unusual_characters
 from detectforge.rules.parse import load_rule
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import Event
@@ -26,6 +26,8 @@ class GateCheck(BaseModel):
     name: str
     passed: bool
     detail: str
+    # A non-blocking check is a warning for the reviewer: it never makes the gate fail.
+    blocking: bool = True
 
 
 class GateResult(BaseModel):
@@ -41,7 +43,8 @@ def check(
 ) -> GateResult:
     """Run every check (no short-circuit) so the reviewer sees all the reasons at once.
 
-    Every rule must be valid and convert to the deploy targets. With original_yaml (hardening),
+    Every rule must be valid, convert to the deploy targets and not contain characters copied from
+    the test attacks (copied literal strings are a warning only). With original_yaml (hardening),
     it must also not regress against the original: no attack it caught may be lost, no false alarm
     added, and no field or exclusion of the original dropped (those can't all be measured here).
     """
@@ -56,6 +59,7 @@ def check(
         return GateResult(passed=False, checks=checks)
 
     checks.append(_deployable(rule_yaml, config.deploy_targets))
+    checks.extend(_not_overfitted(rule_yaml, events, original_yaml))
     card = run(rule_yaml, events)
     base = card.per_transform["none"]
     checks.append(
@@ -106,7 +110,36 @@ def check(
             )
         )
         checks.extend(_keeps_original_scope(original_yaml, rule_yaml))
-    return GateResult(passed=all(c.passed for c in checks), checks=checks)
+    return GateResult(passed=all(c.passed for c in checks if c.blocking), checks=checks)
+
+
+def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | None) -> list[GateCheck]:
+    """Memorising the test attacks instead of describing the behavior (see rules/lint.py)."""
+    unusual = unusual_characters(rule_yaml, original_yaml)
+    attacks = [e.command_line for e in events if e.label == "attack"]
+    copied = copied_literals(rule_yaml, attacks, original_yaml)
+    return [
+        GateCheck(
+            name="no_unusual_characters",
+            passed=not unusual,
+            detail=(
+                "added characters real rules don't need (copied from the test attacks?): "
+                + ", ".join(unusual)
+                if unusual
+                else "none added"
+            ),
+        ),
+        GateCheck(
+            name="no_copied_test_strings",
+            passed=not copied,
+            blocking=False,
+            detail=(
+                "warning, check these are general and not test-specific: " + "; ".join(copied)
+                if copied
+                else "none"
+            ),
+        ),
+    ]
 
 
 def _deployable(rule_yaml: str, targets: list[str]) -> GateCheck:

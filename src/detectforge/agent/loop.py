@@ -22,7 +22,7 @@ from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event, RuleRecord
 from detectforge.tracing import NoopTracer, Tracer
 
-PROMPT_VERSION = "harden-v2"  # v2: states the gate's scope and deployability rules
+PROMPT_VERSION = "harden-v3"  # v2: gate's scope and deployability rules; v3: no memorised characters
 
 SYSTEM_PROMPT = """\
 You are a detection engineer. Your job is to harden an EXISTING Sigma rule so that it keeps \
@@ -43,7 +43,9 @@ Useful Sigma tools: |contains on short tokens, |windash for option prefixes, |re
 patterns. Keep the rule's logsource, title and intent. Never lose an attack the original caught. \
 Broaden, never narrow: keep every field and every exclusion (filter) of the original rule, even \
 ones these events can't exercise; add alternatives instead of removing checks. Do not use the \
-|cased modifier: the rule must also run in Elastic.
+|cased modifier: the rule must also run in Elastic. Never copy the specific odd characters a \
+mutation used (invisible or look-alike Unicode) into the rule, and avoid strings that only appear in \
+these test attacks (task names, file paths): the rule must catch variants you have not seen.
 4. validate_rule is free. run_tuning_set has a limited budget; use it to check each real revision.
 5. Finish by calling submit with the complete Sigma YAML and a short rationale. If the gate rejects \
 it, read the failed checks and try again.
@@ -171,6 +173,11 @@ def _run(
         {"role": "user", "content": _task(technique, rule_yaml, ctx)},
     ]
     model_calls: list[ModelCallRecord] = []
+    # A revision only counts as a "best attempt" if it beats the original on the tuning set.
+    card = ctx.original_card
+    original_score = (
+        (evasion_resistance(card) or 0.0, -card.false_alarms) if card and card.valid else (-1.0, 0)
+    )
     best: tuple[tuple[float, int], str] | None = None
     stop_reason: str | None = None
     nudged = False
@@ -250,7 +257,7 @@ def _run(
 
     if ctx.accepted is not None:
         final_yaml, source, rationale = ctx.accepted.rule_yaml, "accepted", ctx.accepted.rationale
-    elif best is not None:
+    elif best is not None and best[0] > original_score:
         final_yaml, source, rationale = best[1], "best_attempt", None
     else:
         final_yaml, source, rationale = rule_yaml, "original", None
