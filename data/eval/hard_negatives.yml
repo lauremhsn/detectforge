@@ -1,0 +1,127 @@
+# Hard negatives: benign look-alike commands per technique, for measuring rule precision.
+#
+# class A = over-breadth near-miss. A legit use of the SAME binary with a different action/target.
+#           A precise rule should NOT fire; an over-broad one will. This is the false-alarm metric.
+# class B = inherent-ambiguity benign. The same (or near-identical) command, run legitimately.
+#           Command line alone can't separate it from the attack. Reported SEPARATELY, not a defect.
+#
+# Placeholder user is "analyst", matching the base events. Paths/values are invented.
+
+negatives:
+  T1003.001:   # Process Memory Dump Via Comsvcs.DLL   (attack dumps lsass PID 692 to a temp path)
+    - {class: B, note: "differs from the attack only by target PID (4821 vs lsass 692); a command-line rule cannot resolve which process a PID is",
+       cmd: 'rundll32.exe C:\Windows\System32\comsvcs.dll, MiniDump 4821 C:\ProgramData\Diagnostics\apphang.dmp full'}
+
+  T1003.002:   # Dumping of Sensitive Hives Via Reg.EXE   (attack saves/exports HKLM\sam|security|system)
+    - {class: A, note: "reading an autorun value, not dumping a hive",
+       cmd: 'reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v OneDrive'}
+    - {class: A, note: "exporting a benign application hive, not sam/security/system",
+       cmd: 'reg export "HKLM\SOFTWARE\MyCompany\App" C:\Users\analyst\Desktop\app-backup.reg'}
+
+  T1027:       # Suspicious Download Via Certutil.EXE   (attack uses -verifyctl/-urlcache -f <url>)
+    - {class: A, note: "hashing a local file, no download",
+       cmd: 'certutil -hashfile C:\Users\analyst\Downloads\installer.exe SHA256'}
+    - {class: A, note: "inspecting a local certificate, no download",
+       cmd: 'certutil -dump C:\Users\analyst\Documents\company.cer'}
+
+  T1036.003:   # File Download Via Bitsadmin   (attack /transfer <url>)
+    - {class: A, note: "listing BITS jobs, no transfer",
+       cmd: 'bitsadmin /list /allusers /verbose'}
+    - {class: B, note: "legit software updaters also /transfer from a URL (SigmaHQ FP: some legit apps use this)",
+       cmd: 'bitsadmin /transfer UpdateJob /priority normal https://download.company.com/patch.msp C:\ProgramData\patch.msp'}
+
+  T1047:       # Process Creation via Wmic / XSL Script Execution via Wmic
+    - {class: A, note: "read-only process listing",
+       cmd: 'wmic process list brief'}
+    - {class: A, note: "benign output format (htable), not /format:xsl",
+       cmd: 'wmic process get name,processid /format:htable'}
+
+  T1053.005:   # Suspicious Schtasks Schedule Types / Schtasks with SYSTEM privileges
+    - {class: A, note: "listing tasks, no creation",
+       cmd: 'schtasks /query /fo LIST /v'}
+    - {class: A, note: "legit daily task, normal user, benign binary (not onlogon/onstart, not /ru system)",
+       cmd: 'schtasks /create /tn "CompanyUpdate" /tr "C:\Program Files\Company\update.exe" /sc daily /st 03:00'}
+
+  T1059.001:   # PowerShell base64 / download pattern
+    - {class: A, note: "ordinary PowerShell, no -e/-enc and no download",
+       cmd: 'powershell.exe -Command "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5"'}
+    - {class: A, note: "running a local signed script with bypass (no encoded command)",
+       cmd: 'powershell.exe -ExecutionPolicy Bypass -File C:\Scripts\inventory.ps1'}
+
+  T1059.003:   # Read Contents From Stdin Via Cmd.EXE   (attack uses cmd < file)
+    - {class: A, note: "ordinary cmd, no stdin redirection",
+       cmd: 'cmd /c dir C:\Users\analyst\Documents'}
+    - {class: A, note: "reading a file the normal way, no stdin redirection",
+       cmd: 'cmd /c type C:\Users\analyst\notes.txt'}
+
+  T1105:       # Suspicious Curl Download / File Download via MpCmdRun
+    - {class: A, note: "health check, HEAD only, no file written",
+       cmd: 'curl -I https://api.company.com/health'}
+    - {class: A, note: "Defender signature update, not -DownloadFile",
+       cmd: '"C:\Program Files\Windows Defender\MpCmdRun.exe" -SignatureUpdate'}
+    - {class: B, note: "a legit curl file download is indistinguishable from the attack by command line alone",
+       cmd: 'curl -o C:\Users\analyst\Downloads\logo.png https://www.company.com/logo.png'}
+
+  T1218.005:   # Remotely Hosted HTA via Mshta   (attack runs remote script:)
+    - {class: A, note: "running a local, legit HTA, not a remote URL",
+       cmd: 'mshta.exe "C:\Program Files\Company\dialog.hta"'}
+
+  T1218.007:   # Msiexec Quiet Install From Remote   (attack /i <url>)
+    - {class: A, note: "installing a local MSI, not from a URL",
+       cmd: 'msiexec /i "C:\Users\analyst\Downloads\app.msi" /qn'}
+    - {class: A, note: "uninstall by product code",
+       cmd: 'msiexec /x {3F2504E0-4F89-11D3-9A0C-0305E82C3301} /quiet'}
+
+  T1218.010:   # Regsvr32 HTTP/FTP Pattern   (attack /i:<url> scrobj.dll)
+    - {class: A, note: "registering a local DLL, no URL",
+       cmd: 'regsvr32 /s "C:\Program Files\Company\plugin.dll"'}
+    - {class: A, note: "unregistering a local DLL, no URL",
+       cmd: 'regsvr32 /u /s "C:\Program Files\Company\plugin.dll"'}
+
+  T1218.011:   # Potentially Suspicious Rundll32 Activity
+    - {class: A, note: "classic benign rundll32 (open display settings)",
+       cmd: 'rundll32.exe shell32.dll,Control_RunDLL desk.cpl'}
+    - {class: A, note: "classic benign rundll32 (lock workstation)",
+       cmd: 'rundll32.exe user32.dll,LockWorkStation'}
+
+  T1490:       # Shadow Copies Deletion / Wbadmin / Bcdedit Boot Config Tampering
+    - {class: A, note: "listing shadow copies (read), not deleting",
+       cmd: 'vssadmin list shadows'}
+    - {class: A, note: "enumerating boot config (read), not /set",
+       cmd: 'bcdedit /enum'}
+    - {class: A, note: "listing backup versions (read), not delete",
+       cmd: 'wbadmin get versions'}
+    - {class: B, note: "backup software / admin maintenance deletes shadows with the SAME command (Huntress, Elastic 'benign true positive')",
+       cmd: 'vssadmin delete shadows /all /quiet'}
+
+  T1543.003:   # Suspicious New Service Creation
+    - {class: A, note: "querying a service (read)",
+       cmd: 'sc query wuauserv'}
+    - {class: A, note: "installer creating a normal service (benign binPath, not svchost -k / cmd / powershell)",
+       cmd: 'sc create "CompanyAgent" binPath= "C:\Program Files\Company\agent.exe" start= auto'}
+
+  T1547.001:   # Run Keys persistence
+    - {class: A, note: "reading the Run key, not writing",
+       cmd: 'reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"'}
+    - {class: B, note: "legit software writes autorun on install with the same pattern (SigmaHQ FP: Discord, installers)",
+       cmd: 'reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /t REG_SZ /d "C:\Program Files\OneDrive\OneDrive.exe" /f'}
+
+  T1555.003:   # Potential Browser Data Stealing (esentutl /y copy)
+    - {class: A, note: "esentutl /y copying a benign database, not browser Login Data",
+       cmd: 'esentutl.exe /y "C:\ProgramData\App\cache.edb" /d "C:\Temp\cache_copy.edb"'}
+    - {class: A, note: "dumping a database header (maintenance)",
+       cmd: 'esentutl /mh "C:\ProgramData\App\store.edb"'}
+
+  T1685:       # Disable Windows Defender AV (sc config/stop WinDefend)
+    - {class: A, note: "querying the Defender service (read)",
+       cmd: 'sc query WinDefend'}
+    - {class: A, note: "disabling a NON-defender service (legit admin)",
+       cmd: 'sc config Fax start=disabled'}
+
+  T1685.001:   # Audit Policy Tampering / Eventlog Clearing
+    - {class: A, note: "reading audit policy, not changing it",
+       cmd: 'auditpol /get /category:*'}
+    - {class: A, note: "ENABLING auditing (opposite of the attack's disable/clear)",
+       cmd: 'auditpol /set /category:"Logon/Logoff" /success:enable'}
+    - {class: B, note: "admins/maintenance clear event logs legitimately (SigmaHQ FP: admin activity, maintenance)",
+       cmd: 'wevtutil cl Application'}
