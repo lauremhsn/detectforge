@@ -1,0 +1,39 @@
+# Evaluation rule set: SigmaHQ rule IDs, their primary technique, and which techniques are dev.
+# Rebuild with: uv run detectforge dataset select
+atomic_red_team_commit: a0e3f9bc69fed2fd711bd1f1aa87a40c33482fe6
+dev_techniques: [T1053.005, T1547.001, T1490, T1543.003, T1555.003]
+rules:
+  # Execution
+  - {id: fb843269-508c-4b76-8b8d-88679db22ce7, technique: T1059.001}  # Powershell with Base64
+  - {id: 3b6ab547-8ec2-4991-b9d2-2b06702a48d7, technique: T1059.001}  # PowerShell Download Pattern
+  - {id: 241e802a-b65e-484f-88cd-c2dc10f9206d, technique: T1059.003}  # Read Contents From Stdin Via Cmd
+  - {id: 526be59f-a573-4eea-b5f7-f0973207634d, technique: T1047}      # Process Creation via Wmic
+  - {id: 05c36dd6-79d6-4a9a-97da-3db20298ab2d, technique: T1047}      # XSL Script Execution Via WMIC
+  # Tool transfer
+  - {id: e218595b-bbe7-4ee5-8a96-f32a24ad3468, technique: T1105}      # Suspicious Curl Download
+  - {id: 46123129-1024-423e-9fae-43af4a0fa9a5, technique: T1105}      # File Download Via MpCmdRun
+  - {id: 19b08b1c-861d-4e75-a1ef-ea0c1baf202b, technique: T1027}      # Suspicious Download Via Certutil
+  - {id: d059842b-6b9d-4ed1-b5c3-5b89143c6ede, technique: T1036.003}  # File Download Via Bitsadmin
+  # Persistence
+  - {id: de587dce-915e-4218-aac4-835ca6af6f70, technique: T1547.001}  # Run Keys Using Reg
+  - {id: 24357373-078f-44ed-9ac4-6d334a668a11, technique: T1547.001}  # Direct Autorun Keys Modification
+  - {id: 24c8392b-aa3c-46b7-a545-43f71657fe98, technique: T1053.005}  # Suspicious Schtasks Schedule Types
+  - {id: 89ca78fd-b37c-4310-b3d3-81a023f83936, technique: T1053.005}  # Schtasks With SYSTEM Privileges
+  - {id: 17a1be64-8d88-40bf-b5ff-a4f7a50ebcc8, technique: T1543.003}  # Suspicious New Service Creation
+  # Impair defenses
+  - {id: a7ee1722-c3c5-aeff-3212-c777e4733217, technique: T1685}      # Disable Defender AV Monitoring
+  - {id: 0a13e132-651d-11eb-ae93-0242ac130002, technique: T1685.001}  # Audit Policy Tampering Via Auditpol
+  - {id: cc36992a-4671-4f21-a91d-6c2b72a2edf5, technique: T1685.001}  # Eventlog Clearing or Config Change
+  # Proxy execution
+  - {id: e593cf51-88db-4ee1-b920-37e89012a3c9, technique: T1218.011}  # Suspicious Rundll32 Activity
+  - {id: 867356ee-9352-41c9-a8f2-1be690d78216, technique: T1218.010}  # Regsvr32 HTTP/FTP Pattern
+  - {id: b98d0db6-511d-45de-ad02-e82a98729620, technique: T1218.005}  # Remotely Hosted HTA Via Mshta
+  - {id: 8150732a-0c9d-4a99-82b9-9efb9b90c40c, technique: T1218.007}  # Msiexec Quiet Install From Remote
+  # Credential access
+  - {id: 646ea171-dded-4578-8a4d-65e9822892e3, technique: T1003.001}  # Process Memory Dump Via Comsvcs
+  - {id: fd877b94-9bb5-4191-bb25-d79cbd93c167, technique: T1003.002}  # Dumping Sensitive Hives Via Reg
+  - {id: 47147b5b-9e17-4d76-b8d2-7bac24c5ce1b, technique: T1555.003}  # Browser Data Stealing
+  # Impact
+  - {id: 1444443e-6757-43e4-9ea4-c8fc705f79a2, technique: T1490}      # Bcdedit Boot Config Tampering
+  - {id: 639c9081-f482-47d3-a0bd-ddee3d4ecd76, technique: T1490}      # All Backups Deleted Via Wbadmin
+  - {id: c947b146-0abc-4c87-9c64-b17e9d7274a2, technique: T1490}      # Shadow Copies Deletion

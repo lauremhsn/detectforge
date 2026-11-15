@@ -18,6 +18,7 @@ htmlcov/
 # Data that must not be committed (raw VM captures, large event sets)
 data/raw/
 data/sigmahq/
+data/atomic-red-team/
 data/runs/
 *.evtx
 
@@ -30,3 +31,4 @@ Thumbs.db
 
 # Planning spreadsheets are shared directly, not versioned
 *.xlsx
+data/argfuscator/
