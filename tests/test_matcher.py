@@ -2,7 +2,7 @@
 
 import pytest
 
-from detectforge.harness.matcher import can_fire, compile_rule
+from detectforge.harness.matcher import can_fire, compile_rule, required_fields
 from detectforge.rules.parse import RuleError, load_rule
 
 from conftest import make_event, make_rule
@@ -138,3 +138,31 @@ def test_invalid_regex_is_rule_error():
 def test_unsupported_modifier_is_rule_error():
     with pytest.raises(RuleError, match="unsupported"):
         compile_rule(load_rule(make_rule("  sel:\n    CommandLine|fieldref: Image\n  condition: sel")))
+
+
+@pytest.mark.parametrize(
+    ("detection", "required"),
+    [
+        (
+            "  sel:\n    Image|endswith: '\\x.exe'\n    OriginalFileName: 'x.exe'\n  condition: sel",
+            {"Image", "OriginalFileName"},
+        ),
+        ("  sel:\n    - Image|endswith: '\\x.exe'\n    - OriginalFileName: 'x.exe'\n  condition: sel", set()),
+        ("  sel:\n    Image: x\n  filter:\n    CommandLine: y\n  condition: sel and not filter", {"Image"}),
+    ],
+    ids=["and-both-required", "or-neither-required", "filter-not-required"],
+)
+def test_required_fields(detection, required):
+    assert required_fields(load_rule(make_rule(detection))) == required
+
+
+def test_slow_regex_makes_the_rule_unevaluable_instead_of_hanging(monkeypatch):
+    from detectforge.harness import matcher
+    from detectforge.harness.run import run
+
+    monkeypatch.setattr(matcher, "REGEX_TIMEOUT_S", 0.05)
+    rule = make_rule("  sel:\n    CommandLine|re: '(a|aa)+$'\n  condition: sel")
+    secret = "a" * 40 + "!"
+    card = run(rule, [make_event(command_line=secret)])
+    assert not card.valid and "catastrophic backtracking" in card.error
+    assert secret not in card.error  # names the pattern, never the event

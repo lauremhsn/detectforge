@@ -7,6 +7,7 @@ reviewer as "passed", or goes to review as "needs human review" with the failed 
 from pydantic import BaseModel, Field
 
 from detectforge.harness.compare import compare, evasion_resistance
+from detectforge.harness.matcher import required_fields
 from detectforge.harness.run import run
 from detectforge.rules.convert import convert_rule
 from detectforge.rules.lint import copied_literals, dropped_fields, dropped_filters, unusual_characters
@@ -61,6 +62,11 @@ def check(
     checks.append(_deployable(rule_yaml, config.deploy_targets))
     checks.extend(_not_overfitted(rule_yaml, events, original_yaml))
     card = run(rule_yaml, events)
+    if not card.valid:  # valid Sigma, but the harness couldn't run it (e.g. a regex too slow)
+        checks.append(
+            GateCheck(name="evaluable", passed=False, detail=card.error or "could not be evaluated")
+        )
+        return GateResult(passed=False, checks=checks)
     base = card.per_transform["none"]
     checks.append(
         GateCheck(
@@ -162,6 +168,7 @@ def _keeps_original_scope(original_yaml: str, rule_yaml: str) -> list[GateCheck]
     original, candidate = load_rule(original_yaml), load_rule(rule_yaml)
     fields = dropped_fields(original, candidate)
     filters = dropped_filters(original, candidate)
+    newly_required = sorted(required_fields(candidate) - required_fields(original))
     return [
         GateCheck(
             name="keeps_original_fields",
@@ -172,5 +179,16 @@ def _keeps_original_scope(original_yaml: str, rule_yaml: str) -> list[GateCheck]
             name="keeps_original_filters",
             passed=not filters,
             detail=f"dropped exclusions: {'; '.join(filters)}" if filters else "all original exclusions kept",
+        ),
+        GateCheck(
+            name="no_new_required_fields",
+            passed=not newly_required,
+            blocking=False,
+            detail=(
+                f"warning: the rule now needs {', '.join(newly_required)} to fire; it stays silent on logs "
+                "that don't record it (e.g. Windows Security 4688 instead of Sysmon)"
+                if newly_required
+                else "no new required fields"
+            ),
         ),
     ]

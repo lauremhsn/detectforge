@@ -55,7 +55,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                197 automated tests (run on every push by GitHub Actions)
+tests/                203 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -173,7 +173,7 @@ Sigma semantics we implement (from the Sigma spec):
 - plain values match the **whole** field, **case-insensitively**, with `*` and `?` wildcards;
 - modifiers like `contains`, `startswith`, `endswith`, `windash`, `base64` are expanded by pySigma
   into wildcards/lists before we see them, so we inherit the official behavior;
-- `re` (regex), `cased`, `exists`, `null`, number comparisons, `1 of` / `all of` / `them`, `not`;
+- `re` (regex, run with a 1 s time limit per event), `cased`, `exists`, `null`, number comparisons, `1 of` / `all of` / `them`, `not`;
 - **fields we don't have** (e.g. `User`), or optional fields left empty, are treated as *absent*:
   they never match a value.
 
@@ -353,6 +353,14 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   it's shown to the reviewer as a warning and never fails the gate by itself. Program names
   (`Image`, `OriginalFileName`) are never flagged: naming the binary is the most legitimate signal.
 
+- **warning only, `no_new_required_fields`** (hardening): a field the original could do without is now
+  *required* (e.g. `OriginalFileName` added with AND next to `Image`). The rule then stays silent on logs
+  that don't record that field, such as Windows Security event 4688 instead of Sysmon. Found on a real
+  dev run; it's a warning because adding a requirement is sometimes intended. "Required" uses the same
+  reasoning as "can never fire": if the log lacked this field, could the rule still fire?
+- **evaluable**: a rule can be valid Sigma and still unusable, e.g. a regex so slow it would hang (see
+  §5.1, regex time limit). The gate stops there and says why.
+
 Checks are either **blocking** (fail the gate) or **warnings** (shown in the Review tab, never fail it).
 
 **Best attempt.** When no submission is accepted, the run returns the best revision seen on the tuning
@@ -446,7 +454,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 197 tests
+uv run pytest                             # 203 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models
@@ -480,8 +488,11 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 3. **Missing Sysmon fields.** Mostly fixed: with the two optional fields, 175 of 1,297 rules still use
    a field we don't have; 117 harmlessly, and the 58 that can never fire are excluded as unusable.
    Only real if the attack data actually captures the two fields.
-4. **Regex timeouts.** A pathological regex written by the agent could make the harness hang
-   (Python regexes have no timeout). Planned for the W6 security work.
+4. **Regex time limit (fixed).** Rule regexes now run through the `regex` module with a 1-second limit
+   per event; a pattern with catastrophic backtracking (e.g. `(a|aa)+$`) makes the rule unevaluable
+   with a clear message instead of hanging a batch. The limit is time-based, so on a much slower
+   machine a borderline regex could time out where it wouldn't on ours; 1 s is far above any normal
+   rule's cost (microseconds).
 5. **Keyword search is simple** word overlap, not semantic search. Fine for technique-driven search.
 6. **"Usable rule" is defined but not yet wired to a fallback**: usable = evaluable and can fire. The
    UI shows "No usable rule found" when no result is usable; the write-new-rule path itself is W6.

@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from detectforge.harness.matcher import compile_rule
+from detectforge.harness.matcher import RegexTimeout, compile_rule
 from detectforge.rules.parse import RuleError, load_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard, TransformBreakdown
 
@@ -26,7 +26,10 @@ def run(rule_yaml: str, events: list[Event]) -> Scorecard:
     matched_ids = []
     for event in events:
         bucket = per_transform[event.transform]
-        fired = matches(event)
+        try:
+            fired = matches(event)
+        except RegexTimeout as e:  # too slow to evaluate: same outcome as any other unusable rule
+            return Scorecard(valid=False, error=str(e))
         if fired:
             matched_ids.append(event.event_id)
         if event.label == "attack":
