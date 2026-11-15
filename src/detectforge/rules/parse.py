@@ -5,6 +5,10 @@ from sigma.exceptions import SigmaError
 from sigma.rule import SigmaRule
 
 MAX_RULE_BYTES = 64 * 1024
+QUOTE_HINT = (
+    r" (hint: YAML has no \' escape; inside a single-quoted value write a quote as '' (two single "
+    r"""quotes), e.g. '[\s"'']' for a space, double or single quote)"""
+)
 SCOPE_CATEGORY = "process_creation"
 SCOPE_PRODUCT = "windows"
 
@@ -20,7 +24,8 @@ def load_rule(rule_yaml: str) -> SigmaRule:
     try:
         doc = yaml.safe_load(rule_yaml)
     except yaml.YAMLError as e:
-        raise RuleError(f"invalid YAML: {e}") from e
+        hint = QUOTE_HINT if "\\'" in rule_yaml else ""  # the classic regex-in-YAML mistake
+        raise RuleError(f"invalid YAML: {e}{hint}") from e
     if not isinstance(doc, dict):
         raise RuleError("rule must be a single YAML mapping")
     try:

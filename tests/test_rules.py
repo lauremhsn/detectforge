@@ -67,3 +67,14 @@ def test_cli_validate_exit_code(tmp_path, capsys):
     bad.write_text("title: [", encoding="utf-8")
     assert main(["validate", str(bad)]) == 1
     assert json.loads(capsys.readouterr().out)["valid"] is False
+
+
+def test_backslash_quote_in_yaml_gets_a_hint():
+    """Regression: a dev run spent its whole budget writing \' inside a single-quoted regex."""
+    broken = make_rule("  sel:\n    CommandLine|re: '(^|[\\s\"\\'])add'\n  condition: sel")
+    result = validate_rule(broken)
+    assert not result.valid and "write a quote as ''" in result.errors[0]
+    fixed = make_rule("  sel:\n    CommandLine|re: '(^|[\\s\"''])add'\n  condition: sel")
+    assert validate_rule(fixed).valid
+    plain = validate_rule("title: [unclosed")  # unrelated YAML errors get no misleading hint
+    assert not plain.valid and "hint" not in plain.errors[0]

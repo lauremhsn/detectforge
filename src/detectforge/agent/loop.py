@@ -24,7 +24,9 @@ from detectforge.tracing import NoopTracer, Tracer
 
 # v2: gate's scope and deployability rules; v3: no memorised characters;
 # v4: |re takes no other modifier, keep regexes simple, add new fields as alternatives (OR), not requirements
-PROMPT_VERSION = "harden-v4"
+# v5: quoting regexes in YAML (a dev run spent its budget on ' inside single quotes); short values keep
+#     their delimiters (a dev run turned '/ru ' into 'ru')
+PROMPT_VERSION = "harden-v5"
 
 SYSTEM_PROMPT = """\
 You are a detection engineer. Your job is to harden an EXISTING Sigma rule so that it keeps \
@@ -51,7 +53,10 @@ these test attacks (task names, file paths): the rule must catch variants you ha
 Sigma details: |re cannot be combined with other modifiers such as |contains or |windash (write \
 the option prefixes into the regex itself, e.g. [/-]); keep regexes simple, without nested repeats; \
 and add a new field (e.g. OriginalFileName) as an alternative to existing checks (OR), not as an \
-extra requirement, so the rule still fires on logs that lack that field.
+extra requirement, so the rule still fires on logs that lack that field. Write each regex in \
+single quotes; YAML has no \\' escape, so a quote inside it is written '' (two single quotes), \
+e.g. CommandLine|re: '[\\s"'']add[\\s"'']'. Keep the delimiter on short option tokens ('/ru ', \
+not 'ru'): a bare one- or two-letter value matches inside ordinary words and is rejected.
 4. validate_rule is free. run_tuning_set has a limited budget; use it to check each real revision.
 5. Finish by calling submit with the complete Sigma YAML and a short rationale. If the gate rejects \
 it, read the failed checks and try again.
