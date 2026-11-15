@@ -56,7 +56,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                251 automated tests (run on every push by GitHub Actions)
+tests/                255 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -375,6 +375,12 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   from the tuning attacks (e.g. a test task name or file path). Sometimes legitimate (a registry path), so
   it's shown to the reviewer as a warning and never fails the gate by itself. Program names
   (`Image`, `OriginalFileName`) are never flagged: naming the binary is the most legitimate signal.
+- **too broad, `no_short_bare_values`** (blocking): a new command-line value of only one or two letters
+  or digits with no delimiter. Found on the first new-split dev run: the agent turned `'/ru '` into
+  `'ru'`, which also matches "run", "true", "group", so the rule fires on almost any schtasks command.
+  Our few hard negatives didn't show it in a score. Three letters is the limit because 3-letter values
+  (`add`, `set`, `cmd`) appear in 74 SigmaHQ rules, while only 19 of 1,297 use 1–2 letter ones. The
+  agent sees the reason and can add the delimiter back (`'/ru '`, `' -ru '`).
 
 - **warning only, `no_new_required_fields`** (hardening): a field the original could do without is now
   *required* (e.g. `OriginalFileName` added with AND next to `Image`). The rule then stays silent on logs
@@ -385,6 +391,14 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   §5.1, regex time limit). The gate stops there and says why.
 
 Checks are either **blocking** (fail the gate) or **warnings** (shown in the Review tab, never fail it).
+
+**What the gate can't see: held-out false alarms.** All benign events are currently in the held-out
+split, so the gate checks false alarms on zero benign events during hardening. After the run, the
+held-out evaluation does count them, and any **new** held-out false alarm is shown as a red warning
+in the Review tab (plus a "False alarms (held-out)" metric) and named in the `harden-selection`
+summary. Found on the new-split dev run: the hardened Run-keys rule passed the gate but raised 2 new
+false alarms on held-out look-alikes (reading a Run key with `reg query`). This is a warning for
+the human, not a gate check, because the agent must never be scored on held-out data.
 
 **Best attempt.** When no submission is accepted, the run returns the best revision seen on the tuning
 set, but only if it scores strictly better than the original; otherwise the original rule itself (so a
@@ -480,7 +494,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 251 tests
+uv run pytest                             # 255 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models

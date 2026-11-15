@@ -55,10 +55,17 @@ def run_detail(outcome: HardeningOutcome) -> None:
         st.success("The quality gate accepted the agent's rule. It still needs your decision.")
     else:
         st.warning("Needs human review: " + "; ".join(run.reasons))
+    if heldout and heldout.new_false_alarm_event_ids:
+        st.error(
+            f"The proposed rule raises {len(heldout.new_false_alarm_event_ids)} new false alarm(s) on "
+            "held-out benign events that the agent and the gate never saw: "
+            + ", ".join(heldout.new_false_alarm_event_ids)
+            + ". Check these before approving."
+        )
     if run.rationale:
         st.markdown(f"**Agent's explanation:** {run.rationale}")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric(
         "Tuning evasion resistance",
         pct(run.tuning_evasion_resistance_after),
@@ -78,6 +85,13 @@ def run_detail(outcome: HardeningOutcome) -> None:
         run.tuning_false_alarms_after,
         delta=run.tuning_false_alarms_after - run.tuning_false_alarms_before,
         delta_color="inverse",
+    )
+    c4.metric(
+        "False alarms (held-out)",
+        heldout.false_alarms_after if heldout else "n/a",
+        delta=heldout.false_alarms_after - heldout.false_alarms_before if heldout else None,
+        delta_color="inverse",
+        help="On benign look-alikes the agent never saw. Computed after the run.",
     )
 
     st.markdown("**What changed**")

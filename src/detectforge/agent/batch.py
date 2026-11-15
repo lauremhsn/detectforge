@@ -109,6 +109,9 @@ def harden_selection(
         item.heldout_after = heldout.evasion_resistance_after if heldout else None
         item.model_calls = len(agent_run.model_calls)
         item.note = "; ".join(agent_run.reasons)
+        if heldout and heldout.new_false_alarm_event_ids:  # unseen by the agent and gate: flag for review
+            new_fa = f"new held-out false alarms: {', '.join(heldout.new_false_alarm_event_ids)}"
+            item.note = f"{item.note}; {new_fa}" if item.note else new_fa
         if agent_run.model_calls and not agent_run.model_calls[-1].ok:
             item.note = f"stopped the batch: {item.note}"
             break  # the model is unavailable; later rules would fail the same way
