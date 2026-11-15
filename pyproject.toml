@@ -15,6 +15,7 @@ dependencies = [
     # The harness walks pySigma's parsed condition tree, so pin the major version.
     "pysigma>=1.5.1,<2",
     "pysigma-backend-elasticsearch>=2.1.1,<3",
+    "regex>=2024.11.6",
 ]
 
 [project.scripts]
@@ -25,6 +26,9 @@ requires = ["uv_build>=0.12.22,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
+analysis = [
+    "matplotlib>=3.9",
+]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.2",

@@ -22,7 +22,9 @@ from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event, RuleRecord
 from detectforge.tracing import NoopTracer, Tracer
 
-PROMPT_VERSION = "harden-v3"  # v2: gate's scope and deployability rules; v3: no memorised characters
+# v2: gate's scope and deployability rules; v3: no memorised characters;
+# v4: |re takes no other modifier, keep regexes simple, add new fields as alternatives (OR), not requirements
+PROMPT_VERSION = "harden-v4"
 
 SYSTEM_PROMPT = """\
 You are a detection engineer. Your job is to harden an EXISTING Sigma rule so that it keeps \
@@ -45,7 +47,11 @@ Broaden, never narrow: keep every field and every exclusion (filter) of the orig
 ones these events can't exercise; add alternatives instead of removing checks. Do not use the \
 |cased modifier: the rule must also run in Elastic. Never copy the specific odd characters a \
 mutation used (invisible or look-alike Unicode) into the rule, and avoid strings that only appear in \
-these test attacks (task names, file paths): the rule must catch variants you have not seen.
+these test attacks (task names, file paths): the rule must catch variants you have not seen. \
+Sigma details: |re cannot be combined with other modifiers such as |contains or |windash (write \
+the option prefixes into the regex itself, e.g. [/-]); keep regexes simple, without nested repeats; \
+and add a new field (e.g. OriginalFileName) as an alternative to existing checks (OR), not as an \
+extra requirement, so the rule still fires on logs that lack that field.
 4. validate_rule is free. run_tuning_set has a limited budget; use it to check each real revision.
 5. Finish by calling submit with the complete Sigma YAML and a short rationale. If the gate rejects \
 it, read the failed checks and try again.
@@ -86,6 +92,9 @@ class AgentRun(BaseModel):
     completion_tokens: int
     duration_s: float
     record: RuleRecord
+    # The whole conversation (OpenAI chat format): instructions, the model's messages and tool calls,
+    # and every tool result. Only what the agent saw, so tuning data only. Empty in older run files.
+    transcript: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def harden(
@@ -297,6 +306,7 @@ def _run(
         record=RuleRecord(
             rule_yaml=final_yaml, source="adapted", technique=technique, trace_id=trace_id, version=1
         ),
+        transcript=messages,
     )
 
 

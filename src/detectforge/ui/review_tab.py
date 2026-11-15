@@ -1,6 +1,7 @@
 """Review tab: every agent run, what it changed, the evidence, and the human's approve/reject."""
 
 import difflib
+import json
 from pathlib import Path
 
 import streamlit as st
@@ -151,6 +152,64 @@ def run_detail(outcome: HardeningOutcome) -> None:
         )
         if outcome.trace_url:
             st.markdown(f"[Open the full trace in Langfuse]({outcome.trace_url})")
+
+    if run.transcript:
+        if st.toggle("Show the agent's conversation", key=f"transcript_{run.trace_id}"):
+            conversation_view(run.transcript)
+    else:
+        st.caption("This run was saved before conversations were recorded.")
+
+
+MAX_SHOWN = 3000
+
+
+def conversation_view(transcript: list[dict]) -> None:
+    """Every step the agent took. Model text is shown as plain text: it's untrusted output."""
+    step = 0
+    for message in transcript:
+        role, content = message.get("role"), message.get("content") or ""
+        if role == "system":
+            st.markdown("**Instructions given to the agent**")
+            st.text(_shorten(content))
+        elif role == "user":
+            st.markdown("**Task**" if step == 0 else "**Reminder from the loop**")
+            st.code(_shorten(content), language=None)
+        elif role == "assistant":
+            step += 1
+            st.markdown(f"**Step {step}: the agent**")
+            if content.strip():
+                st.text(_shorten(content))
+            for call in message.get("tool_calls") or []:
+                name, arguments = call["function"]["name"], call["function"]["arguments"]
+                st.markdown(f"calls `{name}`")
+                rule = _rule_argument(arguments)
+                st.code(_shorten(rule or arguments), language="yaml" if rule else "json")
+        elif role == "tool":
+            st.markdown("result:")
+            st.code(_shorten(_pretty(content)), language="json")
+
+
+def _rule_argument(arguments: str) -> str | None:
+    try:
+        value = json.loads(arguments).get("rule_yaml")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    return value if isinstance(value, str) else None
+
+
+def _pretty(content: str) -> str:
+    try:
+        return json.dumps(json.loads(content), indent=1, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return content
+
+
+def _shorten(text: str) -> str:
+    return (
+        text
+        if len(text) <= MAX_SHOWN
+        else text[:MAX_SHOWN] + f"\n… ({len(text) - MAX_SHOWN} more characters)"
+    )
 
 
 def decision_form(runs_dir: Path, outcome: HardeningOutcome) -> None:

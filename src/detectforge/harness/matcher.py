@@ -10,6 +10,7 @@ Fields not in SIGMA_FIELD_MAP are treated as absent.
 import re
 from collections.abc import Callable
 
+import regex
 from sigma.conditions import (
     ConditionAND,
     ConditionFieldEqualsValueExpression,
@@ -39,11 +40,18 @@ from detectforge.schemas import SIGMA_FIELD_MAP, Event
 EventPredicate = Callable[[Event], bool]
 ValuePredicate = Callable[[str | None], bool]
 
-_REGEX_FLAGS = {
-    SigmaRegularExpressionFlag.IGNORECASE: re.IGNORECASE,
-    SigmaRegularExpressionFlag.MULTILINE: re.MULTILINE,
-    SigmaRegularExpressionFlag.DOTALL: re.DOTALL,
+REGEX_TIMEOUT_S = 1.0
+_SAFE_REGEX_FLAGS = {
+    SigmaRegularExpressionFlag.IGNORECASE: regex.IGNORECASE,
+    SigmaRegularExpressionFlag.MULTILINE: regex.MULTILINE,
+    SigmaRegularExpressionFlag.DOTALL: regex.DOTALL,
 }
+
+
+class RegexTimeout(RuleError):
+    """A rule's regular expression is too slow to evaluate (raised while matching an event)."""
+
+
 _COMPARE_OPS = {
     SigmaCompareExpression.CompareOperators.LT: lambda a, b: a < b,
     SigmaCompareExpression.CompareOperators.LTE: lambda a, b: a <= b,
@@ -88,25 +96,39 @@ def can_fire(rule: SigmaRule) -> bool:
     fire" is therefore always correct; "can fire" may be optimistic for rules whose checks on
     known fields contradict each other.
     """
+    return _can_fire_without(rule, frozenset())
+
+
+def required_fields(rule: SigmaRule) -> set[str]:
+    """Fields the rule can't fire without: if a log lacks one of them, the rule stays silent."""
+    return {f for f in rule_fields(rule) if not _can_fire_without(rule, frozenset({f}))}
+
+
+def _can_fire_without(rule: SigmaRule, absent: frozenset[str]) -> bool:
     try:
-        return any(_possible(c.parsed)[0] for c in rule.detection.parsed_condition)
+        return any(_possible(c.parsed, absent)[0] for c in rule.detection.parsed_condition)
     except SigmaError as e:
         raise RuleError(f"invalid condition: {e}") from e
 
 
-def _possible(node: object) -> tuple[bool, bool]:
-    """(can be true, can be false) for a condition node, given which fields events have."""
+def _possible(node: object, absent: frozenset[str]) -> tuple[bool, bool]:
+    """(can be true, can be false) for a condition node, given which fields events have.
+
+    Fields outside the event schema, and those in `absent`, are treated as missing from the log.
+    """
     match node:
         case ConditionAND(args=args):
-            parts = [_possible(a) for a in args]
+            parts = [_possible(a, absent) for a in args]
             return all(t for t, _ in parts), any(f for _, f in parts)
         case ConditionOR(args=args):
-            parts = [_possible(a) for a in args]
+            parts = [_possible(a, absent) for a in args]
             return any(t for t, _ in parts), all(f for _, f in parts)
         case ConditionNOT(args=[arg]):
-            t, f = _possible(arg)
+            t, f = _possible(arg, absent)
             return f, t
-        case ConditionFieldEqualsValueExpression(field=field, value=value) if field not in SIGMA_FIELD_MAP:
+        case ConditionFieldEqualsValueExpression(field=field, value=value) if (
+            field not in SIGMA_FIELD_MAP or field in absent
+        ):
             fixed = _compile_value(value)(None)
             return fixed, not fixed
     return True, True
@@ -150,14 +172,7 @@ def _compile_value(value: object, keyword: bool = False) -> ValuePredicate:
         compiled = re.compile(pattern, flags)
         return lambda v: v is not None and compiled.fullmatch(v) is not None
     if isinstance(value, SigmaRegularExpression):
-        flags = 0
-        for flag in value.flags:
-            flags |= _REGEX_FLAGS[flag]
-        try:
-            compiled = re.compile(str(value.regexp), flags)
-        except re.error as e:
-            raise RuleError(f"invalid regular expression {str(value.regexp)!r}: {e}") from e
-        return lambda v: v is not None and compiled.search(v) is not None
+        return _compile_regex(value)
     if isinstance(value, SigmaNull):
         return lambda v: v is None
     if isinstance(value, SigmaExists):
@@ -169,6 +184,36 @@ def _compile_value(value: object, keyword: bool = False) -> ValuePredicate:
         op, bound = _COMPARE_OPS[value.op], value.number.number
         return lambda v: _as_number(v) is not None and op(_as_number(v), bound)
     raise RuleError(f"unsupported value type: {type(value).__name__}")
+
+
+def _compile_regex(value: SigmaRegularExpression) -> ValuePredicate:
+    """Rule regexes (often agent-written) run with a time limit.
+
+    A pattern like (a|aa)+$ can take minutes on one command line ("catastrophic backtracking");
+    without a limit, one bad rule would hang a whole batch of experiments. The `regex` module
+    supports a timeout; the error names the pattern only, never the event.
+    """
+    pattern = str(value.regexp)
+    flags = 0
+    for flag in value.flags:
+        flags |= _SAFE_REGEX_FLAGS[flag]
+    try:
+        compiled = regex.compile(pattern, flags)
+    except regex.error as e:
+        raise RuleError(f"invalid regular expression {pattern!r}: {e}") from e
+
+    def check(v: str | None) -> bool:
+        if v is None:
+            return False
+        try:
+            return compiled.search(v, timeout=REGEX_TIMEOUT_S) is not None
+        except TimeoutError:
+            raise RegexTimeout(
+                f"regular expression {pattern!r} took over {REGEX_TIMEOUT_S}s on one event "
+                "(catastrophic backtracking); rewrite it without nested or overlapping repeats"
+            ) from None
+
+    return check
 
 
 def _wildcard_regex(value: SigmaString) -> str:

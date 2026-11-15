@@ -14,10 +14,10 @@ from detectforge.dataset.argfuscator import SAFE_INVISIBLES, Capability
 from detectforge.schemas import Event, Transform
 
 SPLIT_OF: dict[Transform, str] = {
-    "insertion": "tune",
     "substitution": "tune",
     "omission": "tune",
-    "reordering": "heldout",
+    "reordering": "tune",
+    "insertion": "heldout",
     "recoding": "heldout",
 }
 MAX_PER_TRANSFORM = 4
