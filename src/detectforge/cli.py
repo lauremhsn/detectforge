@@ -1,8 +1,6 @@
-"""Command line: `detectforge {validate,convert,harness,compare,sigmahq,harden,harden-selection,llm,dataset} ...`.
-
-Prints JSON to stdout.
+"""Command line for detectforge: validate, convert, harness, compare, sigmahq, harden,
+harden-selection, llm, dataset. Prints JSON to stdout.
 """
-main
 
 import argparse
 import json
