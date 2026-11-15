@@ -11,6 +11,7 @@ from detectforge.agent.batch import harden_selection, load_selection
 from detectforge.agent.runner import run_hardening
 from detectforge.config import get_settings
 from detectforge.dataset import argfuscator, atomic, mutate, selection
+from detectforge.eval import arms
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -97,6 +98,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
     p.set_defaults(handler=_dataset_mutate)
+
+    eval_sub = sub.add_parser("eval", help="run an evaluation arm").add_subparsers(
+        dest="eval_command", required=True
+    )
+    p = eval_sub.add_parser("community", help="Arm 1: score the community rules as-is against all mutations")
+    p.set_defaults(handler=_eval_community)
 
     args = parser.parse_args(argv)
     return args.handler(args)
@@ -332,4 +339,36 @@ def _dataset_mutate(args: argparse.Namespace) -> int:
             indent=2,
         )
     )
+    return 0
+
+
+def _eval_community(args: argparse.Namespace) -> int:
+    import yaml
+
+    data_dir = get_settings().data_dir
+    selection = yaml.safe_load((data_dir / "eval" / "selection.yml").read_text(encoding="utf-8"))
+    index = ReferenceIndex.load(_sigmahq_dir())
+    events = load_events(data_dir / "eval" / "base_events.jsonl") + load_events(
+        data_dir / "eval" / "mutations.jsonl"
+    )
+    result = arms.run_community_arm(selection, index, events)
+    out_dir = data_dir / "eval" / "results"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "arm1_community.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "arm": result.arm,
+                "rules": result.rule_count,
+                "overall_evasion_resistance": result.overall_evasion_resistance,
+                "by_transform": result.resistance_by_transform,
+                "by_mutation_split": result.resistance_by_mutation_split,
+                "by_selection_split": result.resistance_by_selection_split,
+                "fully_robust_rules": result.rules_fully_robust,
+                "evaded_rules": result.rules_evaded,
+            },
+            indent=2,
+        )
+    )
+    print(f"wrote {out_dir / 'arm1_community.json'}", file=sys.stderr)
     return 0
