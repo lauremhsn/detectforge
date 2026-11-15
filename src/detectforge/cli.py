@@ -2,7 +2,6 @@
 
 Prints JSON to stdout.
 """
-main
 
 import argparse
 import json
