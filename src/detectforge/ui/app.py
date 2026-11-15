@@ -1,11 +1,11 @@
-"""Minimal DetectForge UI: find an existing rule, validate it adversarially, harden it, compare.
+"""DetectForge UI: find an existing rule, validate it adversarially, harden it, review the result.
 
 Run from the repo root:
     uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 
-Read-only over the library: every number on screen comes from the same functions the CLI and
-tests use (search, validate_rule, run, compare). The UI shows held-out events to the human; the
-agent never uses this UI.
+A thin layer over the library: every number on screen comes from the same functions the CLI
+and tests use (search, validate_rule, run, compare, the agent runner, review). The UI shows held-out
+events to the human; the agent itself only ever receives the tuning split.
 """
 
 import sys
@@ -27,15 +27,18 @@ from detectforge.reference import sigmahq
 from detectforge.reference.index import ReferenceIndex, techniques_from_tags
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
+from detectforge.ui.agent_panel import agent_panel
+from detectforge.ui.components import pct, table
+from detectforge.ui.review_tab import review_tab
 
 PIPELINE = [
     ("Find existing rules", True),
     ("Adversarially validate", True),
     ("Harden by hand", True),
-    ("Harden with the agent", False),
+    ("Harden with the agent", True),
     ("Re-validate (before/after)", True),
     ("Write new rule (fallback)", False),
-    ("Approve", False),
+    ("Review and approve", True),
     ("Tune false alarms", False),
 ]
 
@@ -61,28 +64,6 @@ def load_events_cached(path: str, mtime: float) -> list[Event]:
     return load_events(path)
 
 
-def table(rows: list[dict]) -> None:
-    """Render rows as a markdown table (st.dataframe needs pandas, which some machines block)."""
-    if not rows:
-        return
-    cols = list(rows[0])
-    lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
-    lines += ["| " + " | ".join(_cell(r[c]) for c in cols) + " |" for r in rows]
-    st.markdown("\n".join(lines))
-
-
-def _cell(value: object) -> str:
-    # Escape markdown so event command lines and rule titles render literally.
-    text = str(value).replace("\n", " ")
-    for ch in "\\|*_`[]<>":
-        text = text.replace(ch, "\\" + ch)
-    return text
-
-
-def pct(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.0%}"
-
-
 def set_rule_under_test(rule_yaml: str, label: str, techniques: list[str]) -> None:
     """Make this the rule under test and scope the events to its technique when we have them."""
     st.session_state.update(before_yaml=rule_yaml, after_editor=rule_yaml, rule_label=label)
@@ -91,7 +72,8 @@ def set_rule_under_test(rule_yaml: str, label: str, techniques: list[str]) -> No
         st.session_state["technique_filter"] = match
 
 
-def sidebar() -> list[Event]:
+def sidebar() -> tuple[list[Event], list[Event]]:
+    """Returns (all loaded events, the events in the sidebar's technique/split scope)."""
     st.sidebar.title("DetectForge")
     st.sidebar.caption("Adversarial validation and hardening of existing Sigma rules")
     data_dir = get_settings().data_dir
@@ -117,7 +99,7 @@ def sidebar() -> list[Event]:
     st.sidebar.subheader("Pipeline")
     for step, done in PIPELINE:
         st.sidebar.markdown(f"✅ **{step}**" if done else f"⏳ **{step}** — pending")
-    return filtered
+    return events, filtered
 
 
 def find_tab(index: ReferenceIndex | str) -> None:
@@ -266,12 +248,13 @@ def validation_view(rule_yaml: str) -> None:
         st.success("Valid Sigma rule, in scope, evaluable by the harness.")
 
 
-def harden_tab(events: list[Event]) -> None:
+def harden_tab(events: list[Event], all_events: list[Event], index: ReferenceIndex | None) -> None:
     st.subheader("3 · Harden and re-validate (before vs after)")
     before = st.session_state.get("before_yaml")
     if not before:
         st.info("Pick a rule in the Find tab first.")
         return
+    agent_panel(before, all_events, index)
     st.caption("Edit the candidate on the right; every edit is re-validated on the same events.")
     left, right = st.columns(2)
     left.markdown("**Before (as-is)**")
@@ -326,16 +309,18 @@ def harden_tab(events: list[Event]) -> None:
 
 def main() -> None:
     st.set_page_config(page_title="DetectForge", page_icon="🛡️", layout="wide")
-    events = sidebar()
+    all_events, events = sidebar()
     settings = get_settings()
     index = load_index(str(settings.data_dir / "sigmahq"), settings.ui_auto_fetch_index)
-    find, validate, harden = st.tabs(["1 · Find", "2 · Validate", "3 · Harden"])
+    find, validate, harden, review = st.tabs(["1 · Find", "2 · Validate", "3 · Harden", "4 · Review"])
     with find:
         find_tab(index)
     with validate:
         validate_tab(events)
     with harden:
-        harden_tab(events)
+        harden_tab(events, all_events, index if isinstance(index, ReferenceIndex) else None)
+    with review:
+        review_tab(settings.runs_dir)
 
 
 main()

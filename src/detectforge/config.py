@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     # UI: build the SigmaHQ index on first launch if missing (needed on a fresh cloud deploy).
     ui_auto_fetch_index: bool = True
+    # UI: allow the "Ask the agent" button. Off by default so a public deployment can't spend the
+    # model quota; turn it on locally with DETECTFORGE_UI_ALLOW_AGENT_RUNS=true in .env.
+    ui_allow_agent_runs: bool = False
+
+    @property
+    def runs_dir(self) -> Path:
+        """Where agent runs, review decisions and approved rules are saved."""
+        return self.data_dir / "runs"
 
     # LLM for the agent loop: any OpenAI-compatible endpoint. Default is OpenRouter's free tier;
     # for a local model use llm_base_url=http://localhost:11434/v1 (Ollama) and any non-empty key.

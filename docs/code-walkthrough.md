@@ -35,6 +35,7 @@ src/detectforge/
   rules/
     parse.py          Turn rule text into a rule object; reject anything out of scope
     validate.py       "Is this rule OK?" → errors and warnings
+    lint.py           Hardening may broaden a rule, never narrow it (dropped fields/exclusions)
     convert.py        Translate a rule into an Elastic query (for a real SIEM later)
   harness/
     matcher.py        The engine: does this rule fire on this event?
@@ -43,7 +44,8 @@ src/detectforge/
   reference/
     sigmahq.py        Download the pinned SigmaHQ release and build our index of rules
     index.py          Search that index by technique / keywords
-  ui/app.py           The Streamlit UI (Find → Validate → Harden tabs)
+  ui/app.py           The Streamlit UI (Find → Validate → Harden → Review tabs)
+  review.py           Human review: list runs, open one, record approve/reject
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
@@ -52,7 +54,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                160 automated tests (run on every push by GitHub Actions)
+tests/                182 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -267,13 +269,25 @@ first launch, and `src/detectforge/ui/requirements.txt` lists its dependencies.
 
 | Area | What it shows |
 |---|---|
-| Sidebar | Which events file; filter by technique and split; pipeline status (✅ built, 🟡 manual, ⏳ planned). Picking a rule auto-scopes the events to its technique. |
+| Sidebar | Which events file; filter by technique and split; pipeline status (✅ built, ⏳ pending). Picking a rule auto-scopes the events to its technique. |
 | 1 · Find | Search SigmaHQ by technique + keywords; table of candidates with "fields missing from events"; rule details (marked untrusted); or pick a fixture rule. "No usable rule" message = where the write-new-rule fallback will start. |
 | 2 · Validate | The "before": validation errors/warnings, then the scorecard: detected, evasion resistance, false alarms, per-mutation table, and every event with DETECTED / MISSED / FALSE ALARM. |
-| 3 · Harden | Before on the left, an editable "after" on the right. Every edit re-runs `compare`: evasion resistance with delta, per-mutation before/after, and lists of newly caught / LOST attacks and false-alarm changes. In W4 the agent fills this editor instead of you. |
+| 3 · Harden | Before on the left, an editable "after" on the right. Every edit re-runs `compare`: evasion resistance with delta, per-mutation before/after, and lists of newly caught / LOST attacks and false-alarm changes. **"Ask the agent"** runs the hardening loop on the selected technique and puts its proposal in the editor. |
+| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call. **Approve / Reject** with your name and a comment. |
 
-It is **read-only over the library** (no logic of its own), shows held-out events to the human only,
-and is the seed of the review UI (approve/reject comes in W5).
+It is a **thin layer over the library** (no logic of its own) and shows held-out events to the human
+only; the agent itself still receives just the tuning split.
+
+**Review (`review.py`).** A decision is appended to `data/runs/<trace_id>.review.json`, so the full
+history is kept (a later rejection doesn't erase an earlier approval, it's added after it). An approved
+rule is copied to `data/runs/approved/`, ready to deploy; a later rejection removes that copy. A
+reviewer name is required, and only well-formed trace ids become file names, so a crafted id can't
+read or write elsewhere. Approving a rule the gate didn't accept is allowed (a human overrides the
+gate) but the UI asks for a reason.
+
+**"Ask the agent" is off by default.** The deployed app is public; if the button worked there,
+anyone could spend the free model quota. It only works when `DETECTFORGE_UI_ALLOW_AGENT_RUNS=true`
+*and* an LLM key are in `.env` (so: locally). Otherwise it shows why it's unavailable.
 
 **Machine note:** Windows Smart App Control on your laptop blocks some compiled files (pandas'
 `sparse` DLL and the `streamlit.exe` launcher). That's why tables are drawn as markdown instead of
@@ -316,9 +330,17 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
 
 **Quality gate (`gate.check`)**, runs every check so the reviewer sees all reasons at once:
 - valid (§4.2), and detects every *unmutated* attack;
+- **deployable**: converts to an Elastic Lucene query with the official pySigma backend (configurable
+  targets). All 1,297 SigmaHQ rules pass; it catches agent rules a real SIEM can't run, e.g. the
+  `|cased` modifier, which our harness accepts but Lucene can't express;
 - evasion resistance ≥ 80% on the mutations (configurable);
 - hardening: **no attack the original caught is lost, and no new false alarms** (existing ones are
-  left for the tuning step); writing a new rule: false alarms ≤ 0 (configurable).
+  left for the tuning step); writing a new rule: false alarms ≤ 0 (configurable);
+- hardening: **broaden, never narrow** (`rules/lint.py`): every field and every exclusion of the
+  original must still be there. These cover what our scores can't see: a branch on a field our events
+  lack (e.g. `Hashes`), or a filter for a false positive our benign events don't contain. Exclusions
+  are compared by field + value (ignoring case and the filter's name), so renaming is fine; removing
+  is not.
 
 Failing the gate is not a dead end: the rule still goes to a human as "needs human review" with the
 failed checks listed. Example on the fixtures: the literal schtasks rule fails (33% resistance on
@@ -391,7 +413,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 160 tests
+uv run pytest                             # 182 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
@@ -406,8 +428,8 @@ Tests by file: `test_matcher` (Sigma semantics), `test_harness` (scorecards on f
 no data leaks in errors), `test_compare` (before/after numbers, regressions reported), `test_reference`
 (index building, search ranking, exclusion, tampered zip rejected), `test_rules` (validate/convert/CLI),
 `test_schemas` (bad events rejected), `test_fixtures` (data sanity + "hard negatives must cause false
-alarms"), `test_ui` (UI renders and its numbers match the library), `test_agent_tools` (contracts,
-held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_agent_loop`
+alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_agent_tools` (contracts,
+held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
 `test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting
 to memory, a broken backend never breaking a run), `test_config`.
