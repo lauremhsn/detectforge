@@ -10,7 +10,7 @@ from pathlib import Path
 from detectforge.agent.batch import harden_selection, load_selection
 from detectforge.agent.runner import run_hardening
 from detectforge.config import get_settings
-from detectforge.dataset import argfuscator, atomic, mutate, selection
+from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -97,6 +97,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
     p.set_defaults(handler=_dataset_mutate)
+
+    p = dataset_sub.add_parser("negatives", help="build benign hard-negative events from the config")
+    p.set_defaults(handler=_dataset_negatives)
 
     args = parser.parse_args(argv)
     return args.handler(args)
@@ -332,4 +335,16 @@ def _dataset_mutate(args: argparse.Namespace) -> int:
             indent=2,
         )
     )
+    return 0
+
+
+def _dataset_negatives(args: argparse.Namespace) -> int:
+    data_dir = get_settings().data_dir
+    config = hard_negatives.load(data_dir / "eval" / "hard_negatives.yml")
+    class_a, class_b = hard_negatives.build_events(config)
+    for events, name in ((class_a, "benign_events.jsonl"), (class_b, "benign_ambiguous.jsonl")):
+        with open(data_dir / "eval" / name, "w", encoding="utf-8", newline="\n") as f:
+            for event in events:
+                f.write(event.model_dump_json(exclude_none=True) + "\n")
+    print(json.dumps({"class_a": len(class_a), "class_b": len(class_b)}, indent=2))
     return 0
