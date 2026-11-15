@@ -1,0 +1,725 @@
+{
+  "arm": "community",
+  "rule_count": 27,
+  "valid_rules": 27,
+  "overall_evasion_resistance": 0.8201058201058201,
+  "resistance_by_transform": {
+    "insertion": 0.7333333333333333,
+    "substitution": 0.7671232876712328,
+    "omission": 1.0,
+    "reordering": 1.0,
+    "recoding": 0.0
+  },
+  "resistance_by_mutation_split": {
+    "tune": 0.8671875,
+    "heldout": 0.7213114754098361
+  },
+  "resistance_by_selection_split": {
+    "dev": 0.8135593220338984,
+    "test": 0.823076923076923
+  },
+  "rules_fully_robust": 14,
+  "rules_evaded": 10,
+  "rules": [
+    {
+      "rule_id": "fb843269-508c-4b76-8b8d-88679db22ce7",
+      "title": "Suspicious Execution of Powershell with Base64",
+      "technique": "T1059.001",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 0.16666666666666666,
+      "resistance_by_transform": {
+        "insertion": 0.0,
+        "substitution": 0.0,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.2,
+        "heldout": 0.0
+      },
+      "evaded_by": [
+        "insertion",
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "3b6ab547-8ec2-4991-b9d2-2b06702a48d7",
+      "title": "PowerShell Download Pattern",
+      "technique": "T1059.001",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 0.8571428571428571,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": 0.0
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 0.5
+      },
+      "evaded_by": [
+        "recoding"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "241e802a-b65e-484f-88cd-c2dc10f9206d",
+      "title": "Read Contents From Stdin Via Cmd.EXE",
+      "technique": "T1059.003",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": null,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": null,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": null,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "526be59f-a573-4eea-b5f7-f0973207634d",
+      "title": "Process Creation Attempt via Wmic.EXE",
+      "technique": "T1047",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 3,
+      "base_total": 3,
+      "evasion_resistance": 0.8333333333333334,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": 0.6666666666666666,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.8333333333333334,
+        "heldout": null
+      },
+      "evaded_by": [
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "05c36dd6-79d6-4a9a-97da-3db20298ab2d",
+      "title": "XSL Script Execution Via WMIC.EXE",
+      "technique": "T1047",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": 1.0,
+        "omission": null,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "e218595b-bbe7-4ee5-8a96-f32a24ad3468",
+      "title": "Suspicious Curl.EXE Download",
+      "technique": "T1105",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 8,
+      "base_total": 8,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "46123129-1024-423e-9fae-43af4a0fa9a5",
+      "title": "File Download Via Windows Defender MpCmpRun.EXE",
+      "technique": "T1105",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": 1.0,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "19b08b1c-861d-4e75-a1ef-ea0c1baf202b",
+      "title": "Suspicious Download Via Certutil.EXE",
+      "technique": "T1027",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 0.8571428571428571,
+      "resistance_by_transform": {
+        "insertion": 0.5,
+        "substitution": 1.0,
+        "omission": null,
+        "reordering": 1.0,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 0.5
+      },
+      "evaded_by": [
+        "insertion"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "d059842b-6b9d-4ed1-b5c3-5b89143c6ede",
+      "title": "File Download Via Bitsadmin",
+      "technique": "T1036.003",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 3,
+      "base_total": 3,
+      "evasion_resistance": 0.625,
+      "resistance_by_transform": {
+        "insertion": 0.4,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 0.4
+      },
+      "evaded_by": [
+        "insertion"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "de587dce-915e-4218-aac4-835ca6af6f70",
+      "title": "Potential Persistence Attempt Via Run Keys Using Reg.EXE",
+      "technique": "T1547.001",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 2,
+      "base_total": 2,
+      "evasion_resistance": 0.6923076923076923,
+      "resistance_by_transform": {
+        "insertion": 0.6666666666666666,
+        "substitution": 0.6666666666666666,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.7142857142857143,
+        "heldout": 0.6666666666666666
+      },
+      "evaded_by": [
+        "insertion",
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "24357373-078f-44ed-9ac4-6d334a668a11",
+      "title": "Direct Autorun Keys Modification",
+      "technique": "T1547.001",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 2,
+      "base_total": 2,
+      "evasion_resistance": 0.6923076923076923,
+      "resistance_by_transform": {
+        "insertion": 0.6666666666666666,
+        "substitution": 0.6666666666666666,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.7142857142857143,
+        "heldout": 0.6666666666666666
+      },
+      "evaded_by": [
+        "insertion",
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "24c8392b-aa3c-46b7-a545-43f71657fe98",
+      "title": "Suspicious Schtasks Schedule Types",
+      "technique": "T1053.005",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 3,
+      "base_total": 3,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": 1.0,
+        "reordering": 1.0,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "89ca78fd-b37c-4310-b3d3-81a023f83936",
+      "title": "Schtasks Creation Or Modification With SYSTEM Privileges",
+      "technique": "T1053.005",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 0.6,
+      "resistance_by_transform": {
+        "insertion": 0.5,
+        "substitution": 0.0,
+        "omission": 1.0,
+        "reordering": 1.0,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.6666666666666666,
+        "heldout": 0.5
+      },
+      "evaded_by": [
+        "insertion",
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "17a1be64-8d88-40bf-b5ff-a4f7a50ebcc8",
+      "title": "Suspicious New Service Creation",
+      "technique": "T1543.003",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 3,
+      "base_total": 3,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "a7ee1722-c3c5-aeff-3212-c777e4733217",
+      "title": "Disable Windows Defender AV Security Monitoring",
+      "technique": "T1685",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 2,
+      "base_total": 2,
+      "evasion_resistance": null,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": null,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": null,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "0a13e132-651d-11eb-ae93-0242ac130002",
+      "title": "Audit Policy Tampering Via Auditpol",
+      "technique": "T1685.001",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 5,
+      "base_total": 5,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": null,
+        "reordering": 1.0,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "cc36992a-4671-4f21-a91d-6c2b72a2edf5",
+      "title": "Suspicious Eventlog Clearing or Configuration Change Activity",
+      "technique": "T1685.001",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 2,
+      "base_total": 2,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": null,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "e593cf51-88db-4ee1-b920-37e89012a3c9",
+      "title": "Potentially Suspicious Rundll32 Activity",
+      "technique": "T1218.011",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 10,
+      "base_total": 10,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "867356ee-9352-41c9-a8f2-1be690d78216",
+      "title": "Potentially Suspicious Regsvr32 HTTP/FTP Pattern",
+      "technique": "T1218.010",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": 1.0,
+        "reordering": 1.0,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "b98d0db6-511d-45de-ad02-e82a98729620",
+      "title": "Remotely Hosted HTA File Executed Via Mshta.EXE",
+      "technique": "T1218.005",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "8150732a-0c9d-4a99-82b9-9efb9b90c40c",
+      "title": "Suspicious Msiexec Quiet Install From Remote Location",
+      "technique": "T1218.007",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": 1.0,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "646ea171-dded-4578-8a4d-65e9822892e3",
+      "title": "Process Memory Dump Via Comsvcs.DLL",
+      "technique": "T1003.001",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "fd877b94-9bb5-4191-bb25-d79cbd93c167",
+      "title": "Dumping of Sensitive Hives Via Reg.EXE",
+      "technique": "T1003.002",
+      "selection_split": "test",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 6,
+      "base_total": 6,
+      "evasion_resistance": 0.0,
+      "resistance_by_transform": {
+        "insertion": 0.0,
+        "substitution": 0.0,
+        "omission": null,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.0,
+        "heldout": 0.0
+      },
+      "evaded_by": [
+        "insertion",
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "47147b5b-9e17-4d76-b8d2-7bac24c5ce1b",
+      "title": "Potential Browser Data Stealing",
+      "technique": "T1555.003",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "1444443e-6757-43e4-9ea4-c8fc705f79a2",
+      "title": "Boot Configuration Tampering Via Bcdedit.EXE",
+      "technique": "T1490",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 2,
+      "base_total": 2,
+      "evasion_resistance": 1.0,
+      "resistance_by_transform": {
+        "insertion": 1.0,
+        "substitution": 1.0,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 1.0,
+        "heldout": 1.0
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "639c9081-f482-47d3-a0bd-ddee3d4ecd76",
+      "title": "All Backups Deleted Via Wbadmin.EXE",
+      "technique": "T1490",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 1,
+      "base_total": 1,
+      "evasion_resistance": null,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": null,
+        "omission": null,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": null,
+        "heldout": null
+      },
+      "evaded_by": [],
+      "false_alarm_rate": null
+    },
+    {
+      "rule_id": "c947b146-0abc-4c87-9c64-b17e9d7274a2",
+      "title": "Shadow Copies Deletion Using Operating Systems Utilities",
+      "technique": "T1490",
+      "selection_split": "dev",
+      "source": "community",
+      "valid": true,
+      "error": null,
+      "base_detected": 4,
+      "base_total": 4,
+      "evasion_resistance": 0.6666666666666666,
+      "resistance_by_transform": {
+        "insertion": null,
+        "substitution": 0.0,
+        "omission": 1.0,
+        "reordering": null,
+        "recoding": null
+      },
+      "resistance_by_mutation_split": {
+        "tune": 0.6666666666666666,
+        "heldout": null
+      },
+      "evaded_by": [
+        "substitution"
+      ],
+      "false_alarm_rate": null
+    }
+  ]
+}
