@@ -34,13 +34,26 @@ def run_hardening(
     index: ReferenceIndex | None = None,
     out_dir: Path | None = None,
     tracer: Tracer | None = None,
+    base_ids: set[str] | None = None,
 ) -> HardeningOutcome:
-    """events may contain both splits; only the tuning part reaches the agent."""
-    in_scope = [e for e in events if e.technique == technique]
+    """events may contain both splits; only the tuning part reaches the agent.
+
+    base_ids limits the attack events to the base attacks this rule is meant to detect (and their
+    mutations): two rules for the same technique can target different behaviors, and testing a rule
+    on another rule's attacks would push it to broaden beyond its intent. Benign events of the
+    technique are always kept, since every rule must stay quiet on them.
+    """
+    in_scope = [
+        e
+        for e in events
+        if e.technique == technique and (e.label == "benign" or base_ids is None or e.base_id in base_ids)
+    ]
     tuning = [e for e in in_scope if e.split == "tune"]
     heldout = [e for e in in_scope if e.split == "heldout"]
     if not any(e.label == "attack" for e in tuning):
-        raise ValueError(f"no tuning attack events for {technique}")
+        raise ValueError(
+            f"no tuning attack events for {technique}" + (" and these base attacks" if base_ids else "")
+        )
 
     tracer = tracer or NoopTracer()
     run = harden(rule_yaml, technique, tuning, client, model_name, index=index, tracer=tracer)

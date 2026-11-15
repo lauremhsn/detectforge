@@ -50,11 +50,12 @@ src/detectforge/
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
   agent/loop.py       The hardening loop; agent/runner.py splits data and saves each run
+  agent/batch.py      Harden every rule of a selection (e.g. the dev rules), skipping unimprovable ones
   tracing.py          Langfuse tracing of every model and tool call (no-op when not configured)
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                182 automated tests (run on every push by GitHub Actions)
+tests/                188 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -382,6 +383,18 @@ uv run detectforge harden --rule data/fixtures/rules/schtasks_create_literal.yml
 `create`. Tuning evasion resistance 33% → 100%; **held-out 0% → 100%** (a reordering it never saw);
 false alarms unchanged; 4 model calls, 13k tokens, 83 s. One fixture run, not evidence yet.
 
+**Running a whole selection** (`agent/batch.py`): `detectforge harden-selection --split dev` reads the
+evaluation manifest (`data/eval/selection.yml`) and hardens each rule of that split, one agent run per
+rule. Two design points:
+- **Each rule is tested only on its own attacks.** Two rules for the same technique can target
+  different behaviours (e.g. "unusual schedule types" vs "task running as SYSTEM"). Testing one on the
+  other's attacks would mark it as missing them and push the agent to broaden it beyond its intent. The
+  manifest lists each rule's base attacks; the runner keeps those (plus their mutations) and every
+  benign event of the technique.
+- **Model calls are spent only where they can help.** A rule with no mutations to test, or that already
+  detects every tuning mutation, is skipped. `--limit` caps the number of agent runs, and the batch
+  stops at the first "model unavailable" (e.g. the free daily limit) instead of failing every rule.
+
 ---
 
 ## 7d. Tracing (`tracing.py`) *(new)*
@@ -413,8 +426,9 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 182 tests
+uv run pytest                             # 188 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
+uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl
@@ -428,7 +442,7 @@ Tests by file: `test_matcher` (Sigma semantics), `test_harness` (scorecards on f
 no data leaks in errors), `test_compare` (before/after numbers, regressions reported), `test_reference`
 (index building, search ranking, exclusion, tampered zip rejected), `test_rules` (validate/convert/CLI),
 `test_schemas` (bad events rejected), `test_fixtures` (data sanity + "hard negatives must cause false
-alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_agent_tools` (contracts,
+alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_batch` (per-rule scoping, quota-saving skips, early stop), `test_agent_tools` (contracts,
 held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
 `test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting
