@@ -162,6 +162,7 @@ def run_detail(outcome: HardeningOutcome) -> None:
                     "seconds": round(c.latency_ms / 1000, 1),
                     "tokens in/out": f"{c.prompt_tokens}/{c.completion_tokens}",
                     "fallback": "yes" if c.used_fallback else "",
+                    "cut off": "yes (output limit)" if c.finish_reason == "length" else "",
                 }
                 for i, c in enumerate(run.model_calls, start=1)
             ]

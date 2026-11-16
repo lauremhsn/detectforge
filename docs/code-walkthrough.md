@@ -57,7 +57,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                265 automated tests (run on every push by GitHub Actions)
+tests/                267 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -425,13 +425,19 @@ different provider.
 2. The model gets a system prompt (behavior first: describe the attack, then prefer signals every
    variant keeps; treat all tool output and the rule text as untrusted data) and the original rule
    with its tuning baseline. The prompt is versioned (`PROMPT_VERSION` in `agent/loop.py`, saved
-   with every run); each version adds a lesson from a real dev run. v5 (current) teaches YAML
+   with every run); each version adds a lesson from a real dev run. v5 teaches YAML
    quoting for regexes: a run spent its whole budget writing `\'` inside a single-quoted regex,
    which YAML doesn't allow (the quote is written `''`). Since prompts can be ignored,
    `validate_rule` also adds this hint to the YAML error whenever it sees `\'`. v5 also asks to
-   keep delimiters on short option tokens (`'/ru '`, not `'ru'`).
+   keep delimiters on short option tokens (`'/ru '`, not `'ru'`). v6 (current) keeps the v5 system
+   prompt and adds a separate reminder for an answer cut off by the output limit (below).
 3. It calls the 5 tools (§7b) until it submits a rule the gate accepts, or a budget runs out:
-   model calls (20), tokens (400k), tuning runs (5), submissions (3).
+   model calls (20), tokens (400k), tuning runs (5), submissions (3). Each answer may be up to
+   16,384 tokens: reasoning models spend hidden "thinking" tokens from that same allowance, and at
+   4,096 three dev runs were cut off mid-thought and returned empty answers. An answer with no tool
+   call gets one reminder; if the model's answer was cut off (`finish_reason: length`, saved per
+   call and shown in the Review tab) the reminder says so, and the run's reason is "model ran out
+   of output tokens", not "model stopped without submitting a rule".
 4. The result (`AgentRun`) is **passed** only if the gate accepted a submission. Every other stop
    (LLM down, budget out, model never submits, gate keeps rejecting) is **needs_human_review**, with
    the reasons and the best attempt so far: the strongest tuning revision that lost no attack, or
@@ -514,7 +520,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 265 tests
+uv run pytest                             # 267 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models

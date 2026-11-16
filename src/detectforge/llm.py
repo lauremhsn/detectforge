@@ -49,6 +49,7 @@ class ModelCallRecord:
     completion_tokens: int = 0
     used_fallback: bool = False
     error: str | None = None
+    finish_reason: str | None = None  # "length" = cut off by max_output_tokens
 
 
 class ChatClient(Protocol):
@@ -65,7 +66,7 @@ class OpenAICompatibleClient:
     fallback_model: str | None = None
     timeout_s: float = 120.0
     max_retries: int = 3
-    max_output_tokens: int = 4096
+    max_output_tokens: int = 16_384
     _client: Any = field(init=False, repr=False)
 
     def __post_init__(self) -> None:

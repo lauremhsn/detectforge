@@ -115,6 +115,28 @@ def test_model_that_never_calls_tools_is_nudged_then_stopped(tuning, rules, sett
     assert "Call submit" in client.requests[1][-1]["content"]
 
 
+def test_answers_cut_off_by_the_output_limit_are_named_as_such(tuning, rules, settings):
+    # Regression: a reasoning model spent all 4096 output tokens thinking and returned nothing, and
+    # the run was reported as "model stopped without submitting a rule".
+    cut = LLMResponse(
+        model="fake", content=None, tool_calls=[], completion_tokens=4096, finish_reason="length"
+    )
+    client = ScriptedClient([cut, cut])
+    run = harden(rules[0], TECHNIQUE, tuning, client, "fake", settings=settings)
+    assert any("ran out of output tokens" in r for r in run.reasons)
+    assert not any("without submitting" in r for r in run.reasons)
+    assert "cut off" in client.requests[1][-1]["content"]
+    assert [c.finish_reason for c in run.model_calls] == ["length", "length"]
+
+
+def test_a_cut_off_answer_can_recover_after_the_reminder(tuning, rules, settings):
+    original, robust = rules
+    cut = LLMResponse(model="fake", content=None, tool_calls=[], finish_reason="length")
+    client = ScriptedClient([cut, tool_call("submit", rule_yaml=robust, rationale="verb")])
+    run = harden(original, TECHNIQUE, tuning, client, "fake", settings=settings)
+    assert run.status == "passed"
+
+
 def test_model_call_budget_is_enforced(tuning, rules):
     tight = Settings(_env_file=None, max_model_calls=2)
     client = ScriptedClient([tool_call("validate_rule", rule_yaml=rules[0])] * 5)
