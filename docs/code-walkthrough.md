@@ -57,7 +57,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                267 automated tests (run on every push by GitHub Actions)
+tests/                268 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -429,8 +429,16 @@ different provider.
    quoting for regexes: a run spent its whole budget writing `\'` inside a single-quoted regex,
    which YAML doesn't allow (the quote is written `''`). Since prompts can be ignored,
    `validate_rule` also adds this hint to the YAML error whenever it sees `\'`. v5 also asks to
-   keep delimiters on short option tokens (`'/ru '`, not `'ru'`). v6 (current) keeps the v5 system
-   prompt and adds a separate reminder for an answer cut off by the output limit (below).
+   keep delimiters on short option tokens (`'/ru '`, not `'ru'`). v6 keeps the v5 system
+   prompt and adds a separate reminder for an answer cut off by the output limit (below). v7
+   (current) asks to write regex escapes once inside single quotes (a run's `'\\bSYSTEM\\b'` looked
+   for a real backslash and matched nothing) and to use each key once per selection (below).
+   **Repeated keys are rejected.** Plain YAML keeps only the last of two equal keys, so a run that
+   wrote `CommandLine|re:` twice in one selection "passed" with its `add` check silently dropped,
+   while the YAML the reviewer read still showed both lines. The rule parser (`rules/parse.py`,
+   used by the validator, the harness, the gate and the SigmaHQ index) now rejects a repeated key
+   and says to split the conditions into separate selections. None of the 3,302 SigmaHQ rules
+   repeats a key, so community rules are unaffected.
 3. It calls the 5 tools (§7b) until it submits a rule the gate accepts, or a budget runs out:
    model calls (20), tokens (400k), tuning runs (5), submissions (3). Each answer may be up to
    16,384 tokens: reasoning models spend hidden "thinking" tokens from that same allowance, and at
@@ -484,7 +492,7 @@ rule. Two design points:
   gate code or data, and the key changes: older runs are never mixed into new results.
 - **The quota is planned, not discovered.** `--dry-run` shows which rules would run and the worst-case
   number of calls without contacting the model. `--max-calls N` caps the whole batch: a run starts only
-  if its full budget still fits. `--rule-id` runs only some rules. `detectforge llm quota` shows the calls
+  if its full budget still fits on top of the calls the finished runs actually spent. `--rule-id` runs only some rules. `detectforge llm quota` shows the calls
   saved in today's runs (UTC, when OpenRouter's free limit resets) and the key's tier, without spending a
   call. Example: with the budget at 10 calls per rule, the 4 improvable dev rules need at most 40 of the
   50 free daily calls; at the default 20 they could need 80.
@@ -520,7 +528,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 267 tests
+uv run pytest                             # 268 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models

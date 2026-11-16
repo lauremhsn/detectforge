@@ -88,7 +88,7 @@ def harden_selection(
     done = _completed_runs(runs_dir)
     items: list[BatchItem] = []
     started = 0
-    reserved = 0  # worst case: every run may use its whole model-call budget
+    reserved = 0  # calls spent by finished runs + the whole budget of a run about to start
 
     for rule in selection:
         if rule.split != split or (rule_ids is not None and rule.id not in rule_ids):
@@ -156,8 +156,10 @@ def harden_selection(
                 )
             except ValueError as e:
                 item.action, item.note = "error", str(e)
+                reserved -= per_run  # rejected before any model call
                 continue
             _fill(item, outcome, action="hardened")
+            reserved += item.model_calls - per_run  # count what the run spent, not its whole budget
             if _model_failed(outcome):
                 item.note = f"stopped the batch: {item.note}"
                 return items  # the model is unavailable; later rules would fail the same way

@@ -28,7 +28,9 @@ from detectforge.tracing import NoopTracer, Tracer
 #     their delimiters (a dev run turned '/ru ' into 'ru')
 # v6: a separate reminder when an answer was cut off by the output-token limit (3 dev runs ended with
 #     empty, cut-off answers); the system prompt itself is unchanged from v5
-PROMPT_VERSION = "harden-v6"
+# v7: regex escapes written once inside single quotes (a dev run's '\\bSYSTEM\\b' matched nothing);
+#     one key per selection (a dev run repeated CommandLine|re and YAML silently dropped its 'add' check)
+PROMPT_VERSION = "harden-v7"
 
 SYSTEM_PROMPT = """\
 You are a detection engineer. Your job is to harden an EXISTING Sigma rule so that it keeps \
@@ -58,7 +60,11 @@ and add a new field (e.g. OriginalFileName) as an alternative to existing checks
 extra requirement, so the rule still fires on logs that lack that field. Write each regex in \
 single quotes; YAML has no \\' escape, so a quote inside it is written '' (two single quotes), \
 e.g. CommandLine|re: '[\\s"'']add[\\s"'']'. Keep the delimiter on short option tokens ('/ru ', \
-not 'ru'): a bare one- or two-letter value matches inside ordinary words and is rejected.
+not 'ru'): a bare one- or two-letter value matches inside ordinary words and is rejected. Inside \
+single quotes a backslash is literal, so write each regex escape once ('\\bSYSTEM\\b', '\\s+'); a \
+doubled '\\\\b' looks for a real backslash and matches nothing. A key appears only once per \
+selection: to require two patterns on CommandLine, put them in two selections joined with 'and' in \
+the condition.
 4. validate_rule is free. run_tuning_set has a limited budget; use it to check each real revision.
 5. Finish by calling submit with the complete Sigma YAML and a short rationale. If the gate rejects \
 it, read the failed checks and try again.

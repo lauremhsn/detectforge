@@ -88,20 +88,22 @@ def test_runs_cut_short_by_the_model_are_not_reused(setup, fixture_events, tmp_p
 def test_max_calls_only_starts_runs_whose_whole_budget_fits(setup, fixture_events, tmp_path):  # noqa: F811
     index, selection, robust = setup
     settings = get_settings().model_copy(update={"max_model_calls": 10})
-    client = ScriptedClient([tool_call("submit", rule_yaml=robust, rationale="verb")])
+    submit = tool_call("submit", rule_yaml=robust, rationale="verb")
     items = harden_selection(
         selection[:1],
         fixture_events,
         index,
-        client,
+        ScriptedClient([submit, submit]),
         "fake",
         tmp_path,
-        repeat=2,
-        max_calls=15,
+        repeat=3,
+        max_calls=11,
         settings=settings,
     )
-    assert [i.action for i in items] == ["hardened", "skipped"]
-    assert "only 5 of --max-calls 15 left" in items[1].note
+    # Each run spends 1 call: after the first, 10 of 11 are left, so a second full budget still fits
+    # (regression: the cap used to count every run's whole budget, skipping runs that would fit).
+    assert [i.action for i in items] == ["hardened", "hardened", "skipped"]
+    assert "only 9 of --max-calls 11 left" in items[2].note
 
 
 def test_dry_run_needs_no_model_and_spends_nothing(setup, fixture_events, tmp_path):  # noqa: F811
