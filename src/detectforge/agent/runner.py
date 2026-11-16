@@ -10,9 +10,11 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from detectforge.agent.loop import AgentRun, harden
+from detectforge.agent.loop import PROMPT_VERSION, AgentRun, harden
+from detectforge.config import get_settings
 from detectforge.harness.compare import HardeningReport, compare
 from detectforge.llm import ChatClient
+from detectforge.provenance import Provenance, make_provenance
 from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event
 from detectforge.tracing import NoopTracer, Tracer
@@ -23,6 +25,8 @@ class HardeningOutcome(BaseModel):
     heldout_evaluation: HardeningReport | None
     saved_to: str | None = None
     trace_url: str | None = None
+    # Which prompt, model, budgets, code and data produced this run (None in older run files).
+    provenance: Provenance | None = None
 
 
 def scope_events(events: list[Event], technique: str, base_ids: set[str] | None = None) -> list[Event]:
@@ -41,6 +45,15 @@ def scope_events(events: list[Event], technique: str, base_ids: set[str] | None 
         for e in events
         if e.label == "benign" or (e.technique == technique and (base_ids is None or e.base_id in base_ids))
     ]
+
+
+def run_provenance(
+    rule_yaml: str, in_scope: list[Event], client: ChatClient | None, model_name: str
+) -> Provenance:
+    """The setup a hardening run of this rule on these (in-scope) events would have."""
+    settings = get_settings()
+    fallback = getattr(client, "fallback_model", settings.fallback_model)  # client is None in a dry run
+    return make_provenance(rule_yaml, in_scope, model_name, fallback, PROMPT_VERSION, settings)
 
 
 def run_hardening(
@@ -64,12 +77,16 @@ def run_hardening(
         )
 
     tracer = tracer or NoopTracer()
+    provenance = run_provenance(rule_yaml, in_scope, client, model_name)
     run = harden(rule_yaml, technique, tuning, client, model_name, index=index, tracer=tracer)
     tracer.flush()  # short-lived CLI runs must export before exiting
     evaluation = compare(rule_yaml, run.final_rule_yaml, heldout) if heldout else None
     # Evaluation on held-out data happens outside the traced run and is never sent to the tracer.
     outcome = HardeningOutcome(
-        run=run, heldout_evaluation=evaluation, trace_url=tracer.trace_url(run.trace_id)
+        run=run,
+        heldout_evaluation=evaluation,
+        trace_url=tracer.trace_url(run.trace_id),
+        provenance=provenance,
     )
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)

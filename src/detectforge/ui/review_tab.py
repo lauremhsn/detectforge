@@ -51,6 +51,14 @@ def review_tab(runs_dir: Path) -> None:
 def run_detail(outcome: HardeningOutcome) -> None:
     run, heldout = outcome.run, outcome.heldout_evaluation
     st.caption(f"Run `{run.trace_id}` · model `{run.model}` · prompt `{run.prompt_version}`")
+    if p := outcome.provenance:
+        commit = p.git_commit or "unknown"
+        if p.git_dirty:
+            commit += " + uncommitted changes"
+        st.caption(
+            f"Setup `{p.setup_key}` · code `{p.code_sha}` (commit {commit}) · {p.event_count} events "
+            f"`{p.events_sha}` · budgets {p.budgets}"
+        )
     if run.status == "passed":
         st.success("The quality gate accepted the agent's rule. It still needs your decision.")
     else:

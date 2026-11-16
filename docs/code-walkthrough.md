@@ -47,6 +47,7 @@ src/detectforge/
   ui/app.py           The Streamlit UI (Find → Validate → Harden → Review tabs)
   review.py           Human review: list runs, open one, record approve/reject
   intake.py           Plain-language request → ATT&CK techniques (model, checked; keyword fallback)
+  provenance.py       Which prompt, model, budgets, code and data produced a run (setup key)
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
@@ -56,7 +57,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                256 automated tests (run on every push by GitHub Actions)
+tests/                265 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -467,6 +468,20 @@ rule. Two design points:
 - **Model calls are spent only where they can help.** A rule with no mutations to test, or that already
   detects every tuning mutation, is skipped. `--limit` caps the number of agent runs, and the batch
   stops at the first "model unavailable" (e.g. the free daily limit) instead of failing every rule.
+- **Nothing is paid for twice.** Every run saves its *provenance* (`provenance.py`): prompt version,
+  model and fallback, budgets, a fingerprint of the code that can change a result (everything except
+  the UI), of the starting rule and of the events it was scored on, plus the git commit (for humans
+  only). Together these form a *setup key*. Re-running a batch reuses saved runs with the same setup
+  key instead of calling the model again, so a batch that stopped halfway (quota, crash) just carries
+  on. A run cut short because the model was unavailable doesn't count as done. `--repeat 3` gives 3
+  runs per rule for the evaluation, counting the ones already saved. Change the prompt, model, budgets,
+  gate code or data, and the key changes: older runs are never mixed into new results.
+- **The quota is planned, not discovered.** `--dry-run` shows which rules would run and the worst-case
+  number of calls without contacting the model. `--max-calls N` caps the whole batch: a run starts only
+  if its full budget still fits. `--rule-id` runs only some rules. `detectforge llm quota` shows the calls
+  saved in today's runs (UTC, when OpenRouter's free limit resets) and the key's tier, without spending a
+  call. Example: with the budget at 10 calls per rule, the 4 improvable dev rules need at most 40 of the
+  50 free daily calls; at the default 20 they could need 80.
 
 ---
 
@@ -499,7 +514,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 256 tests
+uv run pytest                             # 265 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models

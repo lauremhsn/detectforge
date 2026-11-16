@@ -154,6 +154,20 @@ def list_free_tool_models(base_url: str, timeout_s: float = 30.0) -> list[dict[s
     ]
 
 
+def key_info(base_url: str, api_key: str, timeout_s: float = 15.0) -> dict[str, Any]:
+    """The key's tier and credit usage from OpenRouter's /key endpoint. This is not a model call."""
+    if "openrouter.ai" not in base_url:
+        raise LLMError("key info is only available for OpenRouter")
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/key", headers={"Authorization": f"Bearer {api_key}"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            return json.loads(response.read().decode("utf-8")).get("data", {})
+    except (OSError, ValueError) as e:  # never echo the request (it carries the key)
+        raise LLMError(f"could not read key info ({type(e).__name__})") from None
+
+
 def openai_tool_definitions(schemas: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Provider-neutral tool schemas → the OpenAI-compatible `tools` format."""
     return [
