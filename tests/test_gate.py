@@ -44,6 +44,20 @@ def test_invalid_rule_stops_at_validation(tuning):
     assert not result.passed and [c.name for c in result.checks] == ["valid"]
 
 
+def test_zero_benign_events_is_flagged_not_reported_as_clean(tuning, load_rule_text):
+    """Regression: with no tuning benign events, an over-broad rule passed with "0 new false alarms"."""
+    original = load_rule_text("schtasks_create_literal.yml")
+    robust = load_rule_text("schtasks_create_robust.yml")
+    with_benign = check(robust, tuning, original_yaml=original)
+    assert "false_alarms_tested" in names(with_benign, True)
+
+    attacks_only = [e for e in tuning if e.label == "attack"]
+    result = check(robust, attacks_only, original_yaml=original)
+    tested = next(c for c in result.checks if c.name == "false_alarms_tested")
+    assert not tested.passed and not tested.blocking and "prove nothing" in tested.detail
+    assert result.passed  # a warning for the reviewer, never a reason to fail
+
+
 def test_threshold_is_configurable(tuning, load_rule_text):
     lenient = GateConfig(min_evasion_resistance=0.3, max_false_alarms=1)
     assert check(load_rule_text("schtasks_create_literal.yml"), tuning, config=lenient).passed

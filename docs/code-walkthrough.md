@@ -57,7 +57,8 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                268 automated tests (run on every push by GitHub Actions)
+docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
+tests/                269 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -399,7 +400,9 @@ held-out evaluation does count them, and any **new** held-out false alarm is sho
 in the Review tab (plus a "False alarms (held-out)" metric) and named in the `harden-selection`
 summary. Found on the new-split dev run: the hardened Run-keys rule passed the gate but raised 2 new
 false alarms on held-out look-alikes (reading a Run key with `reg query`). This is a warning for
-the human, not a gate check, because the agent must never be scored on held-out data.
+the human, not a gate check, because the agent must never be scored on held-out data. The gate also
+adds a warning, `false_alarms_tested`, whenever it has no benign events to test against: "0 new false
+alarms" on 0 benign events is untested, not clean.
 
 **Best attempt.** When no submission is accepted, the run returns the best revision seen on the tuning
 set, but only if it scores strictly better than the original; otherwise the original rule itself (so a
@@ -492,7 +495,8 @@ rule. Two design points:
   gate code or data, and the key changes: older runs are never mixed into new results.
 - **The quota is planned, not discovered.** `--dry-run` shows which rules would run and the worst-case
   number of calls without contacting the model. `--max-calls N` caps the whole batch: a run starts only
-  if its full budget still fits on top of the calls the finished runs actually spent. `--rule-id` runs only some rules. `detectforge llm quota` shows the calls
+  if its full budget still fits on top of the calls the finished runs actually spent. `--rule-id` runs
+  only some rules. `detectforge llm quota` shows the calls
   saved in today's runs (UTC, when OpenRouter's free limit resets) and the key's tier, without spending a
   call. Example: with the budget at 10 calls per rule, the 4 improvable dev rules need at most 40 of the
   50 free daily calls; at the default 20 they could need 80.
@@ -528,7 +532,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 268 tests
+uv run pytest                             # 269 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models
