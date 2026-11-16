@@ -35,6 +35,7 @@ class RunSummary(BaseModel):
     trace_id: str
     created: datetime
     technique: str
+    mode: str = "harden"
     model: str
     prompt_version: str
     status: str
@@ -66,6 +67,7 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
                 trace_id=run.trace_id,
                 created=datetime.fromtimestamp(path.stat().st_mtime, tz=UTC),
                 technique=run.technique,
+                mode=run.mode,
                 model=run.model,
                 prompt_version=run.prompt_version,
                 status=run.status,

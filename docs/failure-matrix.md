@@ -32,6 +32,7 @@ Tests are named `file::test`; all of them run in CI on every push (`uv run pytes
 | D14 | `--max-calls 30` skipped a rule saying "0 calls left" when 5 were unused. | The cap counted every run's whole budget, not what it spent. | The cap counts calls actually spent. | `test_provenance.py::test_max_calls_only_starts_runs_whose_whole_budget_fits` |
 | D15 | Runs printed "Failed to export spans" when Langfuse wasn't running. | Tracing backend unreachable. | Nothing to change: the run continued and every call is also saved in the run file. | `test_tracing.py::test_broken_backend_never_breaks_a_run`, `test_tracing_falls_back_to_noop_if_langfuse_cannot_start` |
 | D16 | After a merge-conflict resolution the package failed to import. | A stray `main` left in an import line. | Fixed; any import error fails every test, so CI catches it on push. | Whole suite (CI) |
+| D17 | A rehearsal of the write-new-rule path (real data, scripted model) reported "the agent produced no valid rule" for a rule whose submissions the gate had rejected. | "Best attempt" only remembered rules tested with `run_tuning_set`, not rules submitted directly. | Every tested or submitted version is scored on the tuning set (with the harness, not the tool's output); the reviewer gets the best one with the gate's real reasons. Applies to hardening too. | `test_write_rule.py::test_a_rule_the_gate_rejected_is_still_the_best_attempt` |
 
 ---
 
@@ -62,6 +63,17 @@ Tests are named `file::test`; all of them run in CI on every push (`uv run pytes
 | Loses an attack the original caught, or adds a false alarm | Before/after comparison | Blocking gate checks | `test_gate.py::test_regression_against_original_fails`, `test_compare.py::test_regression_is_reported_as_lost` |
 | Writes a rule a real SIEM can't run | Conversion to Elastic Lucene | Blocking gate check `deployable` | `test_lint.py::test_gate_rejects_rules_elastic_cannot_run` |
 | Model gives a different result on the same setup | Repeated runs | Evaluation uses 3 runs per setup (`--repeat 3`), reporting mean and spread | `test_provenance.py::test_repeat_only_runs_what_is_missing` |
+
+### Writing a new rule (fallback)
+
+| Failure | How we notice | What the system does | Test |
+|---|---|---|---|
+| The model decides to write a rule when a community rule exists (or the reverse) | n/a | Not possible: code chooses the path (`find_usable_rule`); only a usable rule tagged with exactly this technique counts | `test_write_rule.py::test_the_path_is_chosen_by_code_not_the_model` |
+| The agent copies the community rule it was supposed to replace | Search exclusion | Every rule of the technique's family (and untagged rules) is hidden from search | `test_write_rule.py::test_writing_hides_every_rule_of_the_technique_family` |
+| The agent never proposes a usable rule | No valid version tested or submitted | Needs human review with nothing proposed (`final_source: none`), never an empty "pass" | `test_write_rule.py::test_writing_that_never_produces_a_rule_proposes_nothing` |
+| The model fails mid-run | `LLMError` | Best version so far goes to review | `test_write_rule.py::test_writing_keeps_its_best_valid_version_when_the_model_fails` |
+| Held-out data reaches the writing agent | Same runner split as hardening | Held-out scored afterwards against "no rule" | `test_write_rule.py::test_written_runs_are_saved_and_scored_on_held_out_without_the_agent_seeing_it` |
+| A lesson fixed in one prompt but not the other | Shared block of Sigma lessons | Both prompts are built from the same text | `test_write_rule.py::test_both_prompts_share_the_lessons_from_real_runs` |
 
 ### Rule content
 
@@ -123,6 +135,8 @@ Tests are named `file::test`; all of them run in CI on every push (`uv run pytes
 | Double-escaped regex (D13) has no automatic check | The agent can waste calls on a rule that matches nothing | Prompt v7; the gate blocks such a rule from passing | A reliable check is hard: doubled backslashes are legitimate in Windows paths (`\\System32`), so a heuristic would give false hints |
 | Same setup, different result (model randomness) | One run can pass and the next fail (Schtasks SYSTEM: passed under v5, 0% under v6) | 3 runs per setup in the evaluation | Report mean and spread; not a bug to fix |
 | Quota counter sees only saved agent runs | Intake requests, the deployed app and other machines sharing the key are not counted | `llm quota` also shows OpenRouter's own usage figure | Count intake calls too |
+| Writing a new rule is checked with a scripted model only | Real-model behavior of `write-v1` unknown | End-to-end rehearsal on the real data with a fake model | Real dev runs, then freeze `write-v1` before the agent-written arm runs on the test rules |
+| The agent-written arm costs more than a day of free quota | Dev rules alone: 8 runs, up to 80 calls (nothing is skipped) | `--max-calls 40` per day; finished runs are reused | Spread over days, or a second key on another team member's account |
 | Prompt injection resistance depends on the model | A model could still follow injected text | The agent can only propose; gate + human decide | Dedicated injection test set (security work item) |
 
 ---

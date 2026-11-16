@@ -24,6 +24,7 @@ def review_tab(runs_dir: Path) -> None:
             {
                 "when": r.created.astimezone().strftime("%b %d %H:%M"),
                 "technique": r.technique,
+                "path": "write" if r.mode == "write" else "harden",
                 "agent result": r.status.replace("_", " "),
                 "tuning (before → after)": f"{pct(r.tuning_before)} → {pct(r.tuning_after)}",
                 "held-out (before → after)": f"{pct(r.heldout_before)} → {pct(r.heldout_after)}",
@@ -50,7 +51,8 @@ def review_tab(runs_dir: Path) -> None:
 
 def run_detail(outcome: HardeningOutcome) -> None:
     run, heldout = outcome.run, outcome.heldout_evaluation
-    st.caption(f"Run `{run.trace_id}` · model `{run.model}` · prompt `{run.prompt_version}`")
+    path = "wrote a new rule" if run.mode == "write" else "hardened a community rule"
+    st.caption(f"Run `{run.trace_id}` · {path} · model `{run.model}` · prompt `{run.prompt_version}`")
     if p := outcome.provenance:
         commit = p.git_commit or "unknown"
         if p.git_dirty:
@@ -102,25 +104,17 @@ def run_detail(outcome: HardeningOutcome) -> None:
         help="On benign look-alikes the agent never saw. Computed after the run.",
     )
 
-    st.markdown("**What changed**")
-    diff = "\n".join(
-        difflib.unified_diff(
-            run.original_rule_yaml.splitlines(),
-            run.final_rule_yaml.splitlines(),
-            "original (community rule)",
-            f"proposed ({run.final_source.replace('_', ' ')})",
-            lineterm="",
+    if run.mode == "write":
+        st.markdown(
+            "**New rule** (no usable community rule: the agent wrote this from scratch, with the "
+            'technique\'s community rules hidden; "before" is having no rule)'
         )
-    )
-    if diff:
-        st.code(diff, language="diff")
+        if run.final_rule_yaml:
+            st.code(run.final_rule_yaml, language="yaml")
+        else:
+            st.info("The agent produced no valid rule. Nothing to approve.")
     else:
-        st.info("No change: the proposal is the original rule.")
-    left, right = st.columns(2)
-    with left.expander("Original rule"):
-        st.code(run.original_rule_yaml, language="yaml")
-    with right.expander("Proposed rule"):
-        st.code(run.final_rule_yaml, language="yaml")
+        _hardening_diff(run)
 
     st.markdown("**Quality gate**")
     table(
@@ -181,6 +175,28 @@ def run_detail(outcome: HardeningOutcome) -> None:
             conversation_view(run.transcript)
     else:
         st.caption("This run was saved before conversations were recorded.")
+
+
+def _hardening_diff(run) -> None:
+    st.markdown("**What changed**")
+    diff = "\n".join(
+        difflib.unified_diff(
+            run.original_rule_yaml.splitlines(),
+            run.final_rule_yaml.splitlines(),
+            "original (community rule)",
+            f"proposed ({run.final_source.replace('_', ' ')})",
+            lineterm="",
+        )
+    )
+    if diff:
+        st.code(diff, language="diff")
+    else:
+        st.info("No change: the proposal is the original rule.")
+    left, right = st.columns(2)
+    with left.expander("Original rule"):
+        st.code(run.original_rule_yaml, language="yaml")
+    with right.expander("Proposed rule"):
+        st.code(run.final_rule_yaml, language="yaml")
 
 
 MAX_SHOWN = 3000

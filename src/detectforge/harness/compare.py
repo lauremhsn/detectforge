@@ -10,7 +10,7 @@ and the human reviewer only and must not be handed to the agent.
 
 from pydantic import BaseModel
 
-from detectforge.harness.run import run
+from detectforge.harness.run import no_rule, run
 from detectforge.schemas import TRANSFORMS, Event, Scorecard, Transform
 
 
@@ -42,12 +42,13 @@ class HardeningReport(BaseModel):
     removed_false_alarm_event_ids: list[str]
 
 
-def compare(before_yaml: str, after_yaml: str, events: list[Event]) -> HardeningReport:
+def compare(before_yaml: str | None, after_yaml: str | None, events: list[Event]) -> HardeningReport:
     """Score both rule versions on the same events and report what changed.
 
     valid is False if either version could not be evaluated; then resistance values are None.
+    None (or "") stands for having no rule: a newly written rule is compared with no coverage at all.
     """
-    before, after = run(before_yaml, events), run(after_yaml, events)
+    before, after = _score(before_yaml, events), _score(after_yaml, events)
     valid = before.valid and after.valid
     matched_before, matched_after = set(before.matched_event_ids), set(after.matched_event_ids)
 
@@ -79,6 +80,10 @@ def compare(before_yaml: str, after_yaml: str, events: list[Event]) -> Hardening
         new_false_alarm_event_ids=changed("benign", gained=True),
         removed_false_alarm_event_ids=changed("benign", gained=False),
     )
+
+
+def _score(rule_yaml: str | None, events: list[Event]) -> Scorecard:
+    return run(rule_yaml, events) if rule_yaml else no_rule(events)
 
 
 def evasion_resistance(card: Scorecard) -> float | None:

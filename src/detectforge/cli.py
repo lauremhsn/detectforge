@@ -1,4 +1,4 @@
-"""Command line for detectforge: validate, convert, harness, compare, sigmahq, harden,
+"""Command line for detectforge: validate, convert, harness, compare, sigmahq, harden, cover, write,
 harden-selection, llm, dataset. Prints JSON to stdout.
 """
 
@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from detectforge.agent.batch import harden_selection, load_selection
-from detectforge.agent.runner import run_hardening
+from detectforge.agent.runner import HardeningOutcome, find_usable_rule, run_hardening, run_writing
 from detectforge.config import get_settings
 from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
 from detectforge.eval import arms
@@ -90,6 +90,11 @@ def main(argv: list[str] | None = None) -> int:
         help="model-call cap for the whole batch (a run starts only if its budget fits)",
     )
     p.add_argument("--dry-run", action="store_true", help="show what would run, without calling the model")
+    p.add_argument(
+        "--write",
+        action="store_true",
+        help="agent-written arm: write a new rule for each selected rule's attacks (its technique hidden)",
+    )
     p.set_defaults(handler=_harden_selection)
 
     dataset_sub = sub.add_parser("dataset", help="evaluation dataset").add_subparsers(
@@ -106,6 +111,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--events", type=Path, action="append", required=True, help="events JSONL (repeatable)")
     p.add_argument("--out", type=Path, help="where to save the run and rule (default: data/runs)")
     p.set_defaults(handler=_harden)
+
+    for name, help_text in (
+        ("cover", "cover a technique: harden its best usable community rule, or write one if none exists"),
+        ("write", "run the agent to write a new rule for a technique (its community rules hidden)"),
+    ):
+        p = sub.add_parser(name, help=help_text)
+        p.add_argument("--technique", required=True, help="ATT&CK technique, e.g. T1053.005")
+        p.add_argument(
+            "--events", type=Path, action="append", required=True, help="events JSONL (repeatable)"
+        )
+        p.add_argument("--out", type=Path, help="where to save the run and rule (default: data/runs)")
+        p.set_defaults(handler=_cover if name == "cover" else _write)
 
     llm_sub = sub.add_parser("llm", help="LLM provider helpers").add_subparsers(
         dest="llm_command", required=True
@@ -191,8 +208,43 @@ def _harden(args: argparse.Namespace) -> int:
     except (LLMError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    return _print_outcome(outcome)
 
+
+def _cover(args: argparse.Namespace) -> int:
+    index = _load_index_or_none()
+    rule = find_usable_rule(index, args.technique)
+    if rule is not None:
+        print(f"path:         harden the community rule '{rule.title}' ({rule.id})")
+    else:
+        print(f"path:         no usable community rule for {args.technique}; writing a new rule")
+    return _agent_command(args, index, rule.rule_yaml if rule else None)
+
+
+def _write(args: argparse.Namespace) -> int:
+    print(f"path:         writing a new rule for {args.technique} (its community rules are hidden)")
+    return _agent_command(args, _load_index_or_none(), None)
+
+
+def _agent_command(args: argparse.Namespace, index: ReferenceIndex | None, rule_yaml: str | None) -> int:
+    settings = get_settings()
+    events = [e for path in args.events for e in load_events(path)]
+    try:
+        client = OpenAICompatibleClient.from_settings(settings)
+        common = (events, client, settings.model, index, args.out or settings.runs_dir, make_tracer(settings))
+        if rule_yaml is None:
+            outcome = run_writing(args.technique, *common)
+        else:
+            outcome = run_hardening(rule_yaml, args.technique, *common)
+    except (LLMError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return _print_outcome(outcome)
+
+
+def _print_outcome(outcome: HardeningOutcome) -> int:
     run, evaluation = outcome.run, outcome.heldout_evaluation
+    print(f"mode:         {run.mode} (prompt {run.prompt_version})")
     print(f"status:       {run.status} ({run.final_source})")
     for reason in run.reasons:
         print(f"  - {reason}")
@@ -254,10 +306,13 @@ def _harden_selection(args: argparse.Namespace) -> int:
         rule_ids=set(args.rule_id) if args.rule_id else None,
         dry_run=args.dry_run,
         settings=settings,
+        mode="write" if args.write else "harden",
     )
+    if args.write:
+        print("agent-written arm: a new rule per selected rule, community rules of the technique hidden")
     print(f"{'technique':10} {'tuning':>15} {'held-out':>15} {'calls':>5}  result  rule")
     for i in items:
-        ran = i.action in ("hardened", "reused")
+        ran = i.action in ("hardened", "written", "reused")
         tuning = f"{_pct(i.tuning_before)} -> {_pct(i.tuning_after)}" if ran else _pct(i.tuning_before)
         heldout = f"{_pct(i.heldout_before)} -> {_pct(i.heldout_after)}" if ran else ""
         result = f"{i.status} (reused)" if i.action == "reused" else i.status if ran else i.action
