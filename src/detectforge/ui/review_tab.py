@@ -10,14 +10,39 @@ from pydantic import ValidationError
 from detectforge.agent.runner import HardeningOutcome
 from detectforge.config import get_settings
 from detectforge.review import ReviewAuthError, decide, decisions, list_runs, load_run, parse_reviewer_keys
-from detectforge.ui.components import delta_pct, md, pct, table
+from detectforge.ui.components import delta_pct, export_view, md, pct, table
+from detectforge.ui.navigation import header
 
 
 def review_tab(runs_dir: Path) -> None:
-    st.subheader("4 · Review agent runs (a human approves every change)")
+    header(
+        "review",
+        "Everything the agent proposed, with the evidence: what changed, scores on variations it never "
+        "saw, the quality gate's checks and its full reasoning. Nothing is deployed until a reviewer "
+        "approves it.",
+    )
+    # Shown first: after a decision the run may leave the current filter (e.g. "pending review").
+    if message := st.session_state.pop("review_message", None):
+        (st.error if message.startswith("Could not") else st.success)(message)
     runs = list_runs(runs_dir)
     if not runs:
         st.info("No agent runs yet. Ask the agent from the Harden tab, or run `detectforge harden`.")
+        return
+
+    def state(r) -> str:
+        return r.decision.decision if r.decision else "pending review"
+
+    counts = {s: sum(state(r) == s for r in runs) for s in ("pending review", "approved", "rejected")}
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Waiting for review", counts["pending review"])
+    c2.metric("Approved", counts["approved"])
+    c3.metric("Rejected", counts["rejected"])
+    show = st.radio(
+        "Show", ["pending review", "all", "approved", "rejected"], horizontal=True, key="review_show"
+    )
+    runs = [r for r in runs if show == "all" or state(r) == show]
+    if not runs:
+        st.info(f"No runs {'waiting for review' if show == 'pending review' else show}.")
         return
 
     table(
@@ -47,6 +72,8 @@ def review_tab(runs_dir: Path) -> None:
     st.divider()
     run_detail(outcome)
     st.divider()
+    if outcome.run.final_rule_yaml:
+        export_view(outcome.run.final_rule_yaml, f"proposal-{outcome.run.trace_id[:8]}")
     decision_form(runs_dir, outcome)
 
 
@@ -290,8 +317,6 @@ def decision_form(runs_dir: Path, outcome: HardeningOutcome) -> None:
             on_click=_decide,
             args=(runs_dir, trace_id, decision, reviewer_key, keys, comment),
         )
-    if message := st.session_state.pop("review_message", None):
-        (st.error if message.startswith("Could not") else st.success)(message)
 
 
 def _decide(

@@ -11,7 +11,7 @@ from detectforge.agent.batch import harden_selection, load_selection
 from detectforge.agent.runner import HardeningOutcome, find_usable_rule, run_hardening, run_writing
 from detectforge.config import get_settings
 from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
-from detectforge.eval import arms
+from detectforge.eval import arms, regression
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -68,7 +68,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(handler=_sigmahq_search)
 
     p = sub.add_parser("intake", help="map a plain-language request to ATT&CK techniques")
-    p.add_argument("request", help='e.g. "detect scheduled-task persistence"')
+    p.add_argument("request", nargs="?", help='e.g. "detect scheduled-task persistence"')
+    p.add_argument("--file", type=Path, help="read the request from a file (e.g. a pasted threat report)")
     p.add_argument("--no-model", action="store_true", help="keyword search only (no model call)")
     p.set_defaults(handler=_intake)
 
@@ -142,6 +143,11 @@ def main(argv: list[str] | None = None) -> int:
         dest="eval_command", required=True
     )
     p = eval_sub.add_parser("community", help="Arm 1: score the community rules as-is against all mutations")
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="recompute and compare with the committed results instead of writing them (CI regression gate)",
+    )
     p.set_defaults(handler=_eval_community)
 
     args = parser.parse_args(argv)
@@ -342,7 +348,8 @@ def _intake(args: argparse.Namespace) -> int:
             client = OpenAICompatibleClient.from_settings(get_settings())
         except LLMError:
             client = None  # no key: intake degrades to keyword search
-    print(interpret_request(args.request, index, client).model_dump_json(indent=2))
+    request = args.file.read_text(encoding="utf-8") if args.file else (args.request or "")
+    print(interpret_request(request, index, client).model_dump_json(indent=2))
     return 0
 
 
@@ -491,6 +498,22 @@ def _eval_community(args: argparse.Namespace) -> int:
     )
     result = arms.run_community_arm(selection, index, events)
     out_dir = data_dir / "eval" / "results"
+    if args.check:
+        committed = arms.ArmResult.model_validate_json(
+            (out_dir / "arm1_community.json").read_text(encoding="utf-8")
+        )
+        diffs = regression.diff_arm_results(committed, result)
+        if diffs:
+            print(
+                f"Arm 1 results changed ({len(diffs)} differences from the committed results):\n"
+                + regression.report(diffs)
+                + "\nIf intended: run `detectforge eval community` and commit the new results"
+                " with the change.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"Arm 1 matches the committed results ({result.rule_count} rules).")
+        return 0
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "arm1_community.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
     print(

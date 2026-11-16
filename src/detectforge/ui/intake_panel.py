@@ -13,19 +13,23 @@ from detectforge.reference.index import ReferenceIndex
 from detectforge.ui.components import md
 
 
-def intake_panel(index: ReferenceIndex) -> None:
-    """Must run before the technique search box is created, because it may fill that box."""
-    request = st.text_input(
+def intake_panel(index: ReferenceIndex) -> IntakeResult | None:
+    """The request box. Returns the interpreted request (techniques, or a clarifying question)."""
+    request = st.text_area(
         "What do you want to detect?",
         placeholder="e.g. scheduled-task persistence, or paste a short threat report",
         key="intake_request",
+        height=110,
     )
-    if st.button("Find techniques", disabled=not request.strip()):
+    if st.button("Check coverage", type="primary", disabled=not request.strip()):
         with st.spinner("Interpreting the request…"):
             st.session_state["intake_result"] = interpret_request(request, index, _client()).model_dump()
 
     if data := st.session_state.get("intake_result"):
-        _show(IntakeResult.model_validate(data))
+        result = IntakeResult.model_validate(data)
+        _show(result)
+        return result
+    return None
 
 
 def _client() -> OpenAICompatibleClient | None:
@@ -49,14 +53,3 @@ def _show(result: IntakeResult) -> None:
         st.caption(f"Interpreted by {how}. {md(result.rationale)}")
     if result.rejected:
         st.caption("Ignored (not in the SigmaHQ index): " + md(", ".join(result.rejected)))
-    for match in result.techniques:
-        c1, c2 = st.columns([1, 4])
-        c1.button(
-            f"Use {match.technique}",
-            key=f"use_{match.technique}",
-            on_click=st.session_state.update,
-            kwargs={"find_technique": match.technique},
-        )
-        c2.markdown(
-            f"**{match.technique}** · {match.rule_count} rules, e.g. " + md("; ".join(match.example_rules))
-        )

@@ -7,12 +7,13 @@ the CLI, the runner gives it only the tuning split.
 
 import streamlit as st
 
-from detectforge.agent.runner import run_hardening
+from detectforge.agent.runner import run_hardening, run_writing
 from detectforge.config import get_settings
 from detectforge.llm import LLMError, OpenAICompatibleClient
 from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event
 from detectforge.tracing import make_tracer
+from detectforge.ui.navigation import go_button
 
 
 def agent_panel(before_yaml: str, events: list[Event], index: ReferenceIndex | None) -> None:
@@ -47,9 +48,44 @@ def agent_panel(before_yaml: str, events: list[Event], index: ReferenceIndex | N
     if last := st.session_state.get("last_agent_run"):
         trace_id, status = last
         st.success(
-            f"The agent's proposal ({status.replace('_', ' ')}) is in the editor below. "
-            f"Approve or reject it in the Review tab (run {trace_id[:8]})."
+            f"The agent's proposal ({status.replace('_', ' ')}) is in the editor below, and waiting in "
+            f"the review queue (run {trace_id[:8]})."
         )
+        go_button("review", "Open the review queue →")
+
+
+def write_panel(technique: str, events: list[Event], index: ReferenceIndex | None) -> None:
+    """No usable community rule: ask the agent to write one (same switch and checks as hardening)."""
+    settings = get_settings()
+    blocked = _blocked_reason(settings, technique, events)
+    label = f"Ask the agent to write a rule for {technique}"
+    if blocked:
+        st.button(label, disabled=True, help=blocked, key=f"write_{technique}")
+        st.caption(
+            f"⏳ Agent runs here: {blocked}. From the command line: "
+            f"`detectforge write --technique {technique} --events …`"
+        )
+        return
+    if st.button(label, type="primary", key=f"write_{technique}"):
+        with st.spinner("The agent is writing and testing a rule on the tuning events (1-2 minutes)…"):
+            try:
+                outcome = run_writing(
+                    technique,
+                    events,
+                    OpenAICompatibleClient.from_settings(settings),
+                    settings.model,
+                    index,
+                    settings.runs_dir,
+                    make_tracer(settings),
+                )
+            except (LLMError, ValueError) as e:
+                st.error(f"The agent could not run: {e}")
+                return
+        st.success(
+            f"The agent's rule ({outcome.run.status.replace('_', ' ')}) is waiting in the review queue "
+            f"(run {outcome.run.trace_id[:8]})."
+        )
+        go_button("review", "Open the review queue →")
 
 
 def _blocked_reason(settings, technique: str, events: list[Event]) -> str | None:
