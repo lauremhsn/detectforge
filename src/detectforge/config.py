@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # UI: allow the "Ask the agent" button. Off by default so a public deployment can't spend the
     # model quota; turn it on locally with DETECTFORGE_UI_ALLOW_AGENT_RUNS=true in .env.
     ui_allow_agent_runs: bool = False
+    # Review: who may approve or reject, as "name:key,name:key" (each key 16+ characters). The UI
+    # asks for the key and records the matching name, so typing someone's name isn't enough.
+    # Unset = approving is off.
+    reviewer_keys: SecretStr | None = None
 
     @property
     def runs_dir(self) -> Path:

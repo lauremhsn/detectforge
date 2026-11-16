@@ -61,7 +61,7 @@ class OpenAICompatibleClient:
     """Calls `model`, then `fallback_model` if the primary fails after the SDK's own retries."""
 
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)  # a traceback or log line that prints the client must not show it
     model: str
     fallback_model: str | None = None
     timeout_s: float = 120.0

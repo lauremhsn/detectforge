@@ -4,16 +4,24 @@ The agent only proposes; this is where a person decides. Each run lives in the r
 <trace_id>.json (written by the runner). A decision is appended to <trace_id>.review.json (the full
 history is kept, so a changed mind is visible), and an approved rule is copied to approved/, ready
 to deploy. Nothing here calls the model.
+
+Who may decide is checked here, not in the UI: `decide` takes a reviewer key, finds the reviewer it
+belongs to (DETECTFORGE_REVIEWER_KEYS), and records that name. Typing a name proves nothing; a key
+does. Repeated wrong keys lock decisions for a while, so keys can't be guessed by trying many.
 """
 
+import hmac
 import json
 import logging
 import re
+import threading
+import time
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from detectforge.agent.runner import HardeningOutcome
 from detectforge.schemas import RuleRecord
@@ -22,6 +30,14 @@ log = logging.getLogger(__name__)
 
 _TRACE_ID = re.compile(r"^[0-9a-f]{32}$")
 Decision = Literal["approved", "rejected"]
+
+MIN_KEY_LENGTH = 16
+MAX_FAILED_ATTEMPTS = 5  # wrong keys within LOCKOUT_S before decisions are refused
+LOCKOUT_S = 60.0
+
+
+class ReviewAuthError(Exception):
+    """The decision was refused: approving is off, the key is wrong, or too many wrong keys."""
 
 
 class ReviewDecision(BaseModel):
@@ -126,6 +142,81 @@ def record_decision(
     elif approved_copy.exists():
         approved_copy.unlink()  # a later rejection withdraws the approval
     return outcome.run.record.model_copy(update={"status": decision})
+
+
+def parse_reviewer_keys(secret: SecretStr | None) -> dict[str, str]:
+    """{key: reviewer name} from "name:key,name:key". Malformed or short keys are a config error."""
+    if secret is None or not secret.get_secret_value().strip():
+        return {}
+    keys: dict[str, str] = {}
+    for entry in secret.get_secret_value().split(","):
+        name, sep, key = entry.strip().partition(":")
+        name, key = name.strip(), key.strip()
+        # Errors never repeat the value: it may be a key.
+        if not sep or not name or len(name) > 80:
+            raise ValueError("DETECTFORGE_REVIEWER_KEYS must look like name:key,name:key")
+        if len(key) < MIN_KEY_LENGTH:
+            raise ValueError(f"reviewer key for {name!r} is shorter than {MIN_KEY_LENGTH} characters")
+        if key in keys:
+            raise ValueError("two reviewers share the same key")
+        keys[key] = name
+    return keys
+
+
+class _FailedAttempts:
+    """Wrong keys seen recently, shared by every session of this process."""
+
+    def __init__(self) -> None:
+        self._times: deque[float] = deque()
+        self._lock = threading.Lock()
+
+    def locked(self, now: float) -> bool:
+        with self._lock:
+            while self._times and now - self._times[0] > LOCKOUT_S:
+                self._times.popleft()
+            return len(self._times) >= MAX_FAILED_ATTEMPTS
+
+    def add(self, now: float) -> None:
+        with self._lock:
+            self._times.append(now)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._times.clear()
+
+
+_failed = _FailedAttempts()
+
+
+def authenticate(keys: dict[str, str], presented: str, now: float | None = None) -> str:
+    """The reviewer's name for this key, or ReviewAuthError. Compares in constant time."""
+    now = time.monotonic() if now is None else now
+    if not keys:
+        raise ReviewAuthError("approving is off: no reviewer keys are set (DETECTFORGE_REVIEWER_KEYS)")
+    if _failed.locked(now):
+        raise ReviewAuthError("too many wrong reviewer keys; wait a minute and try again")
+    candidate = presented.strip().encode()
+    match = None
+    for key, name in keys.items():  # check every key, so timing doesn't reveal which one was close
+        if hmac.compare_digest(key.encode(), candidate):
+            match = name
+    if match is None:
+        _failed.add(now)
+        raise ReviewAuthError("wrong reviewer key")
+    return match
+
+
+def decide(
+    runs_dir: Path,
+    trace_id: str,
+    decision: Decision,
+    reviewer_key: str,
+    keys: dict[str, str],
+    comment: str = "",
+) -> RuleRecord:
+    """Record a decision by whoever the key belongs to: the only way the UI changes a rule's status."""
+    reviewer = authenticate(keys, reviewer_key)
+    return record_decision(runs_dir, trace_id, decision, reviewer, comment)
 
 
 def _path(runs_dir: Path, trace_id: str, suffix: str) -> Path:

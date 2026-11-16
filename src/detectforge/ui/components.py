@@ -1,5 +1,7 @@
 """Small display helpers shared by the UI tabs."""
 
+import re
+
 import streamlit as st
 
 
@@ -13,12 +15,21 @@ def table(rows: list[dict]) -> None:
     st.markdown("\n".join(lines))
 
 
+_PUNCTUATION = re.compile(r"([!-/:-@\[-`{-~])")
+
+
+def md(text: object) -> str:
+    """Untrusted text (model output, SigmaHQ fields, command lines) made safe for st.markdown.
+
+    Every ASCII punctuation character is backslash-escaped, which CommonMark renders as itself. So
+    the text shows exactly as written: no links or images a reviewer might click or load, no headings
+    or bold that could pass for DetectForge's own messages, no Streamlit colour or icon directives.
+    """
+    return _PUNCTUATION.sub(r"\\\1", str(text))
+
+
 def _cell(value: object) -> str:
-    # Escape markdown so event command lines and rule titles render literally.
-    text = str(value).replace("\n", " ")
-    for ch in "\\|*_`[]<>":
-        text = text.replace(ch, "\\" + ch)
-    return text
+    return md(str(value).replace("\n", " "))
 
 
 def pct(value: float | None) -> str:

@@ -12,16 +12,26 @@ from streamlit.testing.v1 import AppTest
 from conftest import FIXTURES
 
 APP = str(Path(__file__).resolve().parents[1] / "src" / "detectforge" / "ui" / "app.py")
+REVIEWER_KEY = "test-key-0123456789abcdef"
+
+
+def unescaped(markdown: str) -> str:
+    """Table cells and untrusted text are backslash-escaped; tests read them as displayed."""
+    return re.sub(r"\\(.)", r"\1", markdown)
 
 
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
     """A private data folder (fixtures copied in), so local runs or indexes never affect tests."""
+    from detectforge import review
+
     data = tmp_path / "data"
     shutil.copytree(FIXTURES, data / "fixtures")
     monkeypatch.setenv("DETECTFORGE_DATA_DIR", str(data))
     monkeypatch.setenv("DETECTFORGE_UI_AUTO_FETCH_INDEX", "false")  # never hit the network in tests
     monkeypatch.setenv("DETECTFORGE_UI_ALLOW_AGENT_RUNS", "false")  # never inherit a local .env
+    monkeypatch.setenv("DETECTFORGE_REVIEWER_KEYS", "")  # approving off unless a test sets keys
+    review._failed.clear()
     return data
 
 
@@ -98,16 +108,18 @@ def test_review_tab_without_runs_explains_how_to_get_one(app):
     assert any("No agent runs yet" in i.value for i in app.info)
 
 
-def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixture_events):
+def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixture_events, monkeypatch):
     from detectforge.config import get_settings
+    from detectforge.review import decisions
 
+    monkeypatch.setenv("DETECTFORGE_REVIEWER_KEYS", f"analyst:{REVIEWER_KEY}")
     outcome = _saved_run(data_dir / "runs", load_rule_text, fixture_events)
     get_settings.cache_clear()
     at = AppTest.from_file(APP, default_timeout=30)
     at.run()
     assert not at.exception
 
-    page = " ".join(m.value for m in at.markdown)
+    page = unescaped(" ".join(m.value for m in at.markdown))
     assert "pending review" in page and "33% → 100%" in page  # tuning before → after
     assert any(c.language == "diff" and "+    CommandLine|contains: 'create'" in c.value for c in at.code)
     metrics = {m.label: m.value for m in at.metric}
@@ -115,13 +127,16 @@ def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixtu
 
     approve = next(b for b in at.button if b.label == "Approve")
     approve.click().run()
-    assert any("enter your name" in e.value for e in at.error)  # reviewer is required
+    assert any("wrong reviewer key" in e.value for e in at.error)  # a key is required
 
-    at.text_input(key="reviewer").set_value("analyst").run()
+    at.text_input(key="reviewer_key").set_value(REVIEWER_KEY).run()
     next(b for b in at.button if b.label == "Approve").click().run()
     assert any("Rule approved" in s.value for s in at.success)
     approved = data_dir / "runs" / "approved" / f"{outcome.run.trace_id}.yml"
     assert approved.read_text(encoding="utf-8") == outcome.run.final_rule_yaml
+    # Recorded under the key's owner, and the key is not kept in the session after use.
+    assert decisions(data_dir / "runs", outcome.run.trace_id)[-1].reviewer == "analyst"
+    assert at.text_input(key="reviewer_key").value == ""
 
 
 def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, fixture_events):
@@ -143,6 +158,31 @@ def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, 
     assert not at.exception
     assert any("1 new false alarm(s)" in e.value and "benign-reg-query" in e.value for e in at.error)
     assert "False alarms (held-out)" in {m.label for m in at.metric}
+
+
+def test_injected_model_text_shows_literally_and_approving_is_off_without_keys(data_dir, fixture_events):
+    """Security: a rationale with links, images or a fake 'approved' banner renders as plain text."""
+    from test_agent_loop import ScriptedClient, tool_call
+    from test_write_rule import WRITTEN
+
+    from detectforge.agent.runner import run_writing
+    from detectforge.config import get_settings
+
+    hostile = (
+        "**✅ APPROVED by the lead** [Approve now](https://evil.example/a) ![](https://evil.example/p.png)"
+    )
+    client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale=hostile)])
+    run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
+    get_settings.cache_clear()
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    assert not at.exception
+
+    shown = [m.value for m in at.markdown if "evil" in m.value]
+    assert shown and all("](https" not in v and "**✅" not in v for v in shown)
+    assert any(hostile in unescaped(v) for v in shown)  # still readable, word for word
+    assert all(b.disabled for b in at.button if b.label in ("Approve", "Reject"))
+    assert any("Approving and rejecting are off here" in c.value for c in at.caption)
 
 
 def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_events):

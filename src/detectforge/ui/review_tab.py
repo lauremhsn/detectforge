@@ -8,8 +8,9 @@ import streamlit as st
 from pydantic import ValidationError
 
 from detectforge.agent.runner import HardeningOutcome
-from detectforge.review import decisions, list_runs, load_run, record_decision
-from detectforge.ui.components import delta_pct, pct, table
+from detectforge.config import get_settings
+from detectforge.review import ReviewAuthError, decide, decisions, list_runs, load_run, parse_reviewer_keys
+from detectforge.ui.components import delta_pct, md, pct, table
 
 
 def review_tab(runs_dir: Path) -> None:
@@ -64,7 +65,7 @@ def run_detail(outcome: HardeningOutcome) -> None:
     if run.status == "passed":
         st.success("The quality gate accepted the agent's rule. It still needs your decision.")
     else:
-        st.warning("Needs human review: " + "; ".join(run.reasons))
+        st.warning("Needs human review: " + md("; ".join(run.reasons)))
     if heldout and heldout.new_false_alarm_event_ids:
         st.error(
             f"The proposed rule raises {len(heldout.new_false_alarm_event_ids)} new false alarm(s) on "
@@ -73,7 +74,8 @@ def run_detail(outcome: HardeningOutcome) -> None:
             + ". Check these before approving."
         )
     if run.rationale:
-        st.markdown(f"**Agent's explanation:** {run.rationale}")
+        # Model output: shown literally, so an injected link or "approved" banner can't render.
+        st.markdown(f"**Agent's explanation:** {md(run.rationale)}")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(
@@ -257,37 +259,53 @@ def decision_form(runs_dir: Path, outcome: HardeningOutcome) -> None:
     history = decisions(runs_dir, trace_id)
     for d in history:
         st.caption(
-            f"{d.decided_at.astimezone():%b %d %H:%M} — **{d.decision}** by {d.reviewer}"
-            + (f": {d.comment}" if d.comment else "")
+            f"{d.decided_at.astimezone():%b %d %H:%M} — **{d.decision}** by {md(d.reviewer)}"
+            + (f": {md(d.comment)}" if d.comment else "")
         )
     if outcome.run.status != "passed":
         st.caption("The gate did not accept this rule; approving it overrides the gate, so say why.")
 
-    reviewer = st.text_input("Reviewer", key="reviewer")
-    comment = st.text_area("Comment", key=f"comment_{trace_id}", height=80)
+    try:
+        keys = parse_reviewer_keys(get_settings().reviewer_keys)
+        off = None if keys else "no reviewer keys are set (DETECTFORGE_REVIEWER_KEYS in .env)"
+    except ValueError as e:
+        keys, off = {}, f"the reviewer keys are misconfigured: {e}"
+    if off:
+        st.caption(f"Approving and rejecting are off here: {off}.")
+    reviewer_key = st.text_input(
+        "Reviewer key", key="reviewer_key", type="password", disabled=bool(off),
+        help="Your personal key. The decision is recorded under the name it belongs to.",
+    )  # fmt: skip
+    comment = st.text_area("Comment", key=f"comment_{trace_id}", height=80, disabled=bool(off))
     c1, c2, _ = st.columns([1, 1, 4])
-    c1.button(
-        "Approve",
-        type="primary",
-        key=f"approve_{trace_id}",
-        on_click=_decide,
-        args=(runs_dir, trace_id, "approved", reviewer, comment),
-    )
-    c2.button(
-        "Reject",
-        key=f"reject_{trace_id}",
-        on_click=_decide,
-        args=(runs_dir, trace_id, "rejected", reviewer, comment),
-    )
+    for column, label, decision, kind in [
+        (c1, "Approve", "approved", "primary"),
+        (c2, "Reject", "rejected", "secondary"),
+    ]:
+        column.button(
+            label,
+            type=kind,
+            key=f"{decision}_{trace_id}",
+            disabled=bool(off),
+            on_click=_decide,
+            args=(runs_dir, trace_id, decision, reviewer_key, keys, comment),
+        )
     if message := st.session_state.pop("review_message", None):
         (st.error if message.startswith("Could not") else st.success)(message)
 
 
-def _decide(runs_dir: Path, trace_id: str, decision: str, reviewer: str, comment: str) -> None:
+def _decide(
+    runs_dir: Path, trace_id: str, decision: str, reviewer_key: str, keys: dict[str, str], comment: str
+) -> None:
     try:
-        record = record_decision(runs_dir, trace_id, decision, reviewer, comment)
-    except ValidationError:
-        st.session_state["review_message"] = "Could not save: enter your name as reviewer."
+        record = decide(runs_dir, trace_id, decision, reviewer_key, keys, comment)
+    except ReviewAuthError as e:
+        st.session_state["review_message"] = f"Could not save: {e}."
         return
+    except ValidationError:
+        st.session_state["review_message"] = "Could not save: the comment is too long."
+        return
+    finally:
+        st.session_state["reviewer_key"] = ""  # never keep a key in the session after use
     where = f" Saved to {runs_dir / 'approved' / (trace_id + '.yml')}." if decision == "approved" else ""
     st.session_state["review_message"] = f"Rule {record.status}.{where}"

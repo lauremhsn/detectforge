@@ -10,6 +10,7 @@ from detectforge.config import get_settings
 from detectforge.intake import IntakeResult, interpret_request
 from detectforge.llm import LLMError, OpenAICompatibleClient
 from detectforge.reference.index import ReferenceIndex
+from detectforge.ui.components import md
 
 
 def intake_panel(index: ReferenceIndex) -> None:
@@ -40,14 +41,14 @@ def _client() -> OpenAICompatibleClient | None:
 def _show(result: IntakeResult) -> None:
     how = "the model" if result.source == "model" else "keyword search of SigmaHQ"
     if result.note:
-        st.caption(f"Used {how}: {result.note}")
+        st.caption(f"Used {how}: {md(result.note)}")
     if result.status == "needs_clarification":
-        st.warning(result.clarification or "Please describe the attacker behaviour to cover.")
+        st.warning(md(result.clarification or "Please describe the attacker behaviour to cover."))
         return
     if result.rationale:
-        st.caption(f"Interpreted by {how}. {result.rationale}")
+        st.caption(f"Interpreted by {how}. {md(result.rationale)}")
     if result.rejected:
-        st.caption("Ignored (not in the SigmaHQ index): " + ", ".join(result.rejected))
+        st.caption("Ignored (not in the SigmaHQ index): " + md(", ".join(result.rejected)))
     for match in result.techniques:
         c1, c2 = st.columns([1, 4])
         c1.button(
@@ -57,5 +58,5 @@ def _show(result: IntakeResult) -> None:
             kwargs={"find_technique": match.technique},
         )
         c2.markdown(
-            f"**{match.technique}** · {match.rule_count} rules, e.g. " + "; ".join(match.example_rules)
+            f"**{match.technique}** · {match.rule_count} rules, e.g. " + md("; ".join(match.example_rules))
         )
