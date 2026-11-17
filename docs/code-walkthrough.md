@@ -59,7 +59,8 @@ src/detectforge/
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
 docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
-tests/                280 automated tests (run on every push by GitHub Actions)
+docs/threat-model.md  What we protect, from whom, and the test behind each defence
+tests/                293 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -300,17 +301,25 @@ first launch, and `src/detectforge/ui/requirements.txt` lists its dependencies.
 | 1 · Find | Search SigmaHQ by technique + keywords; table of candidates with "fields missing from events"; rule details (marked untrusted); or pick a fixture rule. "No usable rule" message = where the write-new-rule fallback will start. |
 | 2 · Validate | The "before": validation errors/warnings, then the scorecard: detected, evasion resistance, false alarms, per-mutation table, and every event with DETECTED / MISSED / FALSE ALARM. |
 | 3 · Harden | Before on the left, an editable "after" on the right. Every edit re-runs `compare`: evasion resistance with delta, per-mutation before/after, and lists of newly caught / LOST attacks and false-alarm changes. **"Ask the agent"** runs the hardening loop on the selected technique and puts its proposal in the editor. |
-| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call, plus the full conversation step by step. **Approve / Reject** with your name and a comment. |
+| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call, plus the full conversation step by step. **Approve / Reject** with your reviewer key and a comment. |
 
 It is a **thin layer over the library** (no logic of its own) and shows held-out events to the human
 only; the agent itself still receives just the tuning split.
 
 **Review (`review.py`).** A decision is appended to `data/runs/<trace_id>.review.json`, so the full
 history is kept (a later rejection doesn't erase an earlier approval, it's added after it). An approved
-rule is copied to `data/runs/approved/`, ready to deploy; a later rejection removes that copy. A
-reviewer name is required, and only well-formed trace ids become file names, so a crafted id can't
-read or write elsewhere. Approving a rule the gate didn't accept is allowed (a human overrides the
-gate) but the UI asks for a reason.
+rule is copied to `data/runs/approved/`, ready to deploy; a later rejection removes that copy. Only
+well-formed trace ids become file names, so a crafted id can't read or write elsewhere. Approving a
+rule the gate didn't accept is allowed (a human overrides the gate) but the UI asks for a reason.
+
+**Who may approve (`review.decide`).** A typed name proves nothing, so approving needs a personal
+**reviewer key**, set in `.env` as `DETECTFORGE_REVIEWER_KEYS=name:key,name:key` (16+ characters
+each). The decision is recorded under the name the key belongs to. With no keys set, the buttons are
+switched off (this is how the public deployment stays read-only). Keys are compared in constant
+time, 5 wrong keys within a minute lock decisions for a minute, and the key is cleared from the page
+after each use. Model and SigmaHQ text in the UI is escaped (`ui/components.md`), so an injected
+"Approve now" link or a bold "APPROVED" banner shows as plain text. All of this is in
+[threat-model.md](threat-model.md).
 
 **"Ask the agent" is off by default.** The deployed app is public; if the button worked there,
 anyone could spend the free model quota. It only works when `DETECTFORGE_UI_ALLOW_AGENT_RUNS=true`
@@ -561,7 +570,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 280 tests
+uv run pytest                             # 293 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
@@ -583,6 +592,7 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_batch` (per-rule scoping, quota-saving skips, early stop), `test_agent_tools` (contracts,
 held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability, memorised characters, copied strings), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
+`test_security` (an obedient model following injected rules and events, YAML tags, escaped display, five tools with no network or file writes, reviewer keys and lockout, API key never saved or printed, no secret tracked by git),
 `test_write_rule` (path chosen by code, writing loop, same-technique rules hidden, no-rule baseline,
 agent-written arm batch),
 `test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting

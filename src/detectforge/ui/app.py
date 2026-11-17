@@ -28,7 +28,7 @@ from detectforge.reference.index import ReferenceIndex, techniques_from_tags
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
 from detectforge.ui.agent_panel import agent_panel
-from detectforge.ui.components import pct, table
+from detectforge.ui.components import md, pct, table
 from detectforge.ui.intake_panel import intake_panel
 from detectforge.ui.review_tab import review_tab
 
@@ -155,9 +155,9 @@ def find_tab(index: ReferenceIndex | str) -> None:
             rule = hits[choice].rule
             with st.expander("Rule details (SigmaHQ text is untrusted input)"):
                 st.markdown(f"`{rule.path}` · id `{rule.id}`")
-                st.write(rule.description)
+                st.markdown(md(rule.description))
                 if rule.falsepositives:
-                    st.markdown("**Documented false positives:** " + "; ".join(rule.falsepositives))
+                    st.markdown("**Documented false positives:** " + md("; ".join(rule.falsepositives)))
                 st.code(rule.rule_yaml, language="yaml")
             st.button(
                 "Use this rule",
@@ -185,7 +185,7 @@ def find_tab(index: ReferenceIndex | str) -> None:
 
 def scorecard_view(card: Scorecard, events: list[Event]) -> None:
     if not card.valid:
-        st.error(f"Rule could not be evaluated: {card.error}")
+        st.error(f"Rule could not be evaluated: {md(card.error)}")
         return
     attacks = card.hits + card.misses
     c1, c2, c3, c4 = st.columns(4)
@@ -248,9 +248,9 @@ def validate_tab(events: list[Event]) -> None:
 def validation_view(rule_yaml: str) -> None:
     result = validate_rule(rule_yaml)
     for error in result.errors:
-        st.error(error)
+        st.error(md(error))
     for warning in result.warnings:
-        st.warning(warning)
+        st.warning(md(warning))
     if result.valid and not result.warnings:
         st.success("Valid Sigma rule, in scope, evaluable by the harness.")
 
@@ -273,7 +273,7 @@ def harden_tab(events: list[Event], all_events: list[Event], index: ReferenceInd
     validation_view(after)
     report = compare(before, after, events)
     if not report.valid:
-        st.error(report.after.error or report.before.error)
+        st.error(md(report.after.error or report.before.error))
         return
 
     c1, c2, c3 = st.columns(3)
