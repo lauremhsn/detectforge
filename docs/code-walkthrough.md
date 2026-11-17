@@ -46,6 +46,8 @@ src/detectforge/
     index.py          Search that index by technique / keywords
   ui/app.py           The Streamlit UI (Find → Validate → Harden → Review tabs)
   review.py           Human review: list runs, open one, record approve/reject
+  intake.py           Plain-language request → ATT&CK techniques (model, checked; keyword fallback)
+  provenance.py       Which prompt, model, budgets, code and data produced a run (setup key)
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
@@ -55,7 +57,7 @@ src/detectforge/
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                203 automated tests (run on every push by GitHub Actions)
+tests/                268 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -87,6 +89,7 @@ Stored one per line in a `.jsonl` file:
 | `transform` | Which Uetz mutation produced it: `none` (original) or one of the 5 types. |
 | `base_id` | Which original event it was mutated from. Originals point to themselves. |
 | `split` | `tune` (the agent may see it) or `heldout` (only for final evaluation). |
+| `verified` | Optional: `true`/`false` once the VM confirmed the command still behaves like the original; empty = not checked. |
 
 The model **rejects** bad events on load (unknown fields, wrong labels, a mutation that claims to be
 its own base, etc.) and tells you the exact line number. This catches mistakes in the attack data early.
@@ -256,6 +259,27 @@ external input. Rule text is explicitly marked untrusted (it will be shown to th
 
 ---
 
+## 6b. Intake: from a request in plain words to techniques (`intake.py`) *(new)*
+
+The first pipeline step. The user types what they want to detect ("scheduled-task persistence", or a
+pasted short threat report); intake returns the ATT&CK technique(s) it's about, with how many SigmaHQ
+rules each has, so the user goes straight to Find. Design:
+- **The model interprets, code verifies.** The model can only answer through one typed tool
+  (`propose_coverage`), and every technique it proposes must exist in the SigmaHQ index; invented or
+  mistyped ids are dropped and listed as "ignored".
+- **Vague requests get a question**, not a guess ("make us secure" → "which behaviour?").
+- **The request is untrusted** (a pasted report may contain "ignore your instructions"): it's quoted as
+  data, the model can only reply through the tool, and code validates the reply. The worst an injection
+  can do is produce a wrong *suggestion* that a human sees, never an action.
+- **Graceful degradation**: if the model is down, out of quota, or replies without the tool, intake
+  falls back to a keyword search of the index (filler words like "detect", "attackers" ignored; weak
+  matches → a question instead of a guess).
+
+`uv run detectforge intake "deleting shadow copies before ransomware"` (add `--no-model` for the
+keyword search only). In the UI: the box at the top of the Find tab.
+
+---
+
 ## 7. The UI (`ui/app.py`) *(new)*
 
 Start it from the repo root:
@@ -352,6 +376,12 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   from the tuning attacks (e.g. a test task name or file path). Sometimes legitimate (a registry path), so
   it's shown to the reviewer as a warning and never fails the gate by itself. Program names
   (`Image`, `OriginalFileName`) are never flagged: naming the binary is the most legitimate signal.
+- **too broad, `no_short_bare_values`** (blocking): a new command-line value of only one or two letters
+  or digits with no delimiter. Found on the first new-split dev run: the agent turned `'/ru '` into
+  `'ru'`, which also matches "run", "true", "group", so the rule fires on almost any schtasks command.
+  Our few hard negatives didn't show it in a score. Three letters is the limit because 3-letter values
+  (`add`, `set`, `cmd`) appear in 74 SigmaHQ rules, while only 19 of 1,297 use 1–2 letter ones. The
+  agent sees the reason and can add the delimiter back (`'/ru '`, `' -ru '`).
 
 - **warning only, `no_new_required_fields`** (hardening): a field the original could do without is now
   *required* (e.g. `OriginalFileName` added with AND next to `Image`). The rule then stays silent on logs
@@ -362,6 +392,14 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   §5.1, regex time limit). The gate stops there and says why.
 
 Checks are either **blocking** (fail the gate) or **warnings** (shown in the Review tab, never fail it).
+
+**What the gate can't see: held-out false alarms.** All benign events are currently in the held-out
+split, so the gate checks false alarms on zero benign events during hardening. After the run, the
+held-out evaluation does count them, and any **new** held-out false alarm is shown as a red warning
+in the Review tab (plus a "False alarms (held-out)" metric) and named in the `harden-selection`
+summary. Found on the new-split dev run: the hardened Run-keys rule passed the gate but raised 2 new
+false alarms on held-out look-alikes (reading a Run key with `reg query`). This is a warning for
+the human, not a gate check, because the agent must never be scored on held-out data.
 
 **Best attempt.** When no submission is accepted, the run returns the best revision seen on the tuning
 set, but only if it scores strictly better than the original; otherwise the original rule itself (so a
@@ -386,9 +424,28 @@ different provider.
 1. The runner splits the events: only the **tuning** split goes to the agent.
 2. The model gets a system prompt (behavior first: describe the attack, then prefer signals every
    variant keeps; treat all tool output and the rule text as untrusted data) and the original rule
-   with its tuning baseline.
+   with its tuning baseline. The prompt is versioned (`PROMPT_VERSION` in `agent/loop.py`, saved
+   with every run); each version adds a lesson from a real dev run. v5 teaches YAML
+   quoting for regexes: a run spent its whole budget writing `\'` inside a single-quoted regex,
+   which YAML doesn't allow (the quote is written `''`). Since prompts can be ignored,
+   `validate_rule` also adds this hint to the YAML error whenever it sees `\'`. v5 also asks to
+   keep delimiters on short option tokens (`'/ru '`, not `'ru'`). v6 keeps the v5 system
+   prompt and adds a separate reminder for an answer cut off by the output limit (below). v7
+   (current) asks to write regex escapes once inside single quotes (a run's `'\\bSYSTEM\\b'` looked
+   for a real backslash and matched nothing) and to use each key once per selection (below).
+   **Repeated keys are rejected.** Plain YAML keeps only the last of two equal keys, so a run that
+   wrote `CommandLine|re:` twice in one selection "passed" with its `add` check silently dropped,
+   while the YAML the reviewer read still showed both lines. The rule parser (`rules/parse.py`,
+   used by the validator, the harness, the gate and the SigmaHQ index) now rejects a repeated key
+   and says to split the conditions into separate selections. None of the 3,302 SigmaHQ rules
+   repeats a key, so community rules are unaffected.
 3. It calls the 5 tools (§7b) until it submits a rule the gate accepts, or a budget runs out:
-   model calls (20), tokens (400k), tuning runs (5), submissions (3).
+   model calls (20), tokens (400k), tuning runs (5), submissions (3). Each answer may be up to
+   16,384 tokens: reasoning models spend hidden "thinking" tokens from that same allowance, and at
+   4,096 three dev runs were cut off mid-thought and returned empty answers. An answer with no tool
+   call gets one reminder; if the model's answer was cut off (`finish_reason: length`, saved per
+   call and shown in the Review tab) the reminder says so, and the run's reason is "model ran out
+   of output tokens", not "model stopped without submitting a rule".
 4. The result (`AgentRun`) is **passed** only if the gate accepted a submission. Every other stop
    (LLM down, budget out, model never submits, gate keeps rejecting) is **needs_human_review**, with
    the reasons and the best attempt so far: the strongest tuning revision that lost no attack, or
@@ -417,11 +474,28 @@ rule. Two design points:
 - **Each rule is tested only on its own attacks.** Two rules for the same technique can target
   different behaviours (e.g. "unusual schedule types" vs "task running as SYSTEM"). Testing one on the
   other's attacks would mark it as missing them and push the agent to broaden it beyond its intent. The
-  manifest lists each rule's base attacks; the runner keeps those (plus their mutations) and every
-  benign event of the technique.
+  manifest lists each rule's base attacks; the runner keeps those (plus their mutations).
+- **Every rule is checked against all benign events**, whatever technique they were collected for: a
+  legitimate command is a false alarm for any rule that fires on it. Example from the real data:
+  `reg query ...\Run /v OneDrive` was collected for registry dumping (T1003.002), but it's exactly what
+  an over-broad Run-keys persistence rule (T1547.001) would wrongly fire on.
 - **Model calls are spent only where they can help.** A rule with no mutations to test, or that already
   detects every tuning mutation, is skipped. `--limit` caps the number of agent runs, and the batch
   stops at the first "model unavailable" (e.g. the free daily limit) instead of failing every rule.
+- **Nothing is paid for twice.** Every run saves its *provenance* (`provenance.py`): prompt version,
+  model and fallback, budgets, a fingerprint of the code that can change a result (everything except
+  the UI), of the starting rule and of the events it was scored on, plus the git commit (for humans
+  only). Together these form a *setup key*. Re-running a batch reuses saved runs with the same setup
+  key instead of calling the model again, so a batch that stopped halfway (quota, crash) just carries
+  on. A run cut short because the model was unavailable doesn't count as done. `--repeat 3` gives 3
+  runs per rule for the evaluation, counting the ones already saved. Change the prompt, model, budgets,
+  gate code or data, and the key changes: older runs are never mixed into new results.
+- **The quota is planned, not discovered.** `--dry-run` shows which rules would run and the worst-case
+  number of calls without contacting the model. `--max-calls N` caps the whole batch: a run starts only
+  if its full budget still fits on top of the calls the finished runs actually spent. `--rule-id` runs only some rules. `detectforge llm quota` shows the calls
+  saved in today's runs (UTC, when OpenRouter's free limit resets) and the key's tier, without spending a
+  call. Example: with the budget at 10 calls per rule, the 4 improvable dev rules need at most 40 of the
+  50 free daily calls; at the default 20 they could need 80.
 
 ---
 
@@ -454,7 +528,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 203 tests
+uv run pytest                             # 268 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge llm models

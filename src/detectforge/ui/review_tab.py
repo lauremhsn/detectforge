@@ -51,14 +51,29 @@ def review_tab(runs_dir: Path) -> None:
 def run_detail(outcome: HardeningOutcome) -> None:
     run, heldout = outcome.run, outcome.heldout_evaluation
     st.caption(f"Run `{run.trace_id}` · model `{run.model}` · prompt `{run.prompt_version}`")
+    if p := outcome.provenance:
+        commit = p.git_commit or "unknown"
+        if p.git_dirty:
+            commit += " + uncommitted changes"
+        st.caption(
+            f"Setup `{p.setup_key}` · code `{p.code_sha}` (commit {commit}) · {p.event_count} events "
+            f"`{p.events_sha}` · budgets {p.budgets}"
+        )
     if run.status == "passed":
         st.success("The quality gate accepted the agent's rule. It still needs your decision.")
     else:
         st.warning("Needs human review: " + "; ".join(run.reasons))
+    if heldout and heldout.new_false_alarm_event_ids:
+        st.error(
+            f"The proposed rule raises {len(heldout.new_false_alarm_event_ids)} new false alarm(s) on "
+            "held-out benign events that the agent and the gate never saw: "
+            + ", ".join(heldout.new_false_alarm_event_ids)
+            + ". Check these before approving."
+        )
     if run.rationale:
         st.markdown(f"**Agent's explanation:** {run.rationale}")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric(
         "Tuning evasion resistance",
         pct(run.tuning_evasion_resistance_after),
@@ -78,6 +93,13 @@ def run_detail(outcome: HardeningOutcome) -> None:
         run.tuning_false_alarms_after,
         delta=run.tuning_false_alarms_after - run.tuning_false_alarms_before,
         delta_color="inverse",
+    )
+    c4.metric(
+        "False alarms (held-out)",
+        heldout.false_alarms_after if heldout else "n/a",
+        delta=heldout.false_alarms_after - heldout.false_alarms_before if heldout else None,
+        delta_color="inverse",
+        help="On benign look-alikes the agent never saw. Computed after the run.",
     )
 
     st.markdown("**What changed**")
@@ -140,6 +162,7 @@ def run_detail(outcome: HardeningOutcome) -> None:
                     "seconds": round(c.latency_ms / 1000, 1),
                     "tokens in/out": f"{c.prompt_tokens}/{c.completion_tokens}",
                     "fallback": "yes" if c.used_fallback else "",
+                    "cut off": "yes (output limit)" if c.finish_reason == "length" else "",
                 }
                 for i, c in enumerate(run.model_calls, start=1)
             ]

@@ -14,6 +14,11 @@ Overfitting (memorising the test attacks instead of describing the behavior):
   agent adds them, it copied the exact tricks our mutations used, and new variants would get through.
 - copied literals: long strings taken verbatim from the tuning attacks (e.g. a test task name).
   Sometimes legitimate (a registry path), so these are reported for the human, not rejected.
+
+Too broad:
+- short bare values: a new command-line value of only one or two letters or digits with no
+  delimiter (e.g. 'ru' replacing '/ru '). It matches inside ordinary words ("run", "true", "group"),
+  so the rule fires on almost anything; our hard negatives are too few to show that in a score.
 """
 
 import re
@@ -90,6 +95,7 @@ def _values(value: object) -> list[str]:
 
 _ESCAPE = re.compile(r"\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|U([0-9a-fA-F]{8}))")
 MIN_COPIED_LENGTH = 12
+MIN_BARE_VALUE_LENGTH = 3  # 'ru', 'sc' need a / or -; 3+ ('add', 'set') is common in SigmaHQ
 COMMAND_LINE_FIELDS = {"CommandLine", "ParentCommandLine", ""}  # "" = keyword detections
 
 
@@ -121,6 +127,19 @@ def copied_literals(
         if any(literal.lower() in line for line in seen):
             copied.add(literal)
     return sorted(copied)
+
+
+def short_bare_values(candidate_yaml: str, original_yaml: str | None = None) -> list[str]:
+    """New literal command-line values made only of a few letters/digits (no '/', '-', space...)."""
+    known = {v.lower() for _, v in _detection_values(original_yaml)} if original_yaml else set()
+    short = set()
+    for key, value in _detection_values(candidate_yaml):
+        if key.split("|")[0] not in COMMAND_LINE_FIELDS or "|re" in key or value.lower() in known:
+            continue
+        core = value.strip("*")
+        if core.isalnum() and len(core) < MIN_BARE_VALUE_LENGTH:
+            short.add(core)
+    return sorted(short)
 
 
 def _characters(rule_yaml: str) -> set[str]:

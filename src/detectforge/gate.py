@@ -10,7 +10,13 @@ from detectforge.harness.compare import compare, evasion_resistance
 from detectforge.harness.matcher import required_fields
 from detectforge.harness.run import run
 from detectforge.rules.convert import convert_rule
-from detectforge.rules.lint import copied_literals, dropped_fields, dropped_filters, unusual_characters
+from detectforge.rules.lint import (
+    copied_literals,
+    dropped_fields,
+    dropped_filters,
+    short_bare_values,
+    unusual_characters,
+)
 from detectforge.rules.parse import load_rule
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import Event
@@ -124,6 +130,7 @@ def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | No
     unusual = unusual_characters(rule_yaml, original_yaml)
     attacks = [e.command_line for e in events if e.label == "attack"]
     copied = copied_literals(rule_yaml, attacks, original_yaml)
+    short = short_bare_values(rule_yaml, original_yaml)
     return [
         GateCheck(
             name="no_unusual_characters",
@@ -143,6 +150,16 @@ def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | No
                 "warning, check these are general and not test-specific: " + "; ".join(copied)
                 if copied
                 else "none"
+            ),
+        ),
+        GateCheck(
+            name="no_short_bare_values",
+            passed=not short,
+            detail=(
+                "too short to be specific, they match inside ordinary words (keep a delimiter, "
+                "e.g. '/ru ' or ' -ru '): " + ", ".join(repr(v) for v in short)
+                if short
+                else "none added"
             ),
         ),
     ]

@@ -44,6 +44,9 @@ class Event(BaseModel):
     transform: Transform
     base_id: str = Field(min_length=1, description="Event this was mutated from; itself if unmutated.")
     split: Split
+    # True/False once the command was run in the VM to check it still does the same thing;
+    # None = not checked. Lets results be reported separately for VM-verified mutations.
+    verified: bool | None = None
 
     @model_validator(mode="after")
     def _base_id_consistent(self) -> Self:

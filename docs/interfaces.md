@@ -1,7 +1,7 @@
 # Interfaces
 
 Source of truth: [`src/detectforge/schemas.py`](../src/detectforge/schemas.py). Any change needs
-team agreement. Status: **draft, pending team sign-off.**
+team agreement. Status: **agreed by the team.**
 
 ## Event
 
@@ -20,6 +20,7 @@ One JSON object per line (JSONL, UTF-8). Unknown keys are rejected.
 | `transform` | `none` \| `insertion` \| `substitution` \| `omission` \| `reordering` \| `recoding` | Uetz et al. taxonomy. |
 | `base_id` | string | The event this one was mutated from. **Unmutated events point to themselves** (`base_id == event_id`), so grouping by `base_id` gives each base with all its variants. |
 | `split` | `tune` \| `heldout` | |
+| `verified` | bool, optional | `true`/`false` once the command was run in the VM to check it still behaves like the original; omitted/`null` = not checked. Results can be reported separately for verified mutations. |
 
 Sigma field mapping used by the harness: `Image → image`, `CommandLine → command_line`,
 `ParentImage → parent_image`, `OriginalFileName → original_file_name`,
@@ -76,15 +77,16 @@ metrics module, not the harness).
 `rule_yaml`, `source` (`community`|`adapted`|`written`), `technique`, `trace_id`, `version` (≥ 1),
 `status` (`proposed`|`approved`|`rejected`, default `proposed`).
 
-## Open questions
+## Decisions (agreed by the team)
 
-1. **Base IDs**: OK with unmutated events having `base_id == event_id` (rather than null)?
-2. **Extra Sysmon fields (added as optional, pending confirmation)**: `original_file_name` and
-   `parent_command_line` are now optional event fields. Can the attack-data pipeline capture them from
-   Sysmon for every event?
+1. **Base IDs**: unmutated events have `base_id == event_id`, so grouping by `base_id` gives each base
+   attack with all its variants.
+2. **Extra Sysmon fields**: `original_file_name` and `parent_command_line` are optional fields; Sysmon
+   Event ID 1 logs both by default and they are present in the VM captures.
    Measured on SigmaHQ r2026-07-01: before, 717 of 1,297 Windows process-creation rules used a field we
    lacked (`OriginalFileName` in 559, `ParentCommandLine` in 75). With the two fields: 175 still use a
    missing field; 117 of those are harmless, 58 can never fire (mostly `IntegrityLevel`, `User`).
-3. **Behavior verification**: should events carry a flag recording whether the mutation was confirmed in the VM?
-4. **Binary renaming** (optional extension): it changes `image`, not just `command_line`. Use a separate
-   transform value (e.g. `renaming`), reported separately from the five Uetz types?
+3. **Behaviour verification**: optional `verified` field (see the Event table); results can be split by
+   what the VM confirmed.
+4. **Binary renaming**: not implemented; a possible extension, reported separately from the five Uetz
+   types if added.

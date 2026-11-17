@@ -49,6 +49,7 @@ class ModelCallRecord:
     completion_tokens: int = 0
     used_fallback: bool = False
     error: str | None = None
+    finish_reason: str | None = None  # "length" = cut off by max_output_tokens
 
 
 class ChatClient(Protocol):
@@ -65,7 +66,7 @@ class OpenAICompatibleClient:
     fallback_model: str | None = None
     timeout_s: float = 120.0
     max_retries: int = 3
-    max_output_tokens: int = 4096
+    max_output_tokens: int = 16_384
     _client: Any = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -152,6 +153,20 @@ def list_free_tool_models(base_url: str, timeout_s: float = 30.0) -> list[dict[s
             or all(m.get("pricing", {}).get(k) == "0" for k in ("prompt", "completion"))
         )
     ]
+
+
+def key_info(base_url: str, api_key: str, timeout_s: float = 15.0) -> dict[str, Any]:
+    """The key's tier and credit usage from OpenRouter's /key endpoint. This is not a model call."""
+    if "openrouter.ai" not in base_url:
+        raise LLMError("key info is only available for OpenRouter")
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/key", headers={"Authorization": f"Bearer {api_key}"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            return json.loads(response.read().decode("utf-8")).get("data", {})
+    except (OSError, ValueError) as e:  # never echo the request (it carries the key)
+        raise LLMError(f"could not read key info ({type(e).__name__})") from None
 
 
 def openai_tool_definitions(schemas: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -3,7 +3,13 @@
 import pytest
 
 from detectforge.gate import GateConfig, check
-from detectforge.rules.lint import copied_literals, dropped_fields, dropped_filters, unusual_characters
+from detectforge.rules.lint import (
+    copied_literals,
+    dropped_fields,
+    dropped_filters,
+    short_bare_values,
+    unusual_characters,
+)
 from detectforge.rules.parse import load_rule
 
 from conftest import make_rule
@@ -181,3 +187,28 @@ def test_gate_reports_a_rule_too_slow_to_evaluate(monkeypatch):
     result = check(slow, events)
     assert not result.passed and result.checks[-1].name == "evaluable"
     assert "catastrophic backtracking" in result.checks[-1].detail
+
+
+def test_short_bare_values_flags_new_letters_without_a_delimiter():
+    original = make_rule("  sel:\n    CommandLine|contains: '/ru '\n  condition: sel")
+    candidate = make_rule(
+        "  sel:\n"
+        "    Image|endswith: '\\sc.exe'\n"  # program names are fine
+        "    CommandLine|contains:\n"
+        "      - 'ru'\n"  # matches "run", "true", "group"
+        "      - '/ru '\n"  # kept from the original
+        "      - ' -ru '\n"  # has a delimiter
+        "      - 'create'\n"  # long enough
+        "    CommandLine|re: 'ru'\n"  # regexes are out of scope
+        "  condition: sel"
+    )
+    assert short_bare_values(candidate, original) == ["ru"]
+    assert short_bare_values(original, original) == []
+
+
+def test_gate_rejects_short_bare_values(tuning, load_rule_text):
+    robust = load_rule_text("schtasks_create_robust.yml")
+    broad = robust.replace("CommandLine|contains: 'create'", "CommandLine|contains: 'cr'")
+    result = check(broad, tuning, config=GateConfig(max_false_alarms=99))
+    assert not result.passed and "no_short_bare_values" in names(result, False)
+    assert check(robust, tuning, config=GateConfig(max_false_alarms=99)).passed

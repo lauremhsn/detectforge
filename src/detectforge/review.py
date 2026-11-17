@@ -82,6 +82,12 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
     return sorted(summaries, key=lambda s: s.created, reverse=True)
 
 
+def calls_today(runs_dir: Path, now: datetime | None = None) -> int:
+    """Model calls in the runs saved today (UTC, when OpenRouter's daily free limit resets)."""
+    today = (now or datetime.now(UTC)).date()
+    return sum(r.model_calls for r in list_runs(runs_dir) if r.created.astimezone(UTC).date() == today)
+
+
 def load_run(runs_dir: Path, trace_id: str) -> HardeningOutcome:
     return HardeningOutcome.model_validate_json(
         _path(runs_dir, trace_id, ".json").read_text(encoding="utf-8")

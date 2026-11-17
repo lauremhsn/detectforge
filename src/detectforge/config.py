@@ -35,7 +35,9 @@ class Settings(BaseSettings):
     max_iterations: int = Field(default=5, ge=1, description="run_tuning_set calls per rule")
     max_model_calls: int = Field(default=20, ge=1, description="LLM requests per rule")
     max_tokens_per_rule: int = Field(default=400_000, ge=1_000, description="prompt + completion tokens")
-    max_output_tokens: int = Field(default=4_096, ge=256, description="per LLM response")
+    # Reasoning models spend hidden "thinking" tokens from this same allowance; at 4096 a dev run
+    # was cut off mid-thought three times and returned empty answers.
+    max_output_tokens: int = Field(default=16_384, ge=256, description="per LLM response")
 
     # Tracing (Langfuse): enabled when both keys are set. Cloud (free tier) or self-hosted URL.
     langfuse_host: str = Field(default="https://cloud.langfuse.com", validation_alias="LANGFUSE_HOST")

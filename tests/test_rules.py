@@ -67,3 +67,30 @@ def test_cli_validate_exit_code(tmp_path, capsys):
     bad.write_text("title: [", encoding="utf-8")
     assert main(["validate", str(bad)]) == 1
     assert json.loads(capsys.readouterr().out)["valid"] is False
+
+
+def test_backslash_quote_in_yaml_gets_a_hint():
+    """Regression: a dev run spent its whole budget writing \' inside a single-quoted regex."""
+    broken = make_rule("  sel:\n    CommandLine|re: '(^|[\\s\"\\'])add'\n  condition: sel")
+    result = validate_rule(broken)
+    assert not result.valid and "write a quote as ''" in result.errors[0]
+    fixed = make_rule("  sel:\n    CommandLine|re: '(^|[\\s\"''])add'\n  condition: sel")
+    assert validate_rule(fixed).valid
+    plain = validate_rule("title: [unclosed")  # unrelated YAML errors get no misleading hint
+    assert not plain.valid and "hint" not in plain.errors[0]
+
+
+def test_a_key_repeated_in_one_selection_is_rejected():
+    """Regression: plain YAML kept only the second CommandLine|re, silently dropping the 'add' check."""
+    repeated = make_rule(
+        "  sel:\n    Image|endswith: '\\reg.exe'\n    CommandLine|re: 'add'\n"
+        "    CommandLine|re: 'CurrentVersion'\n  condition: sel"
+    )
+    result = validate_rule(repeated)
+    assert not result.valid
+    assert "duplicate key 'CommandLine|re'" in result.errors[0] and "separate selections" in result.errors[0]
+    split = make_rule(
+        "  sel_img:\n    Image|endswith: '\\reg.exe'\n  sel_add:\n    CommandLine|re: 'add'\n"
+        "  sel_key:\n    CommandLine|re: 'CurrentVersion'\n  condition: all of sel_*"
+    )
+    assert validate_rule(split).valid

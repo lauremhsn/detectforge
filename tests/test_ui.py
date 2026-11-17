@@ -124,6 +124,27 @@ def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixtu
     assert approved.read_text(encoding="utf-8") == outcome.run.final_rule_yaml
 
 
+def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, fixture_events):
+    """The agent and gate never see held-out benign events, so the reviewer must be told."""
+    import json
+
+    from detectforge.config import get_settings
+
+    outcome = _saved_run(data_dir / "runs", load_rule_text, fixture_events)
+    path = data_dir / "runs" / f"{outcome.run.trace_id}.json"
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    saved["heldout_evaluation"]["new_false_alarm_event_ids"] = ["benign-reg-query"]
+    saved["heldout_evaluation"]["false_alarms_after"] += 1
+    path.write_text(json.dumps(saved), encoding="utf-8")
+
+    get_settings.cache_clear()
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.run()
+    assert not at.exception
+    assert any("1 new false alarm(s)" in e.value and "benign-reg-query" in e.value for e in at.error)
+    assert "False alarms (held-out)" in {m.label for m in at.metric}
+
+
 def test_agent_button_is_off_by_default(app):
     fixture = next(s for s in app.selectbox if s.label == "Fixture rule")
     fixture.set_value(fixture.options[0]).run()

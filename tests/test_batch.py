@@ -131,3 +131,36 @@ def test_load_selection_reads_the_manifest(tmp_path):
     )
     (rule,) = load_selection(path)
     assert (rule.id, rule.split, rule.base_attacks) == ("abc", "dev", ["T1490-b01"])
+
+
+def test_every_rule_is_checked_against_all_benign_events(fixture_events):
+    """A legitimate command is a false alarm for any rule, whatever technique it was collected for."""
+    from detectforge.agent.runner import scope_events
+
+    scoped = scope_events(fixture_events, "T1053.005", base_ids={"st-001"})
+    benign = {e.event_id for e in scoped if e.label == "benign"}
+    assert {"st-101", "cu-101"} <= benign  # certutil benign events (T1105) are in scope too
+    attacks = {e.base_id for e in scoped if e.label == "attack"}
+    assert attacks == {"st-001"}  # attacks stay limited to this rule's own base attacks
+
+
+def test_new_held_out_false_alarms_are_flagged_for_the_reviewer(setup, fixture_events, tmp_path):
+    """The gate can't see held-out benign events, so the batch summary must name them."""
+    from detectforge.schemas import Event
+
+    index, selection, robust = setup
+    lookalike = Event(
+        event_id="benign-query",
+        image=r"C:\Windows\System32\schtasks.exe",
+        command_line='schtasks /query /tn "CreateExplorerShellUnelevatedTask"',
+        parent_image=r"C:\Windows\explorer.exe",
+        label="benign",
+        technique="T1053.005",
+        transform="none",
+        base_id="benign-query",
+        split="heldout",
+    )
+    client = ScriptedClient([tool_call("submit", rule_yaml=robust, rationale="create verb")])
+    items = harden_selection(selection[:1], [*fixture_events, lookalike], index, client, "fake", tmp_path)
+    assert items[0].status == "passed"  # invisible to the gate...
+    assert "new held-out false alarms: benign-query" in items[0].note  # ...but not to the reviewer
