@@ -158,6 +158,13 @@ budgets, a fingerprint of the code and the events, and the git commit. Re-runnin
 finished runs with the same setup, so a batch can be spread over several days of free quota. Commit
 before an evaluation run so the recorded commit matches the code.
 
+Review the runs in the **Review queue**, or from the terminal (same reviewer-key check):
+
+```bash
+uv run detectforge review list --pending                        # trace prefix, technique, held-out before -> after
+uv run detectforge review reject 13bf08a0 -m "misses /TN"       # or approve; asks for your reviewer key
+```
+
 Single rules:
 
 ```bash

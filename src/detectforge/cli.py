@@ -1,11 +1,15 @@
 """Command line for detectforge: validate, convert, harness, compare, sigmahq, harden, cover, write,
-harden-selection, llm, dataset. Prints JSON to stdout.
+harden-selection, review, llm, dataset, eval. Prints JSON to stdout (review prints a short table).
 """
 
 import argparse
+import getpass
 import json
+import os
 import sys
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from detectforge.agent.batch import harden_selection, load_selection
 from detectforge.agent.runner import HardeningOutcome, find_usable_rule, run_hardening, run_writing
@@ -19,7 +23,16 @@ from detectforge.intake import interpret_request
 from detectforge.llm import LLMError, OpenAICompatibleClient, key_info, list_free_tool_models
 from detectforge.reference import sigmahq
 from detectforge.reference.index import MAX_LIMIT, ReferenceIndex
-from detectforge.review import calls_today
+from detectforge.review import (
+    ReviewAuthError,
+    calls_today,
+    decide,
+    latest_prompt_versions,
+    list_runs,
+    load_run,
+    parse_reviewer_keys,
+    resolve_trace_id,
+)
 from detectforge.rules.convert import TARGETS, convert_rule
 from detectforge.rules.parse import RuleError
 from detectforge.rules.validate import validate_rule
@@ -132,6 +145,19 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(handler=_llm_models)
     p = llm_sub.add_parser("quota", help="model calls used today and the key tier (no model call)")
     p.set_defaults(handler=_llm_quota)
+
+    review_sub = sub.add_parser("review", help="list runs and approve or reject them").add_subparsers(
+        dest="review_command", required=True
+    )
+    p = review_sub.add_parser("list", help="saved runs, newest first (current prompt versions only)")
+    p.add_argument("--pending", action="store_true", help="only runs without a decision")
+    p.add_argument("--all-prompts", action="store_true", help="also runs from older prompt versions")
+    p.set_defaults(handler=_review_list)
+    for verb, decision in (("approve", "approved"), ("reject", "rejected")):
+        p = review_sub.add_parser(verb, help=f"{verb} a run (asks for your reviewer key)")
+        p.add_argument("trace_id", help="the trace id, or its first 6+ characters as `review list` shows")
+        p.add_argument("--comment", "-m", default="", help="why (kept with the decision)")
+        p.set_defaults(handler=_review_decide, decision=decision)
 
     p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
     p.set_defaults(handler=_dataset_mutate)
@@ -374,6 +400,53 @@ def _llm_quota(args: argparse.Namespace) -> int:
         print("credits purchased: free models allow about 1000 requests a day")
         if settings.daily_request_limit < 1000:
             print("  set DETECTFORGE_DAILY_REQUEST_LIMIT=1000 in .env so the UI shows the right limit")
+    return 0
+
+
+def _review_list(args: argparse.Namespace) -> int:
+    runs = list_runs(get_settings().runs_dir)
+    if not args.all_prompts:
+        current = latest_prompt_versions(runs)
+        runs = [r for r in runs if r.prompt_version in current]
+    if args.pending:
+        runs = [r for r in runs if r.decision is None]
+    if not runs:
+        print("no runs")
+    for r in runs:
+        decision = r.decision.decision if r.decision else "pending"
+        print(
+            f"{r.trace_id[:8]}  {r.created.astimezone():%b %d %H:%M}  {r.mode:<7} {r.technique:<10} "
+            f"{r.prompt_version:<10} {r.status:<18} held-out {_pct(r.heldout_before)} -> "
+            f"{_pct(r.heldout_after)}  {decision}"
+        )
+    return 0
+
+
+REVIEWER_KEY_ENV = "DETECTFORGE_REVIEWER_KEY"
+
+
+def _review_decide(args: argparse.Namespace) -> int:
+    """Same check as the UI: the key decides who is recorded. Never taken as an argument (shell history)."""
+    settings = get_settings()
+    try:
+        keys = parse_reviewer_keys(settings.reviewer_keys)
+        trace_id = resolve_trace_id(settings.runs_dir, args.trace_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    run = load_run(settings.runs_dir, trace_id).run
+    print(f"{trace_id}  {run.mode} {run.technique}  {run.prompt_version}  {run.status}", file=sys.stderr)
+    key = os.environ.get(REVIEWER_KEY_ENV) or getpass.getpass("Reviewer key: ")
+    try:
+        record = decide(settings.runs_dir, trace_id, args.decision, key, keys, args.comment)
+    except ReviewAuthError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    except ValidationError:
+        print("error: the comment is too long", file=sys.stderr)
+        return 1
+    approved = settings.runs_dir / "approved" / f"{trace_id}.yml"
+    print(f"{trace_id[:8]} {record.status}" + (f" -> {approved}" if record.status == "approved" else ""))
     return 0
 
 

@@ -23,14 +23,14 @@ from detectforge.config import get_settings
 from detectforge.events import EventFileError, load_events
 from detectforge.reference import sigmahq
 from detectforge.reference.index import ReferenceIndex
-from detectforge.review import list_runs
+from detectforge.review import latest_prompt_versions, list_runs
 from detectforge.schemas import Event
 from detectforge.ui.components import apply_style
 from detectforge.ui.coverage_page import coverage_page
 from detectforge.ui.navigation import menu
 from detectforge.ui.operations_page import operations_page
 from detectforge.ui.request_page import request_page
-from detectforge.ui.review_tab import latest_prompt_versions, review_tab
+from detectforge.ui.review_tab import review_tab
 from detectforge.ui.rules_page import rules_page
 
 PIPELINE = [

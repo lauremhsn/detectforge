@@ -100,6 +100,19 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
     return sorted(summaries, key=lambda s: s.created, reverse=True)
 
 
+def latest_prompt_versions(runs: list[RunSummary]) -> set[str]:
+    """The newest prompt version of each kind ("harden-v7", "write-v1"): v10 is newer than v9."""
+    newest: dict[str, tuple[int, str]] = {}
+    for r in runs:
+        kind, _, number = r.prompt_version.rpartition("-v")
+        rank = int(number) if number.isdigit() else -1
+        if not kind:
+            kind, rank = r.prompt_version, -1
+        if kind not in newest or rank > newest[kind][0]:
+            newest[kind] = (rank, r.prompt_version)
+    return {version for _, version in newest.values()}
+
+
 def calls_today(runs_dir: Path, now: datetime | None = None) -> int:
     """Model calls in the runs saved today (UTC, when OpenRouter's daily free limit resets)."""
     today = (now or datetime.now(UTC)).date()
@@ -217,6 +230,22 @@ def decide(
     """Record a decision by whoever the key belongs to: the only way the UI changes a rule's status."""
     reviewer = authenticate(keys, reviewer_key)
     return record_decision(runs_dir, trace_id, decision, reviewer, comment)
+
+
+MIN_PREFIX_LENGTH = 6
+
+
+def resolve_trace_id(runs_dir: Path, prefix: str) -> str:
+    """The full trace id of the one saved run starting with prefix (as the list shows them)."""
+    prefix = prefix.strip().lower()
+    if len(prefix) < MIN_PREFIX_LENGTH or not re.fullmatch(r"[0-9a-f]+", prefix):
+        raise ValueError(f"give at least {MIN_PREFIX_LENGTH} hex characters of the trace id")
+    matches = sorted(p.stem for p in runs_dir.glob(f"{prefix}*.json") if _TRACE_ID.match(p.stem))
+    if not matches:
+        raise ValueError(f"no saved run starts with {prefix}")
+    if len(matches) > 1:
+        raise ValueError(f"{prefix} matches {len(matches)} runs; give more characters")
+    return matches[0]
 
 
 def _path(runs_dir: Path, trace_id: str, suffix: str) -> Path:

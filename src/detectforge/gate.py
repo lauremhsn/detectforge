@@ -12,6 +12,7 @@ from detectforge.harness.matcher import required_fields
 from detectforge.harness.run import run
 from detectforge.rules.convert import convert_rule
 from detectforge.rules.lint import (
+    case_sensitive_regexes,
     copied_literals,
     dropped_fields,
     dropped_filters,
@@ -147,6 +148,7 @@ def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | No
     attacks = [e.command_line for e in events if e.label == "attack"]
     copied = copied_literals(rule_yaml, attacks, original_yaml)
     short = short_bare_values(rule_yaml, original_yaml)
+    case = case_sensitive_regexes(rule_yaml, original_yaml)
     return [
         GateCheck(
             name="no_unusual_characters",
@@ -166,6 +168,16 @@ def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | No
                 "warning, check these are general and not test-specific: " + "; ".join(copied)
                 if copied
                 else "none"
+            ),
+        ),
+        GateCheck(
+            name="case_insensitive_regexes",
+            passed=not case,
+            detail=(
+                "case-sensitive regex on case-insensitive Windows fields (misses e.g. /TN for /tn); "
+                "start it with (?i): " + ", ".join(repr(v) for v in case)
+                if case
+                else "all new regexes ignore case"
             ),
         ),
         GateCheck(

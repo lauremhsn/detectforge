@@ -62,7 +62,7 @@ docs/failure-matrix.md  Every failure found or handled, what the system does, an
 docs/threat-model.md  What we protect, from whom, and the test behind each defence
 docs/architecture.md  Components, one agent run, the evaluation boundary, deployment, design decisions
 Dockerfile, docker-compose.yml  The UI and the CLI in one image (`docker compose up`)
-tests/                330 automated tests (run on every push by GitHub Actions)
+tests/                333 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -326,7 +326,9 @@ switched off (this is how the public deployment stays read-only). Keys are compa
 time, 5 wrong keys within a minute lock decisions for a minute, and the key is cleared from the page
 after each use. Model and SigmaHQ text in the UI is escaped (`ui/components.md`), so an injected
 "Approve now" link or a bold "APPROVED" banner shows as plain text. All of this is in
-[threat-model.md](threat-model.md).
+[threat-model.md](threat-model.md). The same check runs from the command line:
+`detectforge review approve|reject <trace-id prefix> -m "why"` asks for the key (or reads
+`DETECTFORGE_REVIEWER_KEY`); the key is never a command-line argument, which would land in shell history.
 
 **"Ask the agent" is off by default.** The deployed app is public; if the button worked there,
 anyone could spend the free model quota. It only works when `DETECTFORGE_UI_ALLOW_AGENT_RUNS=true`
@@ -384,6 +386,9 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   lack (e.g. `Hashes`), or a filter for a false positive our benign events don't contain. Exclusions
   are compared by field + value (ignoring case and the filter's name), so renaming is fine; removing
   is not;
+- **regexes ignore case** (`case_insensitive_regexes`): a new `|re` pattern with letters must start
+  with `(?i)`. Sigma regexes are case-sensitive while Windows command lines aren't, so `[/-]tn\b`
+  misses `/TN`; found on a real written rule;
 - hardening: **metadata unchanged** (`keeps_original_metadata`): id, author, date and references stay
   as in the original. Only the detection logic should change; a real run "corrected" a reference link
   to a URL that doesn't exist, which a reviewer focused on detection could easily miss;
@@ -580,12 +585,14 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 330 tests
+uv run pytest                             # 333 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
 uv run detectforge harden-selection --split dev --write   # agent-written arm
+uv run detectforge review list --pending          # runs waiting for a decision (current prompts)
+uv run detectforge review approve 8e3abcbe -m "why"   # or reject; asks for your reviewer key
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl

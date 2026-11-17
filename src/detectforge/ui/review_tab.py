@@ -9,7 +9,15 @@ from pydantic import ValidationError
 
 from detectforge.agent.runner import HardeningOutcome
 from detectforge.config import get_settings
-from detectforge.review import ReviewAuthError, decide, decisions, list_runs, load_run, parse_reviewer_keys
+from detectforge.review import (
+    ReviewAuthError,
+    decide,
+    decisions,
+    latest_prompt_versions,
+    list_runs,
+    load_run,
+    parse_reviewer_keys,
+)
 from detectforge.ui.components import delta_pct, export_view, md, pct, table
 from detectforge.ui.navigation import header
 
@@ -344,16 +352,3 @@ def _decide(
         st.session_state["reviewer_key"] = ""  # never keep a key in the session after use
     where = f" Saved to {runs_dir / 'approved' / (trace_id + '.yml')}." if decision == "approved" else ""
     st.session_state["review_message"] = f"Rule {record.status}.{where}"
-
-
-def latest_prompt_versions(runs) -> set[str]:
-    """The newest prompt version of each kind ("harden-v7", "write-v1"): v10 is newer than v9."""
-    newest: dict[str, tuple[int, str]] = {}
-    for r in runs:
-        kind, _, number = r.prompt_version.rpartition("-v")
-        rank = int(number) if number.isdigit() else -1
-        if not kind:
-            kind, rank = r.prompt_version, -1
-        if kind not in newest or rank > newest[kind][0]:
-            newest[kind] = (rank, r.prompt_version)
-    return {version for _, version in newest.values()}

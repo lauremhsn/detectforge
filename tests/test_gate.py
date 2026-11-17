@@ -82,3 +82,20 @@ def test_hardening_must_not_change_who_wrote_the_rule_or_what_it_cites(tuning, l
     assert "author, references" in failed["keeps_original_metadata"].detail
     # Writing a new rule has no original, so there is nothing to keep.
     assert "keeps_original_metadata" not in {c.name for c in check(edited, tuning).checks}
+
+
+def test_a_new_case_sensitive_regex_is_blocked(tuning, load_rule_text):
+    """Regression: a written rule used [/-]tn\b and missed every /TN (Sigma |re is case-sensitive)."""
+    robust = load_rule_text("schtasks_create_robust.yml")
+    added = "  selection_tn:\n    CommandLine|re: 'PATTERN'\n  condition:"
+    sensitive = robust.replace("  condition:", added.replace("PATTERN", r"[/-]tn\b"), 1)
+    failed = {c.name: c for c in check(sensitive, tuning).checks if not c.passed}
+    assert "case_insensitive_regexes" in failed and failed["case_insensitive_regexes"].blocking
+    assert "(?i)" in failed["case_insensitive_regexes"].detail
+
+    for fixed in (r"(?i)[/-]tn\b", r"(?im)[/-]tn\b"):
+        ok = robust.replace("  condition:", added.replace("PATTERN", fixed), 1)
+        assert "case_insensitive_regexes" not in {c.name for c in check(ok, tuning).checks if not c.passed}
+    # A regex the original rule already had is not the agent's doing, so hardening isn't blocked by it.
+    names = {c.name for c in check(sensitive, tuning, original_yaml=sensitive).checks if not c.passed}
+    assert "case_insensitive_regexes" not in names
