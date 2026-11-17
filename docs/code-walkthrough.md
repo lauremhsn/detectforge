@@ -60,7 +60,7 @@ data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
 docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
 docs/threat-model.md  What we protect, from whom, and the test behind each defence
-tests/                304 automated tests (run on every push by GitHub Actions)
+tests/                325 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -295,13 +295,18 @@ Opens at http://localhost:8501 (bound to your machine only, telemetry off). It c
 for free on Streamlit Community Cloud (see the README): there it builds the SigmaHQ index itself on
 first launch, and `src/detectforge/ui/requirements.txt` lists its dependencies.
 
-| Area | What it shows |
-|---|---|
-| Sidebar | Which events file; filter by technique and split; pipeline status (✅ built, ⏳ pending). Picking a rule auto-scopes the events to its technique. |
-| 1 · Find | Search SigmaHQ by technique + keywords; table of candidates with "fields missing from events"; rule details (marked untrusted); or pick a fixture rule. "No usable rule" message = where the write-new-rule fallback will start. |
-| 2 · Validate | The "before": validation errors/warnings, then the scorecard: detected, evasion resistance, false alarms, per-mutation table, and every event with DETECTED / MISSED / FALSE ALARM. |
-| 3 · Harden | Before on the left, an editable "after" on the right. Every edit re-runs `compare`: evasion resistance with delta, per-mutation before/after, and lists of newly caught / LOST attacks and false-alarm changes. **"Ask the agent"** runs the hardening loop on the selected technique and puts its proposal in the editor. |
-| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call, plus the full conversation step by step. **Approve / Reject** with your reviewer key and a comment. |
+The UI is organised around what people come to do, not around pipeline steps (`ui/navigation.py`).
+Each section opens with its name and one line on what it's for; buttons jump between sections
+(e.g. a verdict's "Harden it →" opens that rule on the Harden step).
+
+| Section | File | What it shows |
+|---|---|---|
+| Sidebar | `app.py`, `navigation.py` | The section menu (with the number of proposals waiting for review); **Test data**: evaluation set, fixtures or a custom file, filtered by technique and split; "About" with the pipeline status (✅ built, ⏳ pending). |
+| Coverage (home) | `coverage_page.py` | "What do you want to do?" guide; headline numbers; by technique (tactic, weakest rule as published, what evades it, best hardened held-out score); every evaluated rule with its Arm 1 score, its latest hardening and writing runs and the review decision; open any rule; download a Markdown coverage report. Reads committed results and saved runs only. |
+| New request | `request_page.py`, `intake_panel.py` | Request or pasted report → techniques. Per technique, a verdict computed by the harness: every usable community rule tagged with that technique is replayed; the strongest single rule is named (most attacks detected, then fewest false alarms), plus what all of them catch together. Actions: see the evidence, harden it, or have the agent write a rule when none is usable. |
+| Rules | `rules_page.py` | ① Pick (SigmaHQ search or a sample rule) → ② Test (scorecard per evasion type, every event, "only missed attacks and false alarms") → ③ Harden (editable candidate re-scored on every edit, or **Ask the agent**). Export as Sigma YAML or an Elastic query. |
+| Review queue | `review_tab.py` | Waiting / approved / rejected counts and filter; per run: explanation, score cards, diff (or the whole new rule), gate checks, held-out per mutation type, every model/tool call, the full conversation; export; **Approve / Reject** with your reviewer key. |
+| Agent operations | `operations_page.py` | Runs, pass rate, model calls, tokens, today's calls against the free limit; per prompt version; failed calls, fallbacks, answers cut off, why runs needed review; tool calls the agent got wrong. |
 
 It is a **thin layer over the library** (no logic of its own) and shows held-out events to the human
 only; the agent itself still receives just the tuning split.
@@ -570,7 +575,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 304 tests
+uv run pytest                             # 325 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
@@ -592,6 +597,7 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_batch` (per-rule scoping, quota-saving skips, early stop), `test_agent_tools` (contracts,
 held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability, memorised characters, copied strings), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
+`test_eval_gate` (recomputed Arm 1 must match the committed results; changes are named rule by rule), `test_demo` (the demo's vague report, injected report, API failure and evasion caught), `test_ui_product` (coverage verdicts from the harness, strongest rule not first hit, guided jumps between sections, coverage report, agent operations),
 `test_contracts` (frozen snapshot of the shared formats and function signatures, interfaces.md matches the code, committed data is one consistent dataset, saved results still load, CLI JSON and exit codes; refresh after an agreed change with `UPDATE_CONTRACTS=1 uv run pytest tests/test_contracts.py`),
 `test_security` (an obedient model following injected rules and events, YAML tags, escaped display, five tools with no network or file writes, reviewer keys and lockout, API key never saved or printed, no secret tracked by git),
 `test_write_rule` (path chosen by code, writing loop, same-technique rules hidden, no-rule baseline,

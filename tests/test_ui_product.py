@@ -62,6 +62,16 @@ def test_coverage_verdicts_come_from_the_harness_not_the_model(rules, fixture_ev
     assert assess("T1105", index, no_attacks).verdict == "untested"  # rule exists, nothing to test it on
 
 
+def test_a_technique_is_judged_by_its_strongest_rule_not_the_first_one_found(rules, fixture_events):
+    """Regression: the verdict used the first search hit, which on real data caught 0 of 23 attacks."""
+    weak = reference("weak-first", rules["literal"], TECHNIQUE)
+    strong = reference("strong-second", rules["robust"], TECHNIQUE)
+    other = reference("other-technique", rules["robust"], "T1105")  # not tagged with this technique
+    c = assess(TECHNIQUE, ReferenceIndex([weak, strong, other]), fixture_events)
+    assert c.rule_id == "strong-second" and c.usable_rules == 2
+    assert c.detected == c.attacks and c.detected_together == c.attacks
+
+
 def test_a_pasted_request_gets_a_verdict_and_harden_opens_the_rule(with_index):
     at = open_app("request")
     at.text_area(key="intake_request").set_value("detect scheduled task persistence with schtasks").run()

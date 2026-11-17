@@ -37,7 +37,7 @@ request ─▶ find rules ─▶ validate (baseline) ─▶ harden ─▶ re-val
   `run_tuning_set`, `submit`. No file, network, approve or deploy tool.
 - **Every model and tool call is traced** (latency, tokens, retries, failures) and saved with the run.
 
-More: [code walkthrough](docs/code-walkthrough.md) · [interfaces](docs/interfaces.md) ·
+More: [architecture](docs/architecture.md) · [code walkthrough](docs/code-walkthrough.md) · [interfaces](docs/interfaces.md) ·
 [failure matrix](docs/failure-matrix.md) · [threat model](docs/threat-model.md)
 
 ## Setup
@@ -89,11 +89,17 @@ uv run detectforge intake "detect scheduled-task persistence" --no-model
 uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 ```
 
-It opens at http://localhost:8501 with four tabs: **Find** (request box and SigmaHQ search),
-**Validate** (the baseline scorecard), **Harden** (edit by hand or ask the agent; every edit is
-re-scored), **Review** (every agent run with its evidence, diff, gate checks, held-out scores and full
-conversation; Approve / Reject with your reviewer key). Approved rules are written to
-`data/runs/approved/`.
+It opens at http://localhost:8501, organised around what you came to do:
+
+| Section | Question it answers |
+|---|---|
+| **Coverage** (home) | Where are we weak, and can we prove it? Every evaluated rule as published vs after hardening, by technique and tactic; downloadable coverage report |
+| **New request** | A new threat came in: are we covered? Paste a request or threat report; get a verdict per technique (covered / evadable / not covered) and the next step |
+| **Rules** | Pick a rule → test it against evasions → harden it (by hand or with the agent); export as Sigma YAML or an Elastic query |
+| **Review queue** | What's waiting for me? Each proposal with its diff, held-out before → after, gate checks and the agent's reasoning; Approve / Reject with your reviewer key |
+| **Agent operations** | Runs, pass rate per prompt version, model calls, tokens, failures, today's quota |
+
+Approved rules are written to `data/runs/approved/`. A guided demo is in [demo/README.md](demo/README.md).
 
 ## Reproducing the evaluation
 
@@ -189,7 +195,7 @@ src/detectforge/
   cli.py          the `detectforge` command
 data/fixtures/    synthetic events and rules for development (not for reported results)
 data/eval/        evaluation rule selection, events and results
-docs/             walkthrough, interfaces, failure matrix, threat model
+docs/             architecture, walkthrough, interfaces, failure matrix, threat model
 analysis/         figures, generated from committed results
 tests/
 ```

@@ -40,12 +40,14 @@ approved"*.
   the report is passed to the model as quoted data, and the model can only answer through one typed tool
   whose output code checks against the SigmaHQ index. Nothing can be approved from here; only a reviewer
   with a key can approve.
-- The verdict: **🟧 covered, but evadable**, measured by the harness, not claimed by the model.
+- The verdict: **🟧 covered, but evadable**, measured by the harness, not claimed by the model. The
+  strongest single community rule catches 17 of 23 attacks and variations; all 30 rules for this
+  technique together catch 23 — coverage depends on which rules you actually deploy.
 
 ## 3. Evasion caught (3 min): Rules
 
-Click **See the evidence →** (or **Coverage → Open a rule → "Schtasks Creation Or Modification With
-SYSTEM Privileges"**).
+Go to **🛡️ Coverage → Open a rule to test or harden it → "T1053.005 · Schtasks Creation Or
+Modification With SYSTEM Privileges" → Open in Rules**.
 
 - **② Test it against evasions**, toggle **Only missed attacks and false alarms**. The rule misses
   `schtasks /"create" …`: the exact insertion example from the paper. Quotes around an option are
