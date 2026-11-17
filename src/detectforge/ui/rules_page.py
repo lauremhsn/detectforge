@@ -25,11 +25,7 @@ STEPS = {
 
 
 def rules_page(events: list[Event], all_events: list[Event], index: ReferenceIndex | str) -> None:
-    header(
-        "rules",
-        "Pick a detection rule, measure how many attacker variations it still catches, then make it "
-        "harder to evade. Changes only become real after a reviewer approves them.",
-    )
+    header("rules", "Measure one rule against attacker variations, then make it harder to evade.")
     if label := st.session_state.get("rule_label"):
         st.info(f"**Rule under test:** {md(label)}")
     st.session_state.setdefault("rules_step", "pick")

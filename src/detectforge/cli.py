@@ -327,9 +327,10 @@ def _harden_selection(args: argparse.Namespace) -> int:
             print(f"{'':10} {i.note}")
     if args.dry_run:
         planned = sum(i.action == "planned" for i in items)
+        per_run = settings.model_call_budget("write" if args.write else "harden")
         print(
-            f"\ndry run: {planned} runs would start, at most {planned * settings.max_model_calls} model "
-            f"calls ({settings.max_model_calls} per run); nothing was sent to the model"
+            f"\ndry run: {planned} runs would start, at most {planned * per_run} model "
+            f"calls ({per_run} per run); nothing was sent to the model"
         )
         return 0
     calls = sum(i.model_calls for i in items)
@@ -369,6 +370,10 @@ def _llm_quota(args: argparse.Namespace) -> int:
     print(f"provider: free tier = {free}, credit limit = {info.get('limit')}, usage = {info.get('usage')}")
     if free:
         print("OpenRouter free tier: about 50 free-model requests a day (1000 with $10 of credits bought)")
+    elif free is False:
+        print("credits purchased: free models allow about 1000 requests a day")
+        if settings.daily_request_limit < 1000:
+            print("  set DETECTFORGE_DAILY_REQUEST_LIMIT=1000 in .env so the UI shows the right limit")
     return 0
 
 

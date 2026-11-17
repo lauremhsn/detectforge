@@ -61,3 +61,24 @@ def test_zero_benign_events_is_flagged_not_reported_as_clean(tuning, load_rule_t
 def test_threshold_is_configurable(tuning, load_rule_text):
     lenient = GateConfig(min_evasion_resistance=0.3, max_false_alarms=1)
     assert check(load_rule_text("schtasks_create_literal.yml"), tuning, config=lenient).passed
+
+
+def test_hardening_must_not_change_who_wrote_the_rule_or_what_it_cites(tuning, load_rule_text):
+    """Regression: a real v7 run 'corrected' a reference link to a URL that doesn't exist."""
+    original = load_rule_text("schtasks_create_literal.yml").replace(
+        "tags:", "references:\n  - https://learn.microsoft.com/schtasks\ntags:", 1
+    )
+    robust = load_rule_text("schtasks_create_robust.yml").replace(
+        "tags:", "references:\n  - https://learn.microsoft.com/schtasks\ntags:", 1
+    )
+    assert check(robust, tuning, original_yaml=original).passed
+
+    edited = robust.replace("learn.microsoft.com", "www.microsoft.com").replace(
+        "author: DetectForge fixtures", "author: Detection Engineer"
+    )
+    result = check(edited, tuning, original_yaml=original)
+    failed = {c.name: c for c in result.checks if not c.passed}
+    assert not result.passed and failed["keeps_original_metadata"].blocking
+    assert "author, references" in failed["keeps_original_metadata"].detail
+    # Writing a new rule has no original, so there is nothing to keep.
+    assert "keeps_original_metadata" not in {c.name for c in check(edited, tuning).checks}

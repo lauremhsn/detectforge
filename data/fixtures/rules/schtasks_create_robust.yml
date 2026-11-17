@@ -1,5 +1,5 @@
 title: Scheduled Task Creation via Schtasks (fixture, behavior-based)
-id: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c02
+id: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c01  # the hardened version of the literal rule keeps its id
 status: experimental
 description: >
   Fixture rule keyed on the binary and the create verb rather than exact argument spelling.
