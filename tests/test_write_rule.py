@@ -1,6 +1,7 @@
 """Write-new-rule fallback: who decides the path, the writing loop, hidden same-technique rules, arm 3."""
 
 import json
+from datetime import UTC, datetime
 
 import pytest
 from test_agent_loop import ScriptedClient, text, tool_call
@@ -13,6 +14,7 @@ from detectforge.config import Settings
 from detectforge.harness.compare import compare
 from detectforge.llm import LLMError
 from detectforge.reference.index import ReferenceIndex
+from detectforge.rules.stamp import stamp_written_rule
 
 TECHNIQUE = "T1053.005"
 
@@ -56,6 +58,11 @@ def tuning(events):
     return [e for e in events if e.split == "tune"]
 
 
+def stamped(rule_yaml, run):
+    """What a written rule looks like after code sets its metadata (rules/stamp.py)."""
+    return stamp_written_rule(rule_yaml, run.trace_id, datetime.now(UTC).date())
+
+
 def test_no_rule_is_the_before_of_a_written_rule(events):
     report = compare(None, WRITTEN, events)
     assert report.valid and report.evasion_resistance_before == 0.0
@@ -73,7 +80,11 @@ def test_writing_happy_path(tuning, settings):
     )
     run = write_rule(TECHNIQUE, tuning, client, "fake", settings=settings)
 
-    assert run.status == "passed" and run.final_source == "accepted" and run.final_rule_yaml == WRITTEN
+    assert (
+        run.status == "passed"
+        and run.final_source == "accepted"
+        and run.final_rule_yaml == stamped(WRITTEN, run)
+    )
     assert run.mode == "write" and run.prompt_version == WRITE_PROMPT_VERSION
     assert run.original_rule_yaml == "" and run.record.source == "written"
     assert run.tuning_evasion_resistance_before == 0.0 and run.tuning_evasion_resistance_after == 1.0
@@ -130,14 +141,14 @@ def test_a_rule_the_gate_rejected_is_still_the_best_attempt(tuning, settings):
     submit = tool_call("submit", rule_yaml=noisy, rationale="flags the vendor updater too")
     run = write_rule(TECHNIQUE, tuning, ScriptedClient([submit] * 3), "fake", settings=settings)
     assert any("rejected every submission" in r for r in run.reasons)
-    assert run.final_source == "best_attempt" and run.final_rule_yaml == noisy
+    assert run.final_source == "best_attempt" and run.final_rule_yaml == stamped(noisy, run)
     assert any(c.name == "false_alarms" and not c.passed for c in run.gate.checks)  # why it was rejected
 
 
 def test_writing_keeps_its_best_valid_version_when_the_model_fails(tuning, settings):
     client = ScriptedClient([tool_call("run_tuning_set", rule_yaml=WRITTEN), LLMError("HTTP 429")])
     run = write_rule(TECHNIQUE, tuning, client, "fake", settings=settings)
-    assert run.final_source == "best_attempt" and run.final_rule_yaml == WRITTEN
+    assert run.final_source == "best_attempt" and run.final_rule_yaml == stamped(WRITTEN, run)
     assert run.status == "needs_human_review" and any("LLM unavailable" in r for r in run.reasons)
 
 

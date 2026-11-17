@@ -9,6 +9,7 @@ loop never fails silently: every stop that isn't a gate-approved submission ends
 import json
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -20,6 +21,7 @@ from detectforge.harness.compare import compare, evasion_resistance
 from detectforge.harness.run import run
 from detectforge.llm import ChatClient, LLMError, ModelCallRecord, openai_tool_definitions
 from detectforge.reference.index import ReferenceIndex
+from detectforge.rules.stamp import stamp_written_rule
 from detectforge.schemas import Event, RuleRecord
 from detectforge.tracing import NoopTracer, Tracer
 
@@ -34,6 +36,8 @@ from detectforge.tracing import NoopTracer, Tracer
 PROMPT_VERSION = "harden-v7"
 # Writing a new rule (the fallback when no usable community rule exists) has its own prompt and version.
 # write-v1: the hardening prompt's Sigma lessons (v2-v7), framed for writing a rule from scratch.
+# write-v2: never list look-alike characters (a v1 rule copied them), submit early. FROZEN Nov 18:
+#     its text may not change (tests/test_prompt_freeze.py); a change needs write-v3.
 WRITE_PROMPT_VERSION = "write-v2"
 
 MUTATION_TYPES = """\
@@ -403,6 +407,8 @@ def _run(
         final_yaml, source, rationale = rule_yaml, "original", None
     else:  # writing, and the agent never proposed a rule that could be evaluated: nothing to propose
         final_yaml, source, rationale = "", "none", None
+    if writing and final_yaml:  # code, not the model, says who wrote it and when (rules/stamp.py)
+        final_yaml = stamp_written_rule(final_yaml, trace_id, datetime.now(UTC).date())
 
     if source == "accepted" and ctx.last_gate:
         gate = ctx.last_gate

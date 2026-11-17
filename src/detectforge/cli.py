@@ -1,5 +1,5 @@
 """Command line for detectforge: validate, convert, harness, compare, sigmahq, harden, cover, write,
-harden-selection, review, llm, dataset, eval. Prints JSON to stdout (review prints a short table).
+harden-selection, review, export, llm, dataset, eval. Prints JSON to stdout (review prints a short table).
 """
 
 import argparse
@@ -16,6 +16,7 @@ from detectforge.agent.runner import HardeningOutcome, find_usable_rule, run_har
 from detectforge.config import get_settings
 from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
 from detectforge.eval import arms, regression
+from detectforge.eval.export import export_runs
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -158,6 +159,13 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("trace_id", help="the trace id, or its first 6+ characters as `review list` shows")
         p.add_argument("--comment", "-m", default="", help="why (kept with the decision)")
         p.set_defaults(handler=_review_decide, decision=decision)
+
+    p = sub.add_parser("export", help="saved runs as CSV/JSON: traces, metrics, mean and spread per setup")
+    p.add_argument("--out", type=Path, help="output directory (default: data/exports)")
+    p.add_argument(
+        "--current-prompts", action="store_true", help="only runs from the current prompt versions"
+    )
+    p.set_defaults(handler=_export)
 
     p = dataset_sub.add_parser("mutate", help="generate command-line mutations of the base attacks")
     p.set_defaults(handler=_dataset_mutate)
@@ -419,6 +427,15 @@ def _review_list(args: argparse.Namespace) -> int:
             f"{r.prompt_version:<10} {r.status:<18} held-out {_pct(r.heldout_before)} -> "
             f"{_pct(r.heldout_after)}  {decision}"
         )
+    return 0
+
+
+def _export(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    out = args.out or settings.data_dir / "exports"
+    counts = export_runs(settings.runs_dir, out, current_prompts_only=args.current_prompts)
+    print(f"{counts['runs']} runs, {counts['model_calls']} model calls, {counts['tool_calls']} tool calls")
+    print(f"written to {out} (runs.csv, model_calls.csv, tool_calls.csv, summary.json)")
     return 0
 
 
