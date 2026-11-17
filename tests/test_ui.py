@@ -35,20 +35,38 @@ def data_dir(tmp_path, monkeypatch):
     return data
 
 
-@pytest.fixture
-def app(data_dir):
+def open_app(page: str = "coverage") -> AppTest:
+    """Start the app on one section (as if picked in the sidebar menu)."""
     from detectforge.config import get_settings
 
     get_settings.cache_clear()
     at = AppTest.from_file(APP, default_timeout=30)
+    at.session_state["page"] = page
     at.run()
-    yield at
+    return at
+
+
+@pytest.fixture
+def app(data_dir):
+    from detectforge.config import get_settings
+
+    yield open_app()
     get_settings.cache_clear()
 
 
-def test_renders_without_errors(app):
-    assert not app.exception
-    assert [t.label for t in app.tabs] == ["1 · Find", "2 · Validate", "3 · Harden", "4 · Review"]
+SECTIONS = ["coverage", "request", "rules", "review", "operations"]
+
+
+@pytest.mark.parametrize("page", SECTIONS)
+def test_every_section_renders_and_says_what_it_is_for(data_dir, page):
+    at = open_app(page)
+    assert not at.exception
+    menu = at.sidebar.radio(key="page")
+    assert [o.split(" ", 1)[1].split("  (")[0] for o in menu.options] == [
+        "Coverage", "New request", "Rules", "Review queue", "Agent operations",
+    ]  # fmt: skip
+    assert menu.value == page
+    assert at.title and at.caption  # each section opens with its name and purpose
 
 
 def test_pipeline_status_shows_done_or_pending_only(app):
@@ -58,17 +76,20 @@ def test_pipeline_status_shows_done_or_pending_only(app):
     assert not re.search(r"\bW\d\b|\bweek\b", page_text, re.IGNORECASE)
 
 
-def test_fixture_rule_flows_to_validate_and_harden(app):
+def test_fixture_rule_flows_to_test_and_harden(data_dir):
+    app = open_app("rules")
     fixture = next(s for s in app.selectbox if s.label == "Fixture rule")
     fixture.set_value(FIXTURES / "rules" / "schtasks_create_literal.yml").run()
     next(b for b in app.button if b.label == "Use fixture").click().run()
-    app.sidebar.selectbox[0].set_value("T1053.005").run()
+    assert app.radio(key="rules_step").value == "test"  # picking a rule moves on to testing it
+    app.sidebar.selectbox(key="technique_filter").set_value("T1053.005").run()
     assert not app.exception
 
     metrics = [(m.label, m.value) for m in app.metric]
     assert ("Attacks detected", "2/5") in metrics  # validate tab
     assert ("Evasion resistance (mutations)", "25%") in metrics
 
+    next(b for b in app.button if b.label == "Harden it →").click().run()
     robust = (FIXTURES / "rules" / "schtasks_create_robust.yml").read_text(encoding="utf-8")
     app.text_area(key="after_editor").set_value(robust).run()
     assert ("Evasion resistance", "100%") in [(m.label, m.value) for m in app.metric]
@@ -104,8 +125,8 @@ def _saved_run(runs_dir, load_rule_text, fixture_events):
     return run_hardening(original, "T1053.005", fixture_events, client, "fake", out_dir=runs_dir)
 
 
-def test_review_tab_without_runs_explains_how_to_get_one(app):
-    assert any("No agent runs yet" in i.value for i in app.info)
+def test_review_queue_without_runs_explains_how_to_get_one(data_dir):
+    assert any("No agent runs yet" in i.value for i in open_app("review").info)
 
 
 def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixture_events, monkeypatch):
@@ -115,8 +136,7 @@ def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixtu
     monkeypatch.setenv("DETECTFORGE_REVIEWER_KEYS", f"analyst:{REVIEWER_KEY}")
     outcome = _saved_run(data_dir / "runs", load_rule_text, fixture_events)
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
 
     page = unescaped(" ".join(m.value for m in at.markdown))
@@ -136,7 +156,7 @@ def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixtu
     assert approved.read_text(encoding="utf-8") == outcome.run.final_rule_yaml
     # Recorded under the key's owner, and the key is not kept in the session after use.
     assert decisions(data_dir / "runs", outcome.run.trace_id)[-1].reviewer == "analyst"
-    assert at.text_input(key="reviewer_key").value == ""
+    assert at.session_state["reviewer_key"] == ""
 
 
 def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, fixture_events):
@@ -153,8 +173,7 @@ def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, 
     path.write_text(json.dumps(saved), encoding="utf-8")
 
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
     assert any("1 new false alarm(s)" in e.value and "benign-reg-query" in e.value for e in at.error)
     assert "False alarms (held-out)" in {m.label for m in at.metric}
@@ -174,8 +193,7 @@ def test_injected_model_text_shows_literally_and_approving_is_off_without_keys(d
     client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale=hostile)])
     run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
 
     shown = [m.value for m in at.markdown if "evil" in m.value]
@@ -195,8 +213,7 @@ def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_ev
     client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale="behavior")])
     run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
 
     page = " ".join(m.value for m in at.markdown)
@@ -206,10 +223,12 @@ def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_ev
     assert {m.label: m.value for m in at.metric}["Held-out evasion resistance"] == "100%"
 
 
-def test_agent_button_is_off_by_default(app):
+def test_agent_button_is_off_by_default(data_dir):
+    app = open_app("rules")
     fixture = next(s for s in app.selectbox if s.label == "Fixture rule")
     fixture.set_value(fixture.options[0]).run()
     next(b for b in app.button if b.label == "Use fixture").click().run()
+    app.radio(key="rules_step").set_value("harden").run()
     button = next(b for b in app.button if b.label == "Ask the agent to harden this rule")
     assert button.disabled
     assert any("switched off" in c.value for c in app.caption)
@@ -220,8 +239,7 @@ def test_review_shows_the_agents_conversation(data_dir, load_rule_text, fixture_
 
     _saved_run(data_dir / "runs", load_rule_text, fixture_events)
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     toggle = next(t for t in at.toggle if t.label == "Show the agent's conversation")
     toggle.set_value(True).run()
     page = " ".join(m.value for m in at.markdown)
@@ -241,7 +259,6 @@ def test_old_runs_without_a_conversation_still_open(data_dir, load_rule_text, fi
     del saved["run"]["transcript"]
     path.write_text(_json.dumps(saved), encoding="utf-8")
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
     assert any("saved before conversations were recorded" in c.value for c in at.caption)
