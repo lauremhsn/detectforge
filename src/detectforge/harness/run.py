@@ -7,6 +7,24 @@ from detectforge.rules.parse import RuleError, load_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard, TransformBreakdown
 
 
+def no_rule(events: list[Event]) -> Scorecard:
+    """The scorecard of having no rule: every attack missed, no false alarms.
+
+    The "before" of a newly written rule: the team had no coverage for that behavior.
+    """
+    per_transform = {t: TransformBreakdown() for t in TRANSFORMS}
+    for event in events:
+        bucket = per_transform[event.transform]
+        if event.label == "attack":
+            bucket.attacks += 1
+            bucket.misses += 1
+        else:
+            bucket.benign += 1
+    return Scorecard(
+        valid=True, misses=sum(b.misses for b in per_transform.values()), per_transform=per_transform
+    )
+
+
 def run(rule_yaml: str, events: list[Event]) -> Scorecard:
     """Score a rule. Rule problems give valid=False; malformed event input raises ValueError.
 

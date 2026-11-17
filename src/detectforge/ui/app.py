@@ -39,7 +39,7 @@ PIPELINE = [
     ("Harden by hand", True),
     ("Harden with the agent", True),
     ("Re-validate (before/after)", True),
-    ("Write new rule (fallback)", False),
+    ("Write new rule (fallback)", True),
     ("Review and approve", True),
     ("Tune false alarms", False),
 ]
@@ -131,7 +131,10 @@ def find_tab(index: ReferenceIndex | str) -> None:
             st.error(str(e))
             hits = []
         if not any(h.rule.usable for h in hits):
-            st.warning("No usable rule found — the write-new-rule fallback (pending) would start here.")
+            st.warning(
+                "No usable rule found: this is where the agent writes a new rule instead "
+                f"(`detectforge cover --technique {technique or 'T…'} --events …`)."
+            )
         if hits:
             table(
                 [

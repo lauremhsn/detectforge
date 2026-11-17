@@ -12,6 +12,11 @@ Saving the free quota (about 50 requests a day):
   what's missing. A run cut short because the model was unavailable doesn't count.
 - `max_calls` caps the whole batch: a run is only started if its full budget still fits.
 - `dry_run` shows the plan (which rules would run, worst-case number of calls) without the model.
+
+`mode="write"` is the "agent-written" evaluation arm: for each selected rule, the agent writes a new
+rule from scratch on the same events (that rule's base attacks), with every rule of the technique's
+family hidden from its search. The community rule itself is never shown, so nothing is skipped as
+"already detects every mutation"; the "before" is having no rule (0%).
 """
 
 import logging
@@ -21,10 +26,17 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from detectforge.agent.runner import HardeningOutcome, run_hardening, run_provenance, scope_events
+from detectforge.agent.loop import Mode
+from detectforge.agent.runner import (
+    HardeningOutcome,
+    run_hardening,
+    run_provenance,
+    run_writing,
+    scope_events,
+)
 from detectforge.config import Settings, get_settings
 from detectforge.harness.compare import evasion_resistance
-from detectforge.harness.run import run
+from detectforge.harness.run import no_rule, run
 from detectforge.llm import ChatClient
 from detectforge.reference.index import ReferenceIndex
 from detectforge.schemas import Event
@@ -47,7 +59,7 @@ class BatchItem(BaseModel):
     rule_id: str
     title: str
     technique: str
-    action: str  # "hardened", "reused", "planned", "skipped", "error"
+    action: str  # "hardened", "written", "reused", "planned", "skipped", "error"
     note: str = ""
     trace_id: str | None = None
     status: str | None = None
@@ -79,8 +91,10 @@ def harden_selection(
     rule_ids: set[str] | None = None,
     dry_run: bool = False,
     settings: Settings | None = None,
+    mode: Mode = "harden",
 ) -> list[BatchItem]:
     """One item per rule, or per run when repeat > 1. client may be None only for a dry run."""
+    writing = mode == "write"
     if client is None and not dry_run:
         raise ValueError("a model client is needed unless dry_run is set")
     per_run = (settings or get_settings()).max_model_calls
@@ -106,8 +120,10 @@ def harden_selection(
             continue
         bases = set(rule.base_attacks)
         in_scope = scope_events(events, rule.technique, bases)
-        baseline = evasion_resistance(run(reference.rule_yaml, [e for e in in_scope if e.split == "tune"]))
-        if baseline is None or (only_improvable and baseline >= 1.0):
+        tuning = [e for e in in_scope if e.split == "tune"]
+        start_rule = None if writing else reference.rule_yaml  # writing starts from no rule
+        baseline = evasion_resistance(no_rule(tuning) if writing else run(reference.rule_yaml, tuning))
+        if baseline is None or (only_improvable and not writing and baseline >= 1.0):
             item = new_item()
             item.tuning_before = baseline
             item.note = (
@@ -117,7 +133,7 @@ def harden_selection(
             )
             continue
 
-        setup = run_provenance(reference.rule_yaml, in_scope, client, model_name).setup_key
+        setup = run_provenance(start_rule, in_scope, client, model_name).setup_key
         previous = done.get(setup, [])[:repeat]
         for earlier in previous:
             item = new_item()
@@ -143,22 +159,27 @@ def harden_selection(
                 item.action, item.note = "planned", f"would run (up to {per_run} model calls)"
                 continue
             try:
-                outcome = run_hardening(
-                    reference.rule_yaml,
-                    rule.technique,
-                    events,
-                    client,
-                    model_name,
-                    index,
-                    runs_dir,
-                    tracer,
-                    base_ids=bases,
-                )
+                if writing:
+                    outcome = run_writing(
+                        rule.technique, events, client, model_name, index, runs_dir, tracer, base_ids=bases
+                    )
+                else:
+                    outcome = run_hardening(
+                        reference.rule_yaml,
+                        rule.technique,
+                        events,
+                        client,
+                        model_name,
+                        index,
+                        runs_dir,
+                        tracer,
+                        base_ids=bases,
+                    )
             except ValueError as e:
                 item.action, item.note = "error", str(e)
                 reserved -= per_run  # rejected before any model call
                 continue
-            _fill(item, outcome, action="hardened")
+            _fill(item, outcome, action="written" if writing else "hardened")
             reserved += item.model_calls - per_run  # count what the run spent, not its whole budget
             if _model_failed(outcome):
                 item.note = f"stopped the batch: {item.note}"
