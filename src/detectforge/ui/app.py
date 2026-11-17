@@ -25,11 +25,12 @@ from detectforge.reference import sigmahq
 from detectforge.reference.index import ReferenceIndex
 from detectforge.review import list_runs
 from detectforge.schemas import Event
+from detectforge.ui.components import apply_style
 from detectforge.ui.coverage_page import coverage_page
 from detectforge.ui.navigation import menu
 from detectforge.ui.operations_page import operations_page
 from detectforge.ui.request_page import request_page
-from detectforge.ui.review_tab import review_tab
+from detectforge.ui.review_tab import latest_prompt_versions, review_tab
 from detectforge.ui.rules_page import rules_page
 
 PIPELINE = [
@@ -80,34 +81,39 @@ def event_sources(data_dir: Path) -> dict[str, list[Path]]:
 def test_data_sidebar() -> tuple[list[Event], list[Event]]:
     """Which events rules are tested on. Returns (all loaded events, those in the technique/split scope)."""
     st.sidebar.divider()
-    st.sidebar.markdown("**Test data**")
+    box = st.sidebar.expander("Test data", expanded=False)
     data_dir = get_settings().data_dir
     events: list[Event] = []
     sources = event_sources(data_dir)
-    source = st.sidebar.selectbox("Events", [*sources, CUSTOM], key="events_source")
+    source = box.selectbox("Events", [*sources, CUSTOM], key="events_source")
     if source == CUSTOM:
         st.session_state.setdefault("events_path", str(data_dir / "fixtures" / "events.jsonl"))
-        paths = [Path(st.sidebar.text_input("Events file (JSONL)", key="events_path"))]
+        paths = [Path(box.text_input("Events file (JSONL)", key="events_path"))]
     else:
         paths = sources[source]
     try:
         for path in paths:
             events += load_events_cached(str(path), path.stat().st_mtime)
     except (OSError, EventFileError) as e:
-        st.sidebar.error(f"Cannot load events: {e}")
+        box.error(f"Cannot load events: {e}")
         events = []
 
     techniques = sorted({e.technique for e in events})
     st.session_state["available_techniques"] = techniques
-    technique = st.sidebar.selectbox("Technique", ["(all)", *techniques], key="technique_filter")
-    split = st.sidebar.radio("Split", ["(all)", "tune", "heldout"], horizontal=True)
+    technique = box.selectbox("Technique", ["(all)", *techniques], key="technique_filter")
+    split = box.radio("Split", ["(all)", "tune", "heldout"], horizontal=True)
     filtered = [
         e
         for e in events
         if (technique == "(all)" or e.technique == technique) and (split == "(all)" or e.split == split)
     ]
     attacks = sum(e.label == "attack" for e in filtered)
-    st.sidebar.caption(f"{len(filtered)} events in scope: {attacks} attack, {len(filtered) - attacks} benign")
+    box.caption(f"{len(filtered)} events in scope: {attacks} attack, {len(filtered) - attacks} benign")
+    st.sidebar.caption(
+        f"Testing on: {source if source != CUSTOM else 'custom file'} · "
+        f"{'all techniques' if technique == '(all)' else technique} · {attacks} attacks, "
+        f"{len(filtered) - attacks} benign"
+    )
     return events, filtered
 
 
@@ -124,10 +130,13 @@ def about_sidebar() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="DetectForge", page_icon="🛡️", layout="wide")
+    apply_style()
     settings = get_settings()
     st.sidebar.title("🛡️ DetectForge")
     st.sidebar.caption("Detection coverage you can prove")
-    pending = sum(r.decision is None for r in list_runs(settings.runs_dir))
+    runs = list_runs(settings.runs_dir)
+    current = latest_prompt_versions(runs)
+    pending = sum(r.decision is None and r.prompt_version in current for r in runs)
     page = menu(pending)
     all_events, events = test_data_sidebar()
     about_sidebar()

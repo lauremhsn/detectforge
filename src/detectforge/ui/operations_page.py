@@ -11,19 +11,14 @@ from pathlib import Path
 
 import streamlit as st
 
+from detectforge.config import get_settings
 from detectforge.review import calls_today, list_runs, load_run
 from detectforge.ui.components import md, pct, table
 from detectforge.ui.navigation import header
 
-FREE_DAILY_REQUESTS = 50  # OpenRouter free tier without credits
-
 
 def operations_page(runs_dir: Path) -> None:
-    header(
-        "operations",
-        "How the agent behaves in practice: model calls, tokens, time, failures and fallbacks, per run "
-        "and per prompt version. Free models only, so the limit is requests per day, not money.",
-    )
+    header("operations", "What the agent costs, how fast it is, and how often it fails.")
     summaries = list_runs(runs_dir)
     if not summaries:
         st.info("No agent runs yet.")
@@ -31,6 +26,7 @@ def operations_page(runs_dir: Path) -> None:
     runs = [load_run(runs_dir, s.trace_id).run for s in summaries]
 
     today = calls_today(runs_dir)
+    limit = get_settings().daily_request_limit
     passed = sum(r.status == "passed" for r in runs)
     calls = sum(len(r.model_calls) for r in runs)
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -38,10 +34,8 @@ def operations_page(runs_dir: Path) -> None:
     c2.metric("Passed the gate", f"{passed}/{len(runs)}")
     c3.metric("Model calls", calls, help="Each run's calls are capped by its budget.")
     c4.metric("Tokens", f"{sum(r.prompt_tokens + r.completion_tokens for r in runs):,}")
-    c5.metric(
-        "Calls today (UTC)", f"{today}/{FREE_DAILY_REQUESTS}", help="Free tier: about 50 requests a day."
-    )
-    if today >= FREE_DAILY_REQUESTS * 0.8:
+    c5.metric("Calls today (UTC)", f"{today}/{limit}", help="The provider's daily limit for free models.")
+    if today >= limit * 0.8:
         st.warning("Close to today's free request limit; it resets at midnight UTC.")
 
     st.subheader("Per prompt version")

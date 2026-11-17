@@ -97,7 +97,7 @@ def harden_selection(
     writing = mode == "write"
     if client is None and not dry_run:
         raise ValueError("a model client is needed unless dry_run is set")
-    per_run = (settings or get_settings()).max_model_calls
+    per_run = (settings or get_settings()).model_call_budget(mode)
     by_id = {r.id: r for r in index.rules}
     done = _completed_runs(runs_dir)
     items: list[BatchItem] = []

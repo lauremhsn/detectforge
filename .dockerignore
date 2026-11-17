@@ -1,0 +1,22 @@
+# Never send secrets, local data or caches into the build
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.git
+.github
+.venv
+.claude
+CLAUDE.md
+BACKLOG.local.md
+*.xlsx
+**/__pycache__
+.pytest_cache
+.ruff_cache
+data/runs
+data/sigmahq
+data/raw
+data/atomic-red-team
+data/argfuscator
+analysis
+tests

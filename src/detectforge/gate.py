@@ -4,6 +4,7 @@ The agent can only propose; this gate decides whether a proposal is good enough 
 reviewer as "passed", or goes to review as "needs human review" with the failed checks listed.
 """
 
+import yaml
 from pydantic import BaseModel, Field
 
 from detectforge.harness.compare import compare, evasion_resistance
@@ -212,6 +213,7 @@ def _keeps_original_scope(original_yaml: str, rule_yaml: str) -> list[GateCheck]
             passed=not filters,
             detail=f"dropped exclusions: {'; '.join(filters)}" if filters else "all original exclusions kept",
         ),
+        _keeps_metadata(original_yaml, rule_yaml),
         GateCheck(
             name="no_new_required_fields",
             passed=not newly_required,
@@ -224,3 +226,26 @@ def _keeps_original_scope(original_yaml: str, rule_yaml: str) -> list[GateCheck]
             ),
         ),
     ]
+
+
+METADATA_KEYS = ("id", "author", "date", "references")
+
+
+def _keeps_metadata(original_yaml: str, rule_yaml: str) -> GateCheck:
+    """Hardening changes detection logic, never who wrote the rule or what it cites.
+
+    Found on a real run: the agent "corrected" a reference link to a URL that doesn't exist. A reviewer
+    approving the detection logic could ship that unnoticed, so it blocks until restored.
+    """
+    original, candidate = yaml.safe_load(original_yaml) or {}, yaml.safe_load(rule_yaml) or {}
+    changed = [k for k in METADATA_KEYS if original.get(k) != candidate.get(k)]
+    return GateCheck(
+        name="keeps_original_metadata",
+        passed=not changed,
+        detail=(
+            f"changed {', '.join(changed)}: restore the original values "
+            "(only the detection logic should change)"
+            if changed
+            else "id, author, date and references unchanged"
+        ),
+    )

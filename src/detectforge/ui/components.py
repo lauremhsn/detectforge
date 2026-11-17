@@ -54,3 +54,35 @@ def export_view(rule_yaml: str, name: str) -> None:
             st.caption(f"Can't convert this rule: {md(e)}")
             return
         st.code(query, language=None)
+
+
+# Fixed styling written here (never built from data), so it carries no injection risk.
+_STYLE = """
+<style>
+[data-testid="stMetric"] {
+  background: var(--df-card, #131D33); border: 1px solid #22304D; border-radius: 0.75rem;
+  padding: 0.9rem 1.1rem;
+}
+[data-testid="stMetricValue"] { font-weight: 650; font-variant-numeric: tabular-nums; }
+[data-testid="stMetricLabel"] p { color: #9FB0CC; font-size: 0.85rem; }
+[data-testid="stMarkdownContainer"] table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9rem;
+  border: 1px solid #22304D; border-radius: 0.6rem; overflow: hidden;
+}
+[data-testid="stMarkdownContainer"] th {
+  background: #16223A; color: #C7D3E6; font-weight: 600; text-align: left;
+}
+[data-testid="stMarkdownContainer"] td, [data-testid="stMarkdownContainer"] th {
+  border: none; border-bottom: 1px solid #1C2942; padding: 0.5rem 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+[data-testid="stMarkdownContainer"] tr:last-child td { border-bottom: none; }
+[data-testid="stMarkdownContainer"] tbody tr:hover { background: #111B30; }
+section[data-testid="stSidebar"] [role="radiogroup"] label { padding: 0.25rem 0; }
+.block-container { padding-top: 2.2rem; max-width: 1300px; }
+</style>
+"""
+
+
+def apply_style() -> None:
+    st.markdown(_STYLE, unsafe_allow_html=True)

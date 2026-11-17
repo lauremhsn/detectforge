@@ -49,3 +49,14 @@ jobs:
         run: uv run detectforge eval community --check
       - name: Demo scenarios that need the SigmaHQ index
         run: uv run pytest tests/test_demo.py
+
+  # The image builds, and the CLI inside it runs.
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker compose build
+      - name: CLI runs in the container
+        run: docker compose run --rm cli --help

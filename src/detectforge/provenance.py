@@ -58,7 +58,9 @@ def make_provenance(
         model=model,
         fallback_model=fallback_model,
         budgets={
-            "model_calls": settings.max_model_calls,
+            "model_calls": settings.model_call_budget(
+                "write" if prompt_version.startswith("write") else "harden"
+            ),
             "tuning_runs": settings.max_iterations,
             "tokens": settings.max_tokens_per_rule,
             "output_tokens": settings.max_output_tokens,

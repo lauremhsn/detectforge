@@ -1,0 +1,17 @@
+# Optional: use this checkout's data/runs folder instead of a Docker volume, so the Docker UI/CLI and
+# a local (non-Docker) checkout share one review queue.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.share-runs.yml up
+#
+# Needs Docker Desktop to share the project folder (Settings > Resources > File sharing). On a Linux
+# host the folder must be writable by the container's user (uid 10001), which is why it isn't the
+# default.
+
+x-runs-folder: &runs-folder
+  volumes:
+    - ./data/runs:/app/data/runs
+    - sigmahq:/app/data/sigmahq
+
+services:
+  app: *runs-folder
+  cli: *runs-folder

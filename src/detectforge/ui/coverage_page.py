@@ -118,9 +118,8 @@ def _run_text(cell: RunCell | None) -> str:
 def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pending: int) -> None:
     header(
         "coverage",
-        "Are we covered, and can we prove it? Each community rule is replayed on real attacks and on "
-        "variations an attacker would use to slip past it; the agent hardens the weak ones, and a "
-        "human approves every change.",
+        "Where each detection rule stands against attacker variations, and what the agent and your "
+        "reviewers changed.",
     )
     _guide(pending)
 
@@ -155,6 +154,8 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
     by_technique: dict[str, list[CoverageRow]] = {}
     for r in rows:
         by_technique.setdefault(r.technique, []).append(r)
+    if chart := resistance_chart(by_technique):
+        st.vega_lite_chart(chart, width="stretch")
     table(
         [
             {
@@ -282,3 +283,57 @@ def coverage_report(rows: list[CoverageRow]) -> str:
 def _worst(rows: list[CoverageRow]) -> float:
     """Sort key: weakest technique first, techniques with no measurement last."""
     return min((r.community for r in rows if r.community is not None), default=2.0)
+
+
+PUBLISHED = "As published (weakest rule)"
+HARDENED = "After hardening (held-out)"
+
+
+def resistance_chart(by_technique: dict[str, list[CoverageRow]]) -> dict | None:
+    """Grouped bars per technique: evasion resistance as published vs after hardening.
+
+    A Vega-Lite spec with its data inline (no dataframe needed). Technique ids are validated ATT&CK
+    ids, so nothing untrusted reaches the chart.
+    """
+    values = []
+    for technique, rs in by_technique.items():
+        published = [r.community for r in rs if r.community is not None]
+        if not published:
+            continue
+        values.append({"technique": technique, "series": PUBLISHED, "resistance": min(published)})
+        hardened = [
+            r.hardened.heldout_after for r in rs if r.hardened and r.hardened.heldout_after is not None
+        ]
+        if hardened:
+            values.append({"technique": technique, "series": HARDENED, "resistance": max(hardened)})
+    if not values:
+        return None
+    order = sorted({v["technique"] for v in values}, key=lambda t: _worst(by_technique[t]))
+    return {
+        "data": {"values": values},
+        "height": {"step": 13},
+        "mark": {"type": "bar", "cornerRadiusEnd": 3},
+        "encoding": {
+            "y": {"field": "technique", "type": "nominal", "sort": order, "title": None},
+            "yOffset": {"field": "series", "sort": [PUBLISHED, HARDENED]},
+            "x": {
+                "field": "resistance",
+                "type": "quantitative",
+                "title": "Evasion resistance (share of attacker variations detected)",
+                "scale": {"domain": [0, 1]},
+                "axis": {"format": "%"},
+            },
+            "color": {
+                "field": "series",
+                "type": "nominal",
+                "title": None,
+                "scale": {"domain": [PUBLISHED, HARDENED], "range": ["#F59E0B", "#3B82F6"]},
+                "legend": {"orient": "top"},
+            },
+            "tooltip": [
+                {"field": "technique"},
+                {"field": "series", "title": "measured"},
+                {"field": "resistance", "format": ".0%"},
+            ],
+        },
+    }

@@ -67,7 +67,9 @@ def menu(pending: int) -> str:
         badge = f"  ({pending})" if key == "review" and pending else ""
         return f"{s.icon} {s.title}{badge}"
 
-    key = st.sidebar.radio("Go to", [s.key for s in SECTIONS], format_func=label, key=PAGE)
+    key = st.sidebar.radio(
+        "Sections", [s.key for s in SECTIONS], format_func=label, key=PAGE, label_visibility="collapsed"
+    )
     st.sidebar.caption(BY_KEY[key].question)
     return key
 

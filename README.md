@@ -101,6 +101,22 @@ It opens at http://localhost:8501, organised around what you came to do:
 
 Approved rules are written to `data/runs/approved/`. A guided demo is in [demo/README.md](demo/README.md).
 
+### With Docker
+
+No Python setup needed, only Docker. Keys still come from `.env`.
+
+```bash
+docker compose up --build                                  # UI at http://localhost:8501
+docker compose run --rm cli sigmahq fetch                  # any detectforge command
+docker compose run --rm cli eval community --check
+```
+
+The image runs as an unprivileged user and contains no secrets (`.env`, git history and local runs
+are excluded). Agent runs, review decisions and the SigmaHQ index are kept in Docker volumes across
+restarts; CI builds the image on every push. To share one review queue with a local checkout instead,
+add `-f docker-compose.yml -f docker-compose.share-runs.yml` (uses `./data/runs`; Docker Desktop must
+be allowed to share the project folder).
+
 ## Reproducing the evaluation
 
 The evaluation data and the Arm 1 results are committed under `data/eval/`, so steps 1–2 only need

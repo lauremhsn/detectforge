@@ -60,7 +60,9 @@ data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
 docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
 docs/threat-model.md  What we protect, from whom, and the test behind each defence
-tests/                325 automated tests (run on every push by GitHub Actions)
+docs/architecture.md  Components, one agent run, the evaluation boundary, deployment, design decisions
+Dockerfile, docker-compose.yml  The UI and the CLI in one image (`docker compose up`)
+tests/                330 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -382,6 +384,9 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   lack (e.g. `Hashes`), or a filter for a false positive our benign events don't contain. Exclusions
   are compared by field + value (ignoring case and the filter's name), so renaming is fine; removing
   is not;
+- hardening: **metadata unchanged** (`keeps_original_metadata`): id, author, date and references stay
+  as in the original. Only the detection logic should change; a real run "corrected" a reference link
+  to a URL that doesn't exist, which a reviewer focused on detection could easily miss;
 - **not overfitted** (`rules/lint.py`): the rule may not add **unusual characters** (invisible or
   look-alike Unicode, written literally or as `\u`/`\x` escapes) that the original didn't have. Found on
   the first real dev run: the agent "hardened" a Run-keys rule by listing the exact zero-width spaces,
@@ -575,7 +580,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 325 tests
+uv run pytest                             # 330 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)

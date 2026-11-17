@@ -168,3 +168,18 @@ def test_agent_operations_summarises_runs(evaluated):
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Agent runs"] == "1" and metrics["Passed the gate"] == "1/1"
     assert metrics["Model calls"] == "2"
+
+
+def test_coverage_chart_compares_published_with_hardened_per_technique(evaluated, rules):
+    from detectforge.ui.coverage_page import HARDENED, PUBLISHED, resistance_chart
+
+    rows = coverage_rows(
+        evaluated / "eval" / "selection.yml",
+        evaluated / "eval" / "results" / "arm1_community.json",
+        evaluated / "runs",
+        {"literal-schtasks": rules["literal"]},
+    )
+    chart = resistance_chart({TECHNIQUE: rows})
+    series = {v["series"]: v["resistance"] for v in chart["data"]["values"]}
+    assert series[PUBLISHED] < 1 and series[HARDENED] == 1.0
+    assert resistance_chart({TECHNIQUE: [rows[0].model_copy(update={"community": None})]}) is None

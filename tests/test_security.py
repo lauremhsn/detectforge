@@ -333,3 +333,12 @@ def test_no_secret_file_or_key_is_tracked_by_git():
             continue  # binary or removed in the working tree
         leaks += [f"{name}: {p.pattern}" for p in SECRET_PATTERNS if p.search(text)]
     assert leaks == []
+
+
+def test_secrets_and_local_data_never_enter_the_docker_image():
+    ignored = (REPO / ".dockerignore").read_text(encoding="utf-8").split()
+    for entry in (".env", ".env.*", ".streamlit/secrets.toml", ".git", "data/runs"):
+        assert entry in ignored, f"{entry} would be copied into the image"
+    dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
+    assert "USER detectforge" in dockerfile  # the app never runs as root
+    assert not re.search(r"(?i)(api_key|secret|token)\s*=", dockerfile)

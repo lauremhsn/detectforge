@@ -85,9 +85,8 @@ def assess(technique: str, index: ReferenceIndex, events: list[Event]) -> Covera
 def request_page(index: ReferenceIndex | str, all_events: list[Event]) -> None:
     header(
         "request",
-        "Describe what you want to detect, or paste a threat report. DetectForge finds the techniques it "
-        "involves and checks, for each one, whether your rules still catch the attack when an attacker "
-        "varies the command line.",
+        "Paste a request or a threat report to see whether your rules catch it, including the "
+        "variations attackers use.",
     )
     if isinstance(index, str):
         st.info(index)

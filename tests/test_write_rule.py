@@ -194,3 +194,21 @@ def test_written_arm_batch_runs_every_rule_and_never_reuses_hardening_runs(setup
         selection[:2], fixture_events, index, ScriptedClient([]), "fake", tmp_path, mode="write"
     )
     assert [i.action for i in again] == ["reused", "reused"]
+
+
+def test_writing_has_its_own_model_call_budget(tuning):
+    """Writing from scratch takes more steps than revising, so it gets a separate budget."""
+    settings = Settings(_env_file=None, max_model_calls=10, write_max_model_calls=2)
+    assert settings.model_call_budget("write") == 2 and settings.model_call_budget("harden") == 10
+    client = ScriptedClient([tool_call("inspect_schema")] * 5)
+    run = write_rule(TECHNIQUE, tuning, client, "fake", settings=settings)
+    assert len(run.model_calls) == 2
+    assert any("model call budget exhausted (2 calls)" in r for r in run.reasons)
+
+
+def test_write_v2_forbids_look_alike_characters_and_asks_to_submit_early():
+    """Regression: the first real write run copied ᵃᵈᵈ and ﹣ from the test attacks and never submitted."""
+    assert WRITE_PROMPT_VERSION == "write-v2"
+    assert "Never list those characters" in WRITE_SYSTEM_PROMPT and "|windash" in WRITE_SYSTEM_PROMPT
+    assert "Submit early" in WRITE_SYSTEM_PROMPT
+    assert "Never list those characters" not in SYSTEM_PROMPT  # hardening prompt unchanged (v7)

@@ -17,9 +17,7 @@ from detectforge.ui.navigation import header
 def review_tab(runs_dir: Path) -> None:
     header(
         "review",
-        "Everything the agent proposed, with the evidence: what changed, scores on variations it never "
-        "saw, the quality gate's checks and its full reasoning. Nothing is deployed until a reviewer "
-        "approves it.",
+        "Proposals waiting for a decision, with the evidence. Nothing ships until a reviewer approves it.",
     )
     # Shown first: after a decision the run may leave the current filter (e.g. "pending review").
     if message := st.session_state.pop("review_message", None):
@@ -32,11 +30,23 @@ def review_tab(runs_dir: Path) -> None:
     def state(r) -> str:
         return r.decision.decision if r.decision else "pending review"
 
+    latest = latest_prompt_versions(runs)
+    only_latest = st.toggle(
+        f"Only the current prompts ({', '.join(sorted(latest))})",
+        value=True,
+        key="review_latest",
+        help="Runs made with older prompt versions are kept as history (and in Agent operations) but "
+        "hidden here: they were replaced by runs of the current prompt.",
+    )
+    hidden = sum(r.prompt_version not in latest for r in runs) if only_latest else 0
+    runs = [r for r in runs if not only_latest or r.prompt_version in latest]
     counts = {s: sum(state(r) == s for r in runs) for s in ("pending review", "approved", "rejected")}
     c1, c2, c3 = st.columns(3)
     c1.metric("Waiting for review", counts["pending review"])
     c2.metric("Approved", counts["approved"])
     c3.metric("Rejected", counts["rejected"])
+    if hidden:
+        st.caption(f"{hidden} run(s) from older prompt versions hidden.")
     show = st.radio(
         "Show", ["pending review", "all", "approved", "rejected"], horizontal=True, key="review_show"
     )
@@ -334,3 +344,16 @@ def _decide(
         st.session_state["reviewer_key"] = ""  # never keep a key in the session after use
     where = f" Saved to {runs_dir / 'approved' / (trace_id + '.yml')}." if decision == "approved" else ""
     st.session_state["review_message"] = f"Rule {record.status}.{where}"
+
+
+def latest_prompt_versions(runs) -> set[str]:
+    """The newest prompt version of each kind ("harden-v7", "write-v1"): v10 is newer than v9."""
+    newest: dict[str, tuple[int, str]] = {}
+    for r in runs:
+        kind, _, number = r.prompt_version.rpartition("-v")
+        rank = int(number) if number.isdigit() else -1
+        if not kind:
+            kind, rank = r.prompt_version, -1
+        if kind not in newest or rank > newest[kind][0]:
+            newest[kind] = (rank, r.prompt_version)
+    return {version for _, version in newest.values()}
