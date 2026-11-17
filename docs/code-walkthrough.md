@@ -60,7 +60,7 @@ data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
 docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
 docs/threat-model.md  What we protect, from whom, and the test behind each defence
-tests/                293 automated tests (run on every push by GitHub Actions)
+tests/                304 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -570,7 +570,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 293 tests
+uv run pytest                             # 304 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
@@ -592,6 +592,7 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_batch` (per-rule scoping, quota-saving skips, early stop), `test_agent_tools` (contracts,
 held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability, memorised characters, copied strings), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
+`test_contracts` (frozen snapshot of the shared formats and function signatures, interfaces.md matches the code, committed data is one consistent dataset, saved results still load, CLI JSON and exit codes; refresh after an agreed change with `UPDATE_CONTRACTS=1 uv run pytest tests/test_contracts.py`),
 `test_security` (an obedient model following injected rules and events, YAML tags, escaped display, five tools with no network or file writes, reviewer keys and lockout, API key never saved or printed, no secret tracked by git),
 `test_write_rule` (path chosen by code, writing loop, same-technique rules hidden, no-rule baseline,
 agent-written arm batch),

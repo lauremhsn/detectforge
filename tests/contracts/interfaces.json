@@ -1,0 +1,1062 @@
+{
+  "functions": {
+    "detectforge.eval.arms.run_community_arm": "(selection: dict, index: detectforge.reference.index.ReferenceIndex, events: list[detectforge.schemas.Event]) -> detectforge.eval.arms.ArmResult",
+    "detectforge.eval.metrics.score_rule": "(rule_yaml: str, events: list[detectforge.schemas.Event], **meta) -> detectforge.eval.metrics.RuleResult",
+    "detectforge.events.dump_events": "(events: collections.abc.Iterable[detectforge.schemas.Event], path: str | pathlib.Path) -> None",
+    "detectforge.events.load_events": "(path: str | pathlib.Path) -> list[detectforge.schemas.Event]",
+    "detectforge.gate.check": "(rule_yaml: str, events: list[detectforge.schemas.Event], original_yaml: str | None = None, config: detectforge.gate.GateConfig | None = None) -> detectforge.gate.GateResult",
+    "detectforge.harness.compare.compare": "(before_yaml: str | None, after_yaml: str | None, events: list[detectforge.schemas.Event]) -> detectforge.harness.compare.HardeningReport",
+    "detectforge.harness.compare.evasion_resistance": "(card: detectforge.schemas.Scorecard) -> float | None",
+    "detectforge.harness.run.no_rule": "(events: list[detectforge.schemas.Event]) -> detectforge.schemas.Scorecard",
+    "detectforge.harness.run.run": "(rule_yaml: str, events: list[detectforge.schemas.Event]) -> detectforge.schemas.Scorecard",
+    "detectforge.rules.validate.validate_rule": "(rule_yaml: str) -> detectforge.schemas.ValidationResult"
+  },
+  "models": {
+    "ArmResult": {
+      "$defs": {
+        "RuleResult": {
+          "properties": {
+            "base_detected": {
+              "title": "Base Detected",
+              "type": "integer"
+            },
+            "base_total": {
+              "title": "Base Total",
+              "type": "integer"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            },
+            "evaded_by": {
+              "items": {
+                "enum": [
+                  "none",
+                  "insertion",
+                  "substitution",
+                  "omission",
+                  "reordering",
+                  "recoding"
+                ],
+                "type": "string"
+              },
+              "title": "Evaded By",
+              "type": "array"
+            },
+            "evasion_resistance": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Evasion Resistance"
+            },
+            "false_alarm_rate": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "False Alarm Rate"
+            },
+            "resistance_by_mutation_split": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "enum": [
+                  "tune",
+                  "heldout"
+                ]
+              },
+              "title": "Resistance By Mutation Split",
+              "type": "object"
+            },
+            "resistance_by_transform": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "enum": [
+                  "none",
+                  "insertion",
+                  "substitution",
+                  "omission",
+                  "reordering",
+                  "recoding"
+                ]
+              },
+              "title": "Resistance By Transform",
+              "type": "object"
+            },
+            "rule_id": {
+              "title": "Rule Id",
+              "type": "string"
+            },
+            "selection_split": {
+              "title": "Selection Split",
+              "type": "string"
+            },
+            "source": {
+              "enum": [
+                "community",
+                "adapted",
+                "written"
+              ],
+              "title": "Source",
+              "type": "string"
+            },
+            "technique": {
+              "title": "Technique",
+              "type": "string"
+            },
+            "title": {
+              "title": "Title",
+              "type": "string"
+            },
+            "valid": {
+              "title": "Valid",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "rule_id",
+            "title",
+            "technique",
+            "selection_split",
+            "source",
+            "valid",
+            "error",
+            "base_detected",
+            "base_total",
+            "evasion_resistance",
+            "resistance_by_transform",
+            "resistance_by_mutation_split",
+            "evaded_by",
+            "false_alarm_rate"
+          ],
+          "title": "RuleResult",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "arm": {
+          "enum": [
+            "community",
+            "adapted",
+            "written"
+          ],
+          "title": "Arm",
+          "type": "string"
+        },
+        "overall_evasion_resistance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Overall Evasion Resistance"
+        },
+        "resistance_by_mutation_split": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "tune",
+              "heldout"
+            ]
+          },
+          "title": "Resistance By Mutation Split",
+          "type": "object"
+        },
+        "resistance_by_selection_split": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Resistance By Selection Split",
+          "type": "object"
+        },
+        "resistance_by_transform": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "none",
+              "insertion",
+              "substitution",
+              "omission",
+              "reordering",
+              "recoding"
+            ]
+          },
+          "title": "Resistance By Transform",
+          "type": "object"
+        },
+        "rule_count": {
+          "title": "Rule Count",
+          "type": "integer"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleResult"
+          },
+          "title": "Rules",
+          "type": "array"
+        },
+        "rules_evaded": {
+          "title": "Rules Evaded",
+          "type": "integer"
+        },
+        "rules_fully_robust": {
+          "title": "Rules Fully Robust",
+          "type": "integer"
+        },
+        "valid_rules": {
+          "title": "Valid Rules",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "arm",
+        "rule_count",
+        "valid_rules",
+        "overall_evasion_resistance",
+        "resistance_by_transform",
+        "resistance_by_mutation_split",
+        "resistance_by_selection_split",
+        "rules_fully_robust",
+        "rules_evaded",
+        "rules"
+      ],
+      "title": "ArmResult",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "description": "One Sysmon Event ID 1 (process creation) record, stored as one JSON line.",
+      "properties": {
+        "base_id": {
+          "description": "Event this was mutated from; itself if unmutated.",
+          "minLength": 1,
+          "title": "Base Id",
+          "type": "string"
+        },
+        "command_line": {
+          "title": "Command Line",
+          "type": "string"
+        },
+        "event_id": {
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "image": {
+          "title": "Image",
+          "type": "string"
+        },
+        "label": {
+          "enum": [
+            "attack",
+            "benign"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "original_file_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original File Name"
+        },
+        "parent_command_line": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Command Line"
+        },
+        "parent_image": {
+          "title": "Parent Image",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "tune",
+            "heldout"
+          ],
+          "title": "Split",
+          "type": "string"
+        },
+        "technique": {
+          "pattern": "^T\\d{4}(\\.\\d{3})?$",
+          "title": "Technique",
+          "type": "string"
+        },
+        "transform": {
+          "enum": [
+            "none",
+            "insertion",
+            "substitution",
+            "omission",
+            "reordering",
+            "recoding"
+          ],
+          "title": "Transform",
+          "type": "string"
+        },
+        "verified": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verified"
+        }
+      },
+      "required": [
+        "event_id",
+        "image",
+        "command_line",
+        "parent_image",
+        "label",
+        "technique",
+        "transform",
+        "base_id",
+        "split"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "GateResult": {
+      "$defs": {
+        "GateCheck": {
+          "properties": {
+            "blocking": {
+              "default": true,
+              "title": "Blocking",
+              "type": "boolean"
+            },
+            "detail": {
+              "title": "Detail",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "passed": {
+              "title": "Passed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "passed",
+            "detail"
+          ],
+          "title": "GateCheck",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/GateCheck"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "passed",
+        "checks"
+      ],
+      "title": "GateResult",
+      "type": "object"
+    },
+    "HardeningReport": {
+      "$defs": {
+        "Scorecard": {
+          "description": "Result of replaying one rule against a list of events.\n\nhits/misses count attack events; false_alarms counts benign events the rule matched.\nWhen valid is False the rule could not be evaluated, error says why, and all counts are zero.",
+          "properties": {
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Error"
+            },
+            "false_alarms": {
+              "default": 0,
+              "title": "False Alarms",
+              "type": "integer"
+            },
+            "hits": {
+              "default": 0,
+              "title": "Hits",
+              "type": "integer"
+            },
+            "matched_event_ids": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Matched Event Ids",
+              "type": "array"
+            },
+            "misses": {
+              "default": 0,
+              "title": "Misses",
+              "type": "integer"
+            },
+            "per_transform": {
+              "additionalProperties": {
+                "$ref": "#/$defs/TransformBreakdown"
+              },
+              "propertyNames": {
+                "enum": [
+                  "none",
+                  "insertion",
+                  "substitution",
+                  "omission",
+                  "reordering",
+                  "recoding"
+                ]
+              },
+              "title": "Per Transform",
+              "type": "object"
+            },
+            "valid": {
+              "title": "Valid",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "valid"
+          ],
+          "title": "Scorecard",
+          "type": "object"
+        },
+        "TransformBreakdown": {
+          "description": "Counts for the events sharing one transform type.",
+          "properties": {
+            "attacks": {
+              "default": 0,
+              "title": "Attacks",
+              "type": "integer"
+            },
+            "benign": {
+              "default": 0,
+              "title": "Benign",
+              "type": "integer"
+            },
+            "false_alarms": {
+              "default": 0,
+              "title": "False Alarms",
+              "type": "integer"
+            },
+            "hits": {
+              "default": 0,
+              "title": "Hits",
+              "type": "integer"
+            },
+            "misses": {
+              "default": 0,
+              "title": "Misses",
+              "type": "integer"
+            }
+          },
+          "title": "TransformBreakdown",
+          "type": "object"
+        },
+        "TransformDelta": {
+          "properties": {
+            "attacks": {
+              "title": "Attacks",
+              "type": "integer"
+            },
+            "benign": {
+              "title": "Benign",
+              "type": "integer"
+            },
+            "false_alarms_after": {
+              "title": "False Alarms After",
+              "type": "integer"
+            },
+            "false_alarms_before": {
+              "title": "False Alarms Before",
+              "type": "integer"
+            },
+            "hits_after": {
+              "title": "Hits After",
+              "type": "integer"
+            },
+            "hits_before": {
+              "title": "Hits Before",
+              "type": "integer"
+            },
+            "resistance_after": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resistance After"
+            },
+            "resistance_before": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resistance Before"
+            }
+          },
+          "required": [
+            "attacks",
+            "hits_before",
+            "hits_after",
+            "resistance_before",
+            "resistance_after",
+            "benign",
+            "false_alarms_before",
+            "false_alarms_after"
+          ],
+          "title": "TransformDelta",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "after": {
+          "$ref": "#/$defs/Scorecard"
+        },
+        "before": {
+          "$ref": "#/$defs/Scorecard"
+        },
+        "evasion_resistance_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Evasion Resistance After"
+        },
+        "evasion_resistance_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Evasion Resistance Before"
+        },
+        "evasion_resistance_delta": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Evasion Resistance Delta"
+        },
+        "false_alarms_after": {
+          "title": "False Alarms After",
+          "type": "integer"
+        },
+        "false_alarms_before": {
+          "title": "False Alarms Before",
+          "type": "integer"
+        },
+        "lost_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Lost Event Ids",
+          "type": "array"
+        },
+        "mutated_attacks": {
+          "title": "Mutated Attacks",
+          "type": "integer"
+        },
+        "new_false_alarm_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "New False Alarm Event Ids",
+          "type": "array"
+        },
+        "newly_detected_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Newly Detected Event Ids",
+          "type": "array"
+        },
+        "per_transform": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TransformDelta"
+          },
+          "propertyNames": {
+            "enum": [
+              "none",
+              "insertion",
+              "substitution",
+              "omission",
+              "reordering",
+              "recoding"
+            ]
+          },
+          "title": "Per Transform",
+          "type": "object"
+        },
+        "removed_false_alarm_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Removed False Alarm Event Ids",
+          "type": "array"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "valid",
+        "before",
+        "after",
+        "mutated_attacks",
+        "evasion_resistance_before",
+        "evasion_resistance_after",
+        "evasion_resistance_delta",
+        "false_alarms_before",
+        "false_alarms_after",
+        "per_transform",
+        "newly_detected_event_ids",
+        "lost_event_ids",
+        "new_false_alarm_event_ids",
+        "removed_false_alarm_event_ids"
+      ],
+      "title": "HardeningReport",
+      "type": "object"
+    },
+    "RuleRecord": {
+      "description": "A rule moving through the find/adapt/write -> approve pipeline.",
+      "properties": {
+        "rule_yaml": {
+          "title": "Rule Yaml",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "community",
+            "adapted",
+            "written"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "default": "proposed",
+          "enum": [
+            "proposed",
+            "approved",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "technique": {
+          "pattern": "^T\\d{4}(\\.\\d{3})?$",
+          "title": "Technique",
+          "type": "string"
+        },
+        "trace_id": {
+          "title": "Trace Id",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rule_yaml",
+        "source",
+        "technique",
+        "trace_id",
+        "version"
+      ],
+      "title": "RuleRecord",
+      "type": "object"
+    },
+    "RuleResult": {
+      "properties": {
+        "base_detected": {
+          "title": "Base Detected",
+          "type": "integer"
+        },
+        "base_total": {
+          "title": "Base Total",
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        },
+        "evaded_by": {
+          "items": {
+            "enum": [
+              "none",
+              "insertion",
+              "substitution",
+              "omission",
+              "reordering",
+              "recoding"
+            ],
+            "type": "string"
+          },
+          "title": "Evaded By",
+          "type": "array"
+        },
+        "evasion_resistance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Evasion Resistance"
+        },
+        "false_alarm_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "False Alarm Rate"
+        },
+        "resistance_by_mutation_split": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "tune",
+              "heldout"
+            ]
+          },
+          "title": "Resistance By Mutation Split",
+          "type": "object"
+        },
+        "resistance_by_transform": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "enum": [
+              "none",
+              "insertion",
+              "substitution",
+              "omission",
+              "reordering",
+              "recoding"
+            ]
+          },
+          "title": "Resistance By Transform",
+          "type": "object"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "selection_split": {
+          "title": "Selection Split",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "community",
+            "adapted",
+            "written"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "technique": {
+          "title": "Technique",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rule_id",
+        "title",
+        "technique",
+        "selection_split",
+        "source",
+        "valid",
+        "error",
+        "base_detected",
+        "base_total",
+        "evasion_resistance",
+        "resistance_by_transform",
+        "resistance_by_mutation_split",
+        "evaded_by",
+        "false_alarm_rate"
+      ],
+      "title": "RuleResult",
+      "type": "object"
+    },
+    "Scorecard": {
+      "$defs": {
+        "TransformBreakdown": {
+          "description": "Counts for the events sharing one transform type.",
+          "properties": {
+            "attacks": {
+              "default": 0,
+              "title": "Attacks",
+              "type": "integer"
+            },
+            "benign": {
+              "default": 0,
+              "title": "Benign",
+              "type": "integer"
+            },
+            "false_alarms": {
+              "default": 0,
+              "title": "False Alarms",
+              "type": "integer"
+            },
+            "hits": {
+              "default": 0,
+              "title": "Hits",
+              "type": "integer"
+            },
+            "misses": {
+              "default": 0,
+              "title": "Misses",
+              "type": "integer"
+            }
+          },
+          "title": "TransformBreakdown",
+          "type": "object"
+        }
+      },
+      "description": "Result of replaying one rule against a list of events.\n\nhits/misses count attack events; false_alarms counts benign events the rule matched.\nWhen valid is False the rule could not be evaluated, error says why, and all counts are zero.",
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "false_alarms": {
+          "default": 0,
+          "title": "False Alarms",
+          "type": "integer"
+        },
+        "hits": {
+          "default": 0,
+          "title": "Hits",
+          "type": "integer"
+        },
+        "matched_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Matched Event Ids",
+          "type": "array"
+        },
+        "misses": {
+          "default": 0,
+          "title": "Misses",
+          "type": "integer"
+        },
+        "per_transform": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TransformBreakdown"
+          },
+          "propertyNames": {
+            "enum": [
+              "none",
+              "insertion",
+              "substitution",
+              "omission",
+              "reordering",
+              "recoding"
+            ]
+          },
+          "title": "Per Transform",
+          "type": "object"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "valid"
+      ],
+      "title": "Scorecard",
+      "type": "object"
+    },
+    "ValidationResult": {
+      "description": "Output of validate_rule. errors make a rule unusable; warnings are advisory.",
+      "properties": {
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "valid": {
+          "title": "Valid",
+          "type": "boolean"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "valid"
+      ],
+      "title": "ValidationResult",
+      "type": "object"
+    }
+  }
+}
