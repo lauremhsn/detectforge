@@ -93,6 +93,21 @@ def check(
             ),
         )
     )
+    benign = sum(1 for e in events if e.label == "benign")
+    checks.append(  # "0 false alarms" on 0 benign events is untested, not clean
+        GateCheck(
+            name="false_alarms_tested",
+            passed=benign > 0,
+            blocking=False,
+            detail=(
+                f"false alarms checked on {benign} benign events"
+                if benign
+                else "warning: no benign events to test against, so the false-alarm checks below prove "
+                "nothing; a rule that fires on harmless commands would still pass. Check the held-out "
+                "false alarms before approving."
+            ),
+        )
+    )
 
     if original_yaml is None:
         checks.append(
