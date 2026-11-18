@@ -67,6 +67,7 @@ class BatchItem(BaseModel):
     tuning_after: float | None = None
     heldout_before: float | None = None
     heldout_after: float | None = None
+    heldout_mutations: int = 0  # mutated held-out attacks for this rule; 0 = held-out resistance is n/a
     model_calls: int = 0  # spent by this batch (0 for a reused run)
 
 
@@ -194,11 +195,41 @@ def _fill(item: BatchItem, outcome: HardeningOutcome, action: str) -> None:
     item.tuning_after = agent_run.tuning_evasion_resistance_after
     item.heldout_before = heldout.evasion_resistance_before if heldout else None
     item.heldout_after = heldout.evasion_resistance_after if heldout else None
+    item.heldout_mutations = heldout.mutated_attacks if heldout else 0
     item.model_calls = len(agent_run.model_calls)
     item.note = "; ".join(agent_run.reasons)
     if heldout and heldout.new_false_alarm_event_ids:  # unseen by the agent and gate: flag for review
         new_fa = f"new held-out false alarms: {', '.join(heldout.new_false_alarm_event_ids)}"
         item.note = f"{item.note}; {new_fa}" if item.note else new_fa
+
+
+class HeldoutSummary(BaseModel):
+    """Held-out evasion resistance of a batch, averaged only over rules that have held-out mutations.
+
+    A rule whose attacks have no held-out mutation type (e.g. nothing to insert into or recode) has
+    no held-out score: it is n/a, not 0% or 100%, and is left out of the mean instead of skewing it.
+    """
+
+    rules: int  # rules that ran (or were reused)
+    rules_with_heldout: int
+    mean_before: float | None
+    mean_after: float | None
+
+
+def heldout_summary(items: list[BatchItem]) -> HeldoutSummary:
+    ran = [i for i in items if i.action in ("hardened", "written", "reused")]
+    scored = [i for i in ran if i.heldout_mutations > 0]
+
+    def mean(values: list[float | None]) -> float | None:
+        # A rule that couldn't be evaluated (invalid) detects nothing: it counts as 0, never dropped.
+        return sum(v or 0.0 for v in values) / len(values) if values else None
+
+    return HeldoutSummary(
+        rules=len(ran),
+        rules_with_heldout=len(scored),
+        mean_before=mean([i.heldout_before for i in scored]),
+        mean_after=mean([i.heldout_after for i in scored]),
+    )
 
 
 def _model_failed(outcome: HardeningOutcome) -> bool:

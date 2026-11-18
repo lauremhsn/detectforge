@@ -11,7 +11,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from detectforge.agent.batch import harden_selection, load_selection
+from detectforge.agent.batch import harden_selection, heldout_summary, load_selection
 from detectforge.agent.runner import HardeningOutcome, find_usable_rule, run_hardening, run_writing
 from detectforge.config import get_settings
 from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
@@ -367,6 +367,13 @@ def _harden_selection(args: argparse.Namespace) -> int:
             f"calls ({per_run} per run); nothing was sent to the model"
         )
         return 0
+    summary = heldout_summary(items)
+    if summary.rules:
+        print(
+            f"\nheld-out evasion resistance, mean over the {summary.rules_with_heldout} of {summary.rules} "
+            f"rules with held-out mutations: {_pct(summary.mean_before)} -> {_pct(summary.mean_after)} "
+            "(rules without held-out mutations are n/a and not averaged in)"
+        )
     calls = sum(i.model_calls for i in items)
     print(f"\n{calls} model calls; runs saved to {settings.runs_dir} (see the Review tab)")
     return 0
