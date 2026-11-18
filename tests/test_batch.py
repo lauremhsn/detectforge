@@ -5,7 +5,7 @@ import json
 import pytest
 from test_agent_loop import ScriptedClient, tool_call
 
-from detectforge.agent.batch import SelectedRule, harden_selection, load_selection
+from detectforge.agent.batch import BatchItem, SelectedRule, harden_selection, heldout_summary, load_selection
 from detectforge.agent.runner import run_hardening
 from detectforge.llm import LLMError
 from detectforge.reference.index import ReferenceIndex, ReferenceRule
@@ -164,3 +164,21 @@ def test_new_held_out_false_alarms_are_flagged_for_the_reviewer(setup, fixture_e
     items = harden_selection(selection[:1], [*fixture_events, lookalike], index, client, "fake", tmp_path)
     assert items[0].status == "passed"  # invisible to the gate...
     assert "new held-out false alarms: benign-query" in items[0].note  # ...but not to the reviewer
+
+
+def test_held_out_mean_leaves_out_rules_without_held_out_mutations(setup, fixture_events, tmp_path):
+    index, selection, robust = setup
+    client = ScriptedClient([tool_call("submit", rule_yaml=robust, rationale="create verb")])
+    items = harden_selection(selection, fixture_events, index, client, "fake", tmp_path)
+    hardened = next(i for i in items if i.action == "hardened")
+    assert hardened.heldout_mutations > 0
+
+    no_heldout = BatchItem(rule_id="x", title="x", technique="T1", action="hardened", tuning_before=0.5)
+    invalid = BatchItem(
+        rule_id="y", title="y", technique="T2", action="hardened", heldout_before=0.5, heldout_mutations=2
+    )  # the hardened rule couldn't be evaluated (after = None): it detects nothing, so it counts as 0
+    summary = heldout_summary([*items, no_heldout, invalid])
+    assert (summary.rules, summary.rules_with_heldout) == (3, 2)
+    assert summary.mean_before == pytest.approx((hardened.heldout_before + 0.5) / 2)
+    assert summary.mean_after == pytest.approx(hardened.heldout_after / 2)
+    assert heldout_summary([no_heldout]).mean_after is None  # n/a, not 0%
