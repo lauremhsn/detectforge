@@ -170,16 +170,36 @@ def test_agent_operations_summarises_runs(evaluated):
     assert metrics["Model calls"] == "2"
 
 
-def test_coverage_chart_compares_published_with_hardened_per_technique(evaluated, rules):
-    from detectforge.ui.coverage_page import HARDENED, PUBLISHED, resistance_chart
+def test_coverage_chart_compares_the_same_rule_before_and_after_on_held_out(evaded_rows):
+    from detectforge.ui.coverage_page import AFTER, BEFORE, heldout_mean, resistance_chart
 
-    rows = coverage_rows(
+    chart = resistance_chart({TECHNIQUE: evaded_rows})
+    series = {v["series"]: v["resistance"] for v in chart["data"]["values"]}
+    cell = evaded_rows[0].hardened
+    assert series == {BEFORE: cell.heldout_before, AFTER: cell.heldout_after} and series[AFTER] == 1.0
+    mean = heldout_mean(evaded_rows)
+    assert (mean.hardened, mean.with_heldout, mean.after) == (1, 1, 1.0)
+
+
+def test_a_rule_without_held_out_mutations_is_n_a_not_a_score(evaded_rows):
+    from detectforge.ui.coverage_page import _run_text, heldout_mean, resistance_chart
+
+    no_heldout = evaded_rows[0].model_copy(
+        update={"hardened": evaded_rows[0].hardened.model_copy(update={"heldout_mutations": 0})}
+    )
+    assert resistance_chart({TECHNIQUE: [no_heldout]}) is None  # nothing to compare on held-out
+    assert _run_text(no_heldout.hardened).startswith("n/a (no held-out mutations)")
+    mean = heldout_mean([*evaded_rows, no_heldout])
+    assert (mean.hardened, mean.with_heldout, mean.after) == (2, 1, 1.0)  # left out, not averaged as 0
+    report = coverage_report([no_heldout])
+    assert "n/a (no held-out mutations)" in report and "mean over the 0 hardened rules" in report
+
+
+@pytest.fixture
+def evaded_rows(evaluated, rules):
+    return coverage_rows(
         evaluated / "eval" / "selection.yml",
         evaluated / "eval" / "results" / "arm1_community.json",
         evaluated / "runs",
         {"literal-schtasks": rules["literal"]},
     )
-    chart = resistance_chart({TECHNIQUE: rows})
-    series = {v["series"]: v["resistance"] for v in chart["data"]["values"]}
-    assert series[PUBLISHED] < 1 and series[HARDENED] == 1.0
-    assert resistance_chart({TECHNIQUE: [rows[0].model_copy(update={"community": None})]}) is None

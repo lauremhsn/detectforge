@@ -50,6 +50,7 @@ src/detectforge/
   intake.py           Plain-language request → ATT&CK techniques (model, checked; keyword fallback)
   provenance.py       Which prompt, model, budgets, code and data produced a run (setup key)
   eval/export.py      Every saved run as CSV + per-setup summary (mean, spread, cost per approved rule)
+  eval/thresholds.py  Gate threshold ablation, recomputed from saved runs
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
@@ -65,7 +66,7 @@ docs/threat-model.md  What we protect, from whom, and the test behind each defen
 docs/limitations.md   Known limitations and assumptions, and what to do about each
 docs/architecture.md  Components, one agent run, the evaluation boundary, deployment, design decisions
 Dockerfile, docker-compose.yml  The UI and the CLI in one image (`docker compose up`)
-tests/                342 automated tests (run on every push by GitHub Actions)
+tests/                352 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -588,7 +589,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 342 tests
+uv run pytest                             # 352 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
@@ -597,6 +598,7 @@ uv run detectforge harden-selection --split dev --write   # agent-written arm
 uv run detectforge review list --pending          # runs waiting for a decision (current prompts)
 uv run detectforge review approve 8e3abcbe -m "why"   # or reject; asks for your reviewer key
 uv run detectforge export                        # every run as CSV + per-setup summary (data/exports)
+uv run detectforge eval gate-thresholds          # ablation: saved rules passing at 60-100% (no model)
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl

@@ -17,6 +17,7 @@ from detectforge.config import get_settings
 from detectforge.dataset import argfuscator, atomic, hard_negatives, mutate, selection
 from detectforge.eval import arms, regression
 from detectforge.eval.export import export_runs
+from detectforge.eval.thresholds import DEFAULT_THRESHOLDS, threshold_table
 from detectforge.events import load_events
 from detectforge.harness import run
 from detectforge.harness.compare import compare
@@ -183,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
         help="recompute and compare with the committed results instead of writing them (CI regression gate)",
     )
     p.set_defaults(handler=_eval_community)
+    p = eval_sub.add_parser(
+        "gate-thresholds", help="ablation: saved rules passing at each evasion-resistance minimum (no model)"
+    )
+    p.add_argument("--thresholds", type=float, nargs="+", default=list(DEFAULT_THRESHOLDS))
+    p.add_argument("--all-prompts", action="store_true", help="also runs from older prompt versions")
+    p.set_defaults(handler=_eval_gate_thresholds)
 
     args = parser.parse_args(argv)
     return args.handler(args)
@@ -437,6 +444,24 @@ def _review_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _eval_gate_thresholds(args: argparse.Namespace) -> int:
+    rows = threshold_table(
+        get_settings().runs_dir, tuple(args.thresholds), current_prompts_only=not args.all_prompts
+    )
+    if not rows:
+        print("no runs where the agent proposed a rule")
+        return 0
+    print("post hoc: which of the rules the agent produced clear each bar (the agent saw the 80% gate)")
+    print(f"{'mode':7} {'prompt':10} {'min':>5} {'pass':>9}  {'held-out mean (rules)':>22}  new held-out FAs")
+    for r in rows:
+        heldout = f"{_pct(r.heldout_after_mean)} ({r.passing_with_heldout})"
+        print(
+            f"{r.mode:7} {r.prompt_version:10} {r.threshold:>5.0%} {r.passing:>4}/{r.runs:<4}  "
+            f"{heldout:>22}  {r.passing_with_new_heldout_false_alarms}"
+        )
+    return 0
+
+
 def _export(args: argparse.Namespace) -> int:
     settings = get_settings()
     out = args.out or settings.data_dir / "exports"
@@ -635,3 +660,7 @@ def _eval_community(args: argparse.Namespace) -> int:
     )
     print(f"wrote {out_dir / 'arm1_community.json'}", file=sys.stderr)
     return 0
+
+
+if __name__ == "__main__":  # also runnable as `python -m detectforge.cli`
+    sys.exit(main())

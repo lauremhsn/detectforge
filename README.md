@@ -170,6 +170,7 @@ pass rate and cost per approved rule per prompt version and model):
 
 ```bash
 uv run detectforge export                                       # writes data/exports/
+uv run detectforge eval gate-thresholds                         # how results depend on the 80% gate
 ```
 
 Single rules:

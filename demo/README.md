@@ -29,6 +29,8 @@ Open **🛡️ Coverage**.
   an attacker would use. "Rules existing doesn't mean we're covered" (Uetz et al.: 129 of 292 widespread
   Sigma rules are evadable with five simple transforms).
 - **By technique**: 🟥/🟧 rows, and the *evaded by* column (insertion, substitution, …).
+- The chart: the **same rule before and after hardening, on held-out variations** the agent never
+  saw (mean 61% → 100% over the hardened rules that have held-out variations; the others are n/a).
 
 ## 2. A new threat comes in (2 min): New request (+ failure case: injected report)
 
