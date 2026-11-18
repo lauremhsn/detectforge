@@ -8,15 +8,59 @@ import streamlit as st
 from pydantic import ValidationError
 
 from detectforge.agent.runner import HardeningOutcome
-from detectforge.review import decisions, list_runs, load_run, record_decision
-from detectforge.ui.components import delta_pct, pct, table
+from detectforge.config import get_settings
+from detectforge.review import (
+    ReviewAuthError,
+    decide,
+    decisions,
+    latest_prompt_versions,
+    list_runs,
+    load_run,
+    parse_reviewer_keys,
+)
+from detectforge.ui.components import delta_pct, export_view, md, pct, table
+from detectforge.ui.navigation import header
 
 
 def review_tab(runs_dir: Path) -> None:
-    st.subheader("4 · Review agent runs (a human approves every change)")
+    header(
+        "review",
+        "Proposals waiting for a decision, with the evidence. Nothing ships until a reviewer approves it.",
+    )
+    # Shown first: after a decision the run may leave the current filter (e.g. "pending review").
+    if message := st.session_state.pop("review_message", None):
+        (st.error if message.startswith("Could not") else st.success)(message)
     runs = list_runs(runs_dir)
     if not runs:
         st.info("No agent runs yet. Ask the agent from the Harden tab, or run `detectforge harden`.")
+        return
+
+    def state(r) -> str:
+        return r.decision.decision if r.decision else "pending review"
+
+    latest = latest_prompt_versions(runs)
+    only_latest = st.toggle(
+        f"Only the current prompts ({', '.join(sorted(latest))})",
+        value=True,
+        key="review_latest",
+        help="Runs made with older prompt versions are kept as history (and in Agent operations) but "
+        "hidden here: they were replaced by runs of the current prompt.",
+    )
+    hidden = sum(r.prompt_version not in latest for r in runs) if only_latest else 0
+    runs = [r for r in runs if not only_latest or r.prompt_version in latest]
+    counts = {s: sum(state(r) == s for r in runs) for s in ("pending review", "approved", "rejected")}
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Waiting for review", counts["pending review"])
+    c2.metric("Approved", counts["approved"])
+    c3.metric("Rejected", counts["rejected"])
+    if hidden:
+        st.caption(f"{hidden} run(s) from older prompt versions hidden.")
+    show = st.radio(
+        "Show", ["pending review", "all", "approved", "rejected"], horizontal=True, key="review_show"
+    )
+    runs = [r for r in runs if show == "all" or state(r) == show]
+    if not runs:
+        st.info(f"No runs {'waiting for review' if show == 'pending review' else show}.")
         return
 
     table(
@@ -24,6 +68,7 @@ def review_tab(runs_dir: Path) -> None:
             {
                 "when": r.created.astimezone().strftime("%b %d %H:%M"),
                 "technique": r.technique,
+                "path": "write" if r.mode == "write" else "harden",
                 "agent result": r.status.replace("_", " "),
                 "tuning (before → after)": f"{pct(r.tuning_before)} → {pct(r.tuning_after)}",
                 "held-out (before → after)": f"{pct(r.heldout_before)} → {pct(r.heldout_after)}",
@@ -45,12 +90,15 @@ def review_tab(runs_dir: Path) -> None:
     st.divider()
     run_detail(outcome)
     st.divider()
+    if outcome.run.final_rule_yaml:
+        export_view(outcome.run.final_rule_yaml, f"proposal-{outcome.run.trace_id[:8]}")
     decision_form(runs_dir, outcome)
 
 
 def run_detail(outcome: HardeningOutcome) -> None:
     run, heldout = outcome.run, outcome.heldout_evaluation
-    st.caption(f"Run `{run.trace_id}` · model `{run.model}` · prompt `{run.prompt_version}`")
+    path = "wrote a new rule" if run.mode == "write" else "hardened a community rule"
+    st.caption(f"Run `{run.trace_id}` · {path} · model `{run.model}` · prompt `{run.prompt_version}`")
     if p := outcome.provenance:
         commit = p.git_commit or "unknown"
         if p.git_dirty:
@@ -62,7 +110,7 @@ def run_detail(outcome: HardeningOutcome) -> None:
     if run.status == "passed":
         st.success("The quality gate accepted the agent's rule. It still needs your decision.")
     else:
-        st.warning("Needs human review: " + "; ".join(run.reasons))
+        st.warning("Needs human review: " + md("; ".join(run.reasons)))
     if heldout and heldout.new_false_alarm_event_ids:
         st.error(
             f"The proposed rule raises {len(heldout.new_false_alarm_event_ids)} new false alarm(s) on "
@@ -71,7 +119,8 @@ def run_detail(outcome: HardeningOutcome) -> None:
             + ". Check these before approving."
         )
     if run.rationale:
-        st.markdown(f"**Agent's explanation:** {run.rationale}")
+        # Model output: shown literally, so an injected link or "approved" banner can't render.
+        st.markdown(f"**Agent's explanation:** {md(run.rationale)}")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(
@@ -102,25 +151,17 @@ def run_detail(outcome: HardeningOutcome) -> None:
         help="On benign look-alikes the agent never saw. Computed after the run.",
     )
 
-    st.markdown("**What changed**")
-    diff = "\n".join(
-        difflib.unified_diff(
-            run.original_rule_yaml.splitlines(),
-            run.final_rule_yaml.splitlines(),
-            "original (community rule)",
-            f"proposed ({run.final_source.replace('_', ' ')})",
-            lineterm="",
+    if run.mode == "write":
+        st.markdown(
+            "**New rule** (no usable community rule: the agent wrote this from scratch, with the "
+            'technique\'s community rules hidden; "before" is having no rule)'
         )
-    )
-    if diff:
-        st.code(diff, language="diff")
+        if run.final_rule_yaml:
+            st.code(run.final_rule_yaml, language="yaml")
+        else:
+            st.info("The agent produced no valid rule. Nothing to approve.")
     else:
-        st.info("No change: the proposal is the original rule.")
-    left, right = st.columns(2)
-    with left.expander("Original rule"):
-        st.code(run.original_rule_yaml, language="yaml")
-    with right.expander("Proposed rule"):
-        st.code(run.final_rule_yaml, language="yaml")
+        _hardening_diff(run)
 
     st.markdown("**Quality gate**")
     table(
@@ -183,6 +224,28 @@ def run_detail(outcome: HardeningOutcome) -> None:
         st.caption("This run was saved before conversations were recorded.")
 
 
+def _hardening_diff(run) -> None:
+    st.markdown("**What changed**")
+    diff = "\n".join(
+        difflib.unified_diff(
+            run.original_rule_yaml.splitlines(),
+            run.final_rule_yaml.splitlines(),
+            "original (community rule)",
+            f"proposed ({run.final_source.replace('_', ' ')})",
+            lineterm="",
+        )
+    )
+    if diff:
+        st.code(diff, language="diff")
+    else:
+        st.info("No change: the proposal is the original rule.")
+    left, right = st.columns(2)
+    with left.expander("Original rule"):
+        st.code(run.original_rule_yaml, language="yaml")
+    with right.expander("Proposed rule"):
+        st.code(run.final_rule_yaml, language="yaml")
+
+
 MAX_SHOWN = 3000
 
 
@@ -241,37 +304,51 @@ def decision_form(runs_dir: Path, outcome: HardeningOutcome) -> None:
     history = decisions(runs_dir, trace_id)
     for d in history:
         st.caption(
-            f"{d.decided_at.astimezone():%b %d %H:%M} — **{d.decision}** by {d.reviewer}"
-            + (f": {d.comment}" if d.comment else "")
+            f"{d.decided_at.astimezone():%b %d %H:%M} — **{d.decision}** by {md(d.reviewer)}"
+            + (f": {md(d.comment)}" if d.comment else "")
         )
     if outcome.run.status != "passed":
         st.caption("The gate did not accept this rule; approving it overrides the gate, so say why.")
 
-    reviewer = st.text_input("Reviewer", key="reviewer")
-    comment = st.text_area("Comment", key=f"comment_{trace_id}", height=80)
-    c1, c2, _ = st.columns([1, 1, 4])
-    c1.button(
-        "Approve",
-        type="primary",
-        key=f"approve_{trace_id}",
-        on_click=_decide,
-        args=(runs_dir, trace_id, "approved", reviewer, comment),
-    )
-    c2.button(
-        "Reject",
-        key=f"reject_{trace_id}",
-        on_click=_decide,
-        args=(runs_dir, trace_id, "rejected", reviewer, comment),
-    )
-    if message := st.session_state.pop("review_message", None):
-        (st.error if message.startswith("Could not") else st.success)(message)
-
-
-def _decide(runs_dir: Path, trace_id: str, decision: str, reviewer: str, comment: str) -> None:
     try:
-        record = record_decision(runs_dir, trace_id, decision, reviewer, comment)
-    except ValidationError:
-        st.session_state["review_message"] = "Could not save: enter your name as reviewer."
+        keys = parse_reviewer_keys(get_settings().reviewer_keys)
+        off = None if keys else "no reviewer keys are set (DETECTFORGE_REVIEWER_KEYS in .env)"
+    except ValueError as e:
+        keys, off = {}, f"the reviewer keys are misconfigured: {e}"
+    if off:
+        st.caption(f"Approving and rejecting are off here: {off}.")
+    reviewer_key = st.text_input(
+        "Reviewer key", key="reviewer_key", type="password", disabled=bool(off),
+        help="Your personal key. The decision is recorded under the name it belongs to.",
+    )  # fmt: skip
+    comment = st.text_area("Comment", key=f"comment_{trace_id}", height=80, disabled=bool(off))
+    c1, c2, _ = st.columns([1, 1, 4])
+    for column, label, decision, kind in [
+        (c1, "Approve", "approved", "primary"),
+        (c2, "Reject", "rejected", "secondary"),
+    ]:
+        column.button(
+            label,
+            type=kind,
+            key=f"{decision}_{trace_id}",
+            disabled=bool(off),
+            on_click=_decide,
+            args=(runs_dir, trace_id, decision, reviewer_key, keys, comment),
+        )
+
+
+def _decide(
+    runs_dir: Path, trace_id: str, decision: str, reviewer_key: str, keys: dict[str, str], comment: str
+) -> None:
+    try:
+        record = decide(runs_dir, trace_id, decision, reviewer_key, keys, comment)
+    except ReviewAuthError as e:
+        st.session_state["review_message"] = f"Could not save: {e}."
         return
+    except ValidationError:
+        st.session_state["review_message"] = "Could not save: the comment is too long."
+        return
+    finally:
+        st.session_state["reviewer_key"] = ""  # never keep a key in the session after use
     where = f" Saved to {runs_dir / 'approved' / (trace_id + '.yml')}." if decision == "approved" else ""
     st.session_state["review_message"] = f"Rule {record.status}.{where}"

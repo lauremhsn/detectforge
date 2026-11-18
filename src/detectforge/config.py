@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     # UI: allow the "Ask the agent" button. Off by default so a public deployment can't spend the
     # model quota; turn it on locally with DETECTFORGE_UI_ALLOW_AGENT_RUNS=true in .env.
     ui_allow_agent_runs: bool = False
+    # Review: who may approve or reject, as "name:key,name:key" (each key 16+ characters). The UI
+    # asks for the key and records the matching name, so typing someone's name isn't enough.
+    # Unset = approving is off.
+    reviewer_keys: SecretStr | None = None
+
+    def model_call_budget(self, mode: str) -> int:
+        """LLM requests allowed for one run: hardening ("harden") or writing ("write")."""
+        return self.write_max_model_calls if mode == "write" else self.max_model_calls
 
     @property
     def runs_dir(self) -> Path:
@@ -28,12 +36,17 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
     model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     fallback_model: str | None = "google/gemma-4-31b-it:free"
+    # Free-model requests the provider allows per day (OpenRouter: 50; 1000 once 10 credits were
+    # ever purchased). Only used to show usage against the limit.
+    daily_request_limit: int = Field(default=50, ge=1)
     llm_timeout_s: float = Field(default=120.0, gt=0)
     llm_max_retries: int = Field(default=3, ge=0)
 
     # Per-rule budgets for the agent loop.
     max_iterations: int = Field(default=5, ge=1, description="run_tuning_set calls per rule")
     max_model_calls: int = Field(default=20, ge=1, description="LLM requests per rule")
+    # Writing a rule from scratch takes more steps than revising one (inspect, draft, test, fix).
+    write_max_model_calls: int = Field(default=15, ge=1, description="LLM requests per written rule")
     max_tokens_per_rule: int = Field(default=400_000, ge=1_000, description="prompt + completion tokens")
     # Reasoning models spend hidden "thinking" tokens from this same allowance; at 4096 a dev run
     # was cut off mid-thought three times and returned empty answers.

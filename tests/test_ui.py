@@ -12,33 +12,61 @@ from streamlit.testing.v1 import AppTest
 from conftest import FIXTURES
 
 APP = str(Path(__file__).resolve().parents[1] / "src" / "detectforge" / "ui" / "app.py")
+REVIEWER_KEY = "test-key-0123456789abcdef"
+
+
+def unescaped(markdown: str) -> str:
+    """Table cells and untrusted text are backslash-escaped; tests read them as displayed."""
+    return re.sub(r"\\(.)", r"\1", markdown)
 
 
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
     """A private data folder (fixtures copied in), so local runs or indexes never affect tests."""
+    from detectforge import review
+
     data = tmp_path / "data"
     shutil.copytree(FIXTURES, data / "fixtures")
     monkeypatch.setenv("DETECTFORGE_DATA_DIR", str(data))
     monkeypatch.setenv("DETECTFORGE_UI_AUTO_FETCH_INDEX", "false")  # never hit the network in tests
     monkeypatch.setenv("DETECTFORGE_UI_ALLOW_AGENT_RUNS", "false")  # never inherit a local .env
+    monkeypatch.setenv("DETECTFORGE_REVIEWER_KEYS", "")  # approving off unless a test sets keys
+    review._failed.clear()
     return data
+
+
+def open_app(page: str = "coverage") -> AppTest:
+    """Start the app on one section (as if picked in the sidebar menu)."""
+    from detectforge.config import get_settings
+
+    get_settings.cache_clear()
+    at = AppTest.from_file(APP, default_timeout=30)
+    at.session_state["page"] = page
+    at.run()
+    return at
 
 
 @pytest.fixture
 def app(data_dir):
     from detectforge.config import get_settings
 
-    get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
-    yield at
+    yield open_app()
     get_settings.cache_clear()
 
 
-def test_renders_without_errors(app):
-    assert not app.exception
-    assert [t.label for t in app.tabs] == ["1 · Find", "2 · Validate", "3 · Harden", "4 · Review"]
+SECTIONS = ["coverage", "request", "rules", "review", "operations"]
+
+
+@pytest.mark.parametrize("page", SECTIONS)
+def test_every_section_renders_and_says_what_it_is_for(data_dir, page):
+    at = open_app(page)
+    assert not at.exception
+    menu = at.sidebar.radio(key="page")
+    assert [o.split(" ", 1)[1].split("  (")[0] for o in menu.options] == [
+        "Coverage", "New request", "Rules", "Review queue", "Agent operations",
+    ]  # fmt: skip
+    assert menu.value == page
+    assert at.title and at.caption  # each section opens with its name and purpose
 
 
 def test_pipeline_status_shows_done_or_pending_only(app):
@@ -48,17 +76,20 @@ def test_pipeline_status_shows_done_or_pending_only(app):
     assert not re.search(r"\bW\d\b|\bweek\b", page_text, re.IGNORECASE)
 
 
-def test_fixture_rule_flows_to_validate_and_harden(app):
+def test_fixture_rule_flows_to_test_and_harden(data_dir):
+    app = open_app("rules")
     fixture = next(s for s in app.selectbox if s.label == "Fixture rule")
     fixture.set_value(FIXTURES / "rules" / "schtasks_create_literal.yml").run()
     next(b for b in app.button if b.label == "Use fixture").click().run()
-    app.sidebar.selectbox[0].set_value("T1053.005").run()
+    assert app.radio(key="rules_step").value == "test"  # picking a rule moves on to testing it
+    app.sidebar.selectbox(key="technique_filter").set_value("T1053.005").run()
     assert not app.exception
 
     metrics = [(m.label, m.value) for m in app.metric]
     assert ("Attacks detected", "2/5") in metrics  # validate tab
     assert ("Evasion resistance (mutations)", "25%") in metrics
 
+    next(b for b in app.button if b.label == "Harden it →").click().run()
     robust = (FIXTURES / "rules" / "schtasks_create_robust.yml").read_text(encoding="utf-8")
     app.text_area(key="after_editor").set_value(robust).run()
     assert ("Evasion resistance", "100%") in [(m.label, m.value) for m in app.metric]
@@ -94,20 +125,21 @@ def _saved_run(runs_dir, load_rule_text, fixture_events):
     return run_hardening(original, "T1053.005", fixture_events, client, "fake", out_dir=runs_dir)
 
 
-def test_review_tab_without_runs_explains_how_to_get_one(app):
-    assert any("No agent runs yet" in i.value for i in app.info)
+def test_review_queue_without_runs_explains_how_to_get_one(data_dir):
+    assert any("No agent runs yet" in i.value for i in open_app("review").info)
 
 
-def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixture_events):
+def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixture_events, monkeypatch):
     from detectforge.config import get_settings
+    from detectforge.review import decisions
 
+    monkeypatch.setenv("DETECTFORGE_REVIEWER_KEYS", f"analyst:{REVIEWER_KEY}")
     outcome = _saved_run(data_dir / "runs", load_rule_text, fixture_events)
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
 
-    page = " ".join(m.value for m in at.markdown)
+    page = unescaped(" ".join(m.value for m in at.markdown))
     assert "pending review" in page and "33% → 100%" in page  # tuning before → after
     assert any(c.language == "diff" and "+    CommandLine|contains: 'create'" in c.value for c in at.code)
     metrics = {m.label: m.value for m in at.metric}
@@ -115,13 +147,16 @@ def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixtu
 
     approve = next(b for b in at.button if b.label == "Approve")
     approve.click().run()
-    assert any("enter your name" in e.value for e in at.error)  # reviewer is required
+    assert any("wrong reviewer key" in e.value for e in at.error)  # a key is required
 
-    at.text_input(key="reviewer").set_value("analyst").run()
+    at.text_input(key="reviewer_key").set_value(REVIEWER_KEY).run()
     next(b for b in at.button if b.label == "Approve").click().run()
     assert any("Rule approved" in s.value for s in at.success)
     approved = data_dir / "runs" / "approved" / f"{outcome.run.trace_id}.yml"
     assert approved.read_text(encoding="utf-8") == outcome.run.final_rule_yaml
+    # Recorded under the key's owner, and the key is not kept in the session after use.
+    assert decisions(data_dir / "runs", outcome.run.trace_id)[-1].reviewer == "analyst"
+    assert at.session_state["reviewer_key"] == ""
 
 
 def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, fixture_events):
@@ -138,17 +173,62 @@ def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, 
     path.write_text(json.dumps(saved), encoding="utf-8")
 
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
     assert any("1 new false alarm(s)" in e.value and "benign-reg-query" in e.value for e in at.error)
     assert "False alarms (held-out)" in {m.label for m in at.metric}
 
 
-def test_agent_button_is_off_by_default(app):
+def test_injected_model_text_shows_literally_and_approving_is_off_without_keys(data_dir, fixture_events):
+    """Security: a rationale with links, images or a fake 'approved' banner renders as plain text."""
+    from test_agent_loop import ScriptedClient, tool_call
+    from test_write_rule import WRITTEN
+
+    from detectforge.agent.runner import run_writing
+    from detectforge.config import get_settings
+
+    hostile = (
+        "**✅ APPROVED by the lead** [Approve now](https://evil.example/a) ![](https://evil.example/p.png)"
+    )
+    client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale=hostile)])
+    run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
+    get_settings.cache_clear()
+    at = open_app("review")
+    assert not at.exception
+
+    shown = [m.value for m in at.markdown if "evil" in m.value]
+    assert shown and all("](https" not in v and "**✅" not in v for v in shown)
+    assert any(hostile in unescaped(v) for v in shown)  # still readable, word for word
+    assert all(b.disabled for b in at.button if b.label in ("Approve", "Reject"))
+    assert any("Approving and rejecting are off here" in c.value for c in at.caption)
+
+
+def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_events):
+    from test_agent_loop import ScriptedClient, tool_call
+    from test_write_rule import WRITTEN
+
+    from detectforge.agent.runner import run_writing
+    from detectforge.config import get_settings
+
+    client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale="behavior")])
+    run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
+    get_settings.cache_clear()
+    at = open_app("review")
+    assert not at.exception
+
+    page = " ".join(m.value for m in at.markdown)
+    assert "**New rule**" in page and "What changed" not in page
+    assert any(c.language == "yaml" and c.value.strip() == WRITTEN.strip() for c in at.code)
+    assert any("wrote a new rule" in c.value for c in at.caption)
+    assert {m.label: m.value for m in at.metric}["Held-out evasion resistance"] == "100%"
+
+
+def test_agent_button_is_off_by_default(data_dir):
+    app = open_app("rules")
     fixture = next(s for s in app.selectbox if s.label == "Fixture rule")
     fixture.set_value(fixture.options[0]).run()
     next(b for b in app.button if b.label == "Use fixture").click().run()
+    app.radio(key="rules_step").set_value("harden").run()
     button = next(b for b in app.button if b.label == "Ask the agent to harden this rule")
     assert button.disabled
     assert any("switched off" in c.value for c in app.caption)
@@ -159,8 +239,7 @@ def test_review_shows_the_agents_conversation(data_dir, load_rule_text, fixture_
 
     _saved_run(data_dir / "runs", load_rule_text, fixture_events)
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     toggle = next(t for t in at.toggle if t.label == "Show the agent's conversation")
     toggle.set_value(True).run()
     page = " ".join(m.value for m in at.markdown)
@@ -180,7 +259,6 @@ def test_old_runs_without_a_conversation_still_open(data_dir, load_rule_text, fi
     del saved["run"]["transcript"]
     path.write_text(_json.dumps(saved), encoding="utf-8")
     get_settings.cache_clear()
-    at = AppTest.from_file(APP, default_timeout=30)
-    at.run()
+    at = open_app("review")
     assert not at.exception
     assert any("saved before conversations were recorded" in c.value for c in at.caption)

@@ -44,6 +44,58 @@ def test_invalid_rule_stops_at_validation(tuning):
     assert not result.passed and [c.name for c in result.checks] == ["valid"]
 
 
+def test_zero_benign_events_is_flagged_not_reported_as_clean(tuning, load_rule_text):
+    """Regression: with no tuning benign events, an over-broad rule passed with "0 new false alarms"."""
+    original = load_rule_text("schtasks_create_literal.yml")
+    robust = load_rule_text("schtasks_create_robust.yml")
+    with_benign = check(robust, tuning, original_yaml=original)
+    assert "false_alarms_tested" in names(with_benign, True)
+
+    attacks_only = [e for e in tuning if e.label == "attack"]
+    result = check(robust, attacks_only, original_yaml=original)
+    tested = next(c for c in result.checks if c.name == "false_alarms_tested")
+    assert not tested.passed and not tested.blocking and "prove nothing" in tested.detail
+    assert result.passed  # a warning for the reviewer, never a reason to fail
+
+
 def test_threshold_is_configurable(tuning, load_rule_text):
     lenient = GateConfig(min_evasion_resistance=0.3, max_false_alarms=1)
     assert check(load_rule_text("schtasks_create_literal.yml"), tuning, config=lenient).passed
+
+
+def test_hardening_must_not_change_who_wrote_the_rule_or_what_it_cites(tuning, load_rule_text):
+    """Regression: a real v7 run 'corrected' a reference link to a URL that doesn't exist."""
+    original = load_rule_text("schtasks_create_literal.yml").replace(
+        "tags:", "references:\n  - https://learn.microsoft.com/schtasks\ntags:", 1
+    )
+    robust = load_rule_text("schtasks_create_robust.yml").replace(
+        "tags:", "references:\n  - https://learn.microsoft.com/schtasks\ntags:", 1
+    )
+    assert check(robust, tuning, original_yaml=original).passed
+
+    edited = robust.replace("learn.microsoft.com", "www.microsoft.com").replace(
+        "author: DetectForge fixtures", "author: Detection Engineer"
+    )
+    result = check(edited, tuning, original_yaml=original)
+    failed = {c.name: c for c in result.checks if not c.passed}
+    assert not result.passed and failed["keeps_original_metadata"].blocking
+    assert "author, references" in failed["keeps_original_metadata"].detail
+    # Writing a new rule has no original, so there is nothing to keep.
+    assert "keeps_original_metadata" not in {c.name for c in check(edited, tuning).checks}
+
+
+def test_a_new_case_sensitive_regex_is_blocked(tuning, load_rule_text):
+    """Regression: a written rule used [/-]tn\b and missed every /TN (Sigma |re is case-sensitive)."""
+    robust = load_rule_text("schtasks_create_robust.yml")
+    added = "  selection_tn:\n    CommandLine|re: 'PATTERN'\n  condition:"
+    sensitive = robust.replace("  condition:", added.replace("PATTERN", r"[/-]tn\b"), 1)
+    failed = {c.name: c for c in check(sensitive, tuning).checks if not c.passed}
+    assert "case_insensitive_regexes" in failed and failed["case_insensitive_regexes"].blocking
+    assert "(?i)" in failed["case_insensitive_regexes"].detail
+
+    for fixed in (r"(?i)[/-]tn\b", r"(?im)[/-]tn\b"):
+        ok = robust.replace("  condition:", added.replace("PATTERN", fixed), 1)
+        assert "case_insensitive_regexes" not in {c.name for c in check(ok, tuning).checks if not c.passed}
+    # A regex the original rule already had is not the agent's doing, so hardening isn't blocked by it.
+    names = {c.name for c in check(sensitive, tuning, original_yaml=sensitive).checks if not c.passed}
+    assert "case_insensitive_regexes" not in names

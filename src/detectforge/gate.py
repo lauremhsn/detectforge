@@ -4,6 +4,7 @@ The agent can only propose; this gate decides whether a proposal is good enough 
 reviewer as "passed", or goes to review as "needs human review" with the failed checks listed.
 """
 
+import yaml
 from pydantic import BaseModel, Field
 
 from detectforge.harness.compare import compare, evasion_resistance
@@ -11,6 +12,7 @@ from detectforge.harness.matcher import required_fields
 from detectforge.harness.run import run
 from detectforge.rules.convert import convert_rule
 from detectforge.rules.lint import (
+    case_sensitive_regexes,
     copied_literals,
     dropped_fields,
     dropped_filters,
@@ -93,6 +95,21 @@ def check(
             ),
         )
     )
+    benign = sum(1 for e in events if e.label == "benign")
+    checks.append(  # "0 false alarms" on 0 benign events is untested, not clean
+        GateCheck(
+            name="false_alarms_tested",
+            passed=benign > 0,
+            blocking=False,
+            detail=(
+                f"false alarms checked on {benign} benign events"
+                if benign
+                else "warning: no benign events to test against, so the false-alarm checks below prove "
+                "nothing; a rule that fires on harmless commands would still pass. Check the held-out "
+                "false alarms before approving."
+            ),
+        )
+    )
 
     if original_yaml is None:
         checks.append(
@@ -131,6 +148,7 @@ def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | No
     attacks = [e.command_line for e in events if e.label == "attack"]
     copied = copied_literals(rule_yaml, attacks, original_yaml)
     short = short_bare_values(rule_yaml, original_yaml)
+    case = case_sensitive_regexes(rule_yaml, original_yaml)
     return [
         GateCheck(
             name="no_unusual_characters",
@@ -150,6 +168,16 @@ def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | No
                 "warning, check these are general and not test-specific: " + "; ".join(copied)
                 if copied
                 else "none"
+            ),
+        ),
+        GateCheck(
+            name="case_insensitive_regexes",
+            passed=not case,
+            detail=(
+                "case-sensitive regex on case-insensitive Windows fields (misses e.g. /TN for /tn); "
+                "start it with (?i): " + ", ".join(repr(v) for v in case)
+                if case
+                else "all new regexes ignore case"
             ),
         ),
         GateCheck(
@@ -197,6 +225,7 @@ def _keeps_original_scope(original_yaml: str, rule_yaml: str) -> list[GateCheck]
             passed=not filters,
             detail=f"dropped exclusions: {'; '.join(filters)}" if filters else "all original exclusions kept",
         ),
+        _keeps_metadata(original_yaml, rule_yaml),
         GateCheck(
             name="no_new_required_fields",
             passed=not newly_required,
@@ -209,3 +238,26 @@ def _keeps_original_scope(original_yaml: str, rule_yaml: str) -> list[GateCheck]
             ),
         ),
     ]
+
+
+METADATA_KEYS = ("id", "author", "date", "references")
+
+
+def _keeps_metadata(original_yaml: str, rule_yaml: str) -> GateCheck:
+    """Hardening changes detection logic, never who wrote the rule or what it cites.
+
+    Found on a real run: the agent "corrected" a reference link to a URL that doesn't exist. A reviewer
+    approving the detection logic could ship that unnoticed, so it blocks until restored.
+    """
+    original, candidate = yaml.safe_load(original_yaml) or {}, yaml.safe_load(rule_yaml) or {}
+    changed = [k for k in METADATA_KEYS if original.get(k) != candidate.get(k)]
+    return GateCheck(
+        name="keeps_original_metadata",
+        passed=not changed,
+        detail=(
+            f"changed {', '.join(changed)}: restore the original values "
+            "(only the detection logic should change)"
+            if changed
+            else "id, author, date and references unchanged"
+        ),
+    )

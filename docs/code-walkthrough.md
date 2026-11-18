@@ -20,7 +20,7 @@ reachable three ways: Python functions, a command line (`detectforge ...`), and 
  (technique)  SigmaHQ      harness run()        (manual in UI;  compare()       review UI   FP tuning
               search       → Scorecard          agent = W4)     → before/after  (W5)        module
                                                                                       ▲
-                     no usable rule ──► WRITE NEW RULE (fallback, W6) ────────────────┘
+                     no usable rule ──► WRITE NEW RULE (fallback, §7c) ───────────────┘
 ```
 
 ---
@@ -51,13 +51,18 @@ src/detectforge/
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
-  agent/loop.py       The hardening loop; agent/runner.py splits data and saves each run
-  agent/batch.py      Harden every rule of a selection (e.g. the dev rules), skipping unimprovable ones
+  agent/loop.py       The agent loop: harden a rule, or write a new one (fallback)
+  agent/runner.py     Chooses the path (harden or write), splits the data, saves each run
+  agent/batch.py      Run every rule of a selection (e.g. the dev rules): harden it, or write one instead
   tracing.py          Langfuse tracing of every model and tool call (no-op when not configured)
   cli.py              The `detectforge` command line
 data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
-tests/                268 automated tests (run on every push by GitHub Actions)
+docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
+docs/threat-model.md  What we protect, from whom, and the test behind each defence
+docs/architecture.md  Components, one agent run, the evaluation boundary, deployment, design decisions
+Dockerfile, docker-compose.yml  The UI and the CLI in one image (`docker compose up`)
+tests/                333 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -292,23 +297,38 @@ Opens at http://localhost:8501 (bound to your machine only, telemetry off). It c
 for free on Streamlit Community Cloud (see the README): there it builds the SigmaHQ index itself on
 first launch, and `src/detectforge/ui/requirements.txt` lists its dependencies.
 
-| Area | What it shows |
-|---|---|
-| Sidebar | Which events file; filter by technique and split; pipeline status (✅ built, ⏳ pending). Picking a rule auto-scopes the events to its technique. |
-| 1 · Find | Search SigmaHQ by technique + keywords; table of candidates with "fields missing from events"; rule details (marked untrusted); or pick a fixture rule. "No usable rule" message = where the write-new-rule fallback will start. |
-| 2 · Validate | The "before": validation errors/warnings, then the scorecard: detected, evasion resistance, false alarms, per-mutation table, and every event with DETECTED / MISSED / FALSE ALARM. |
-| 3 · Harden | Before on the left, an editable "after" on the right. Every edit re-runs `compare`: evasion resistance with delta, per-mutation before/after, and lists of newly caught / LOST attacks and false-alarm changes. **"Ask the agent"** runs the hardening loop on the selected technique and puts its proposal in the editor. |
-| 4 · Review | Every agent run (newest first): result, tuning and held-out before → after, decision. Open one to see the agent's explanation, the three score cards, a coloured diff of what changed, both full rules, the gate checks, held-out results per mutation type, and every model/tool call, plus the full conversation step by step. **Approve / Reject** with your name and a comment. |
+The UI is organised around what people come to do, not around pipeline steps (`ui/navigation.py`).
+Each section opens with its name and one line on what it's for; buttons jump between sections
+(e.g. a verdict's "Harden it →" opens that rule on the Harden step).
+
+| Section | File | What it shows |
+|---|---|---|
+| Sidebar | `app.py`, `navigation.py` | The section menu (with the number of proposals waiting for review); **Test data**: evaluation set, fixtures or a custom file, filtered by technique and split; "About" with the pipeline status (✅ built, ⏳ pending). |
+| Coverage (home) | `coverage_page.py` | "What do you want to do?" guide; headline numbers; by technique (tactic, weakest rule as published, what evades it, best hardened held-out score); every evaluated rule with its Arm 1 score, its latest hardening and writing runs and the review decision; open any rule; download a Markdown coverage report. Reads committed results and saved runs only. |
+| New request | `request_page.py`, `intake_panel.py` | Request or pasted report → techniques. Per technique, a verdict computed by the harness: every usable community rule tagged with that technique is replayed; the strongest single rule is named (most attacks detected, then fewest false alarms), plus what all of them catch together. Actions: see the evidence, harden it, or have the agent write a rule when none is usable. |
+| Rules | `rules_page.py` | ① Pick (SigmaHQ search or a sample rule) → ② Test (scorecard per evasion type, every event, "only missed attacks and false alarms") → ③ Harden (editable candidate re-scored on every edit, or **Ask the agent**). Export as Sigma YAML or an Elastic query. |
+| Review queue | `review_tab.py` | Waiting / approved / rejected counts and filter; per run: explanation, score cards, diff (or the whole new rule), gate checks, held-out per mutation type, every model/tool call, the full conversation; export; **Approve / Reject** with your reviewer key. |
+| Agent operations | `operations_page.py` | Runs, pass rate, model calls, tokens, today's calls against the free limit; per prompt version; failed calls, fallbacks, answers cut off, why runs needed review; tool calls the agent got wrong. |
 
 It is a **thin layer over the library** (no logic of its own) and shows held-out events to the human
 only; the agent itself still receives just the tuning split.
 
 **Review (`review.py`).** A decision is appended to `data/runs/<trace_id>.review.json`, so the full
 history is kept (a later rejection doesn't erase an earlier approval, it's added after it). An approved
-rule is copied to `data/runs/approved/`, ready to deploy; a later rejection removes that copy. A
-reviewer name is required, and only well-formed trace ids become file names, so a crafted id can't
-read or write elsewhere. Approving a rule the gate didn't accept is allowed (a human overrides the
-gate) but the UI asks for a reason.
+rule is copied to `data/runs/approved/`, ready to deploy; a later rejection removes that copy. Only
+well-formed trace ids become file names, so a crafted id can't read or write elsewhere. Approving a
+rule the gate didn't accept is allowed (a human overrides the gate) but the UI asks for a reason.
+
+**Who may approve (`review.decide`).** A typed name proves nothing, so approving needs a personal
+**reviewer key**, set in `.env` as `DETECTFORGE_REVIEWER_KEYS=name:key,name:key` (16+ characters
+each). The decision is recorded under the name the key belongs to. With no keys set, the buttons are
+switched off (this is how the public deployment stays read-only). Keys are compared in constant
+time, 5 wrong keys within a minute lock decisions for a minute, and the key is cleared from the page
+after each use. Model and SigmaHQ text in the UI is escaped (`ui/components.md`), so an injected
+"Approve now" link or a bold "APPROVED" banner shows as plain text. All of this is in
+[threat-model.md](threat-model.md). The same check runs from the command line:
+`detectforge review approve|reject <trace-id prefix> -m "why"` asks for the key (or reads
+`DETECTFORGE_REVIEWER_KEY`); the key is never a command-line argument, which would land in shell history.
 
 **"Ask the agent" is off by default.** The deployed app is public; if the button worked there,
 anyone could spend the free model quota. It only works when `DETECTFORGE_UI_ALLOW_AGENT_RUNS=true`
@@ -366,6 +386,12 @@ call is recorded (tool, ok, latency, error), which is what tracing will build on
   lack (e.g. `Hashes`), or a filter for a false positive our benign events don't contain. Exclusions
   are compared by field + value (ignoring case and the filter's name), so renaming is fine; removing
   is not;
+- **regexes ignore case** (`case_insensitive_regexes`): a new `|re` pattern with letters must start
+  with `(?i)`. Sigma regexes are case-sensitive while Windows command lines aren't, so `[/-]tn\b`
+  misses `/TN`; found on a real written rule;
+- hardening: **metadata unchanged** (`keeps_original_metadata`): id, author, date and references stay
+  as in the original. Only the detection logic should change; a real run "corrected" a reference link
+  to a URL that doesn't exist, which a reviewer focused on detection could easily miss;
 - **not overfitted** (`rules/lint.py`): the rule may not add **unusual characters** (invisible or
   look-alike Unicode, written literally or as `\u`/`\x` escapes) that the original didn't have. Found on
   the first real dev run: the agent "hardened" a Run-keys rule by listing the exact zero-width spaces,
@@ -399,11 +425,17 @@ held-out evaluation does count them, and any **new** held-out false alarm is sho
 in the Review tab (plus a "False alarms (held-out)" metric) and named in the `harden-selection`
 summary. Found on the new-split dev run: the hardened Run-keys rule passed the gate but raised 2 new
 false alarms on held-out look-alikes (reading a Run key with `reg query`). This is a warning for
-the human, not a gate check, because the agent must never be scored on held-out data.
+the human, not a gate check, because the agent must never be scored on held-out data. The gate also
+adds a warning, `false_alarms_tested`, whenever it has no benign events to test against: "0 new false
+alarms" on 0 benign events is untested, not clean.
 
-**Best attempt.** When no submission is accepted, the run returns the best revision seen on the tuning
-set, but only if it scores strictly better than the original; otherwise the original rule itself (so a
-re-sent copy with its comments stripped never masquerades as an improvement).
+**Best attempt.** When no submission is accepted, the run returns the best version the agent tested or
+submitted (scored on the tuning set, losing no attack the original caught), but only if it scores
+strictly better than the original; otherwise the original rule itself (so a re-sent copy with its
+comments stripped never masquerades as an improvement). When writing a new rule there is no original:
+if the agent never proposed a rule that could be evaluated, the run proposes nothing (`final_source:
+none`). Submitted rules count too: a rehearsal reported "no valid rule" when the agent had submitted
+valid rules that the gate rejected.
 
 Failing the gate is not a dead end: the rule still goes to a human as "needs human review" with the
 failed checks listed. Example on the fixtures: the literal schtasks rule fails (33% resistance on
@@ -492,10 +524,35 @@ rule. Two design points:
   gate code or data, and the key changes: older runs are never mixed into new results.
 - **The quota is planned, not discovered.** `--dry-run` shows which rules would run and the worst-case
   number of calls without contacting the model. `--max-calls N` caps the whole batch: a run starts only
-  if its full budget still fits on top of the calls the finished runs actually spent. `--rule-id` runs only some rules. `detectforge llm quota` shows the calls
+  if its full budget still fits on top of the calls the finished runs actually spent. `--rule-id` runs
+  only some rules. `detectforge llm quota` shows the calls
   saved in today's runs (UTC, when OpenRouter's free limit resets) and the key's tier, without spending a
   call. Example: with the budget at 10 calls per rule, the 4 improvable dev rules need at most 40 of the
   50 free daily calls; at the default 20 they could need 80.
+
+**Writing a new rule: the fallback** (`write_rule` in `agent/loop.py`, `cover` in `agent/runner.py`).
+Hardening comes first; writing is only for a technique with no usable community rule.
+- **Code decides the path, never the model.** `find_usable_rule` takes the best-ranked rule tagged with
+  exactly this technique that is *usable* (evaluable and able to fire on our fields). Rules of a parent
+  or sibling technique (T1053 for T1053.005) don't count: they target another behavior. None found →
+  write. `detectforge cover --technique T…` runs this choice and prints which path it took and why.
+- **Same loop, same tools, same gate, same budgets.** Only the instructions differ (`write-v1`, versioned
+  apart from the hardening prompt). Both prompts share one block of Sigma lessons from real runs
+  (quoting, escapes, one key per selection, no `|cased`, no copied characters), so a lesson added once
+  reaches both. The hardening prompt's text is byte-for-byte unchanged by this split.
+- **The agent can't copy a community rule.** Search hides every rule of the technique's family and
+  untagged rules (`exclude_technique`), so what it writes is its own. This is also exactly the condition
+  of the "agent-written" evaluation arm, so the arm measures the real fallback, not a variant of it.
+- **The gate is stricter**: with no original to compare with, it requires *no* false alarms (not "no
+  new ones") and flags every unusual character or short value, not only new ones.
+- **"Before" is having no rule**: 0% evasion resistance, no false alarms (`harness.run.no_rule`), so the
+  before/after, the held-out evaluation and the Review tab work the same way. The Review tab shows the
+  new rule whole ("New rule", path "write") instead of a diff.
+- **The agent-written arm**: `detectforge harden-selection --split dev --write` writes one rule per
+  selected rule, on that rule's own attacks, with the same quota protections (reuse, `--max-calls`,
+  `--dry-run`). Nothing is skipped as "already detects every mutation", so it costs more: on the dev
+  rules, 8 runs and up to 80 model calls, more than one day of the free tier (spread it over days with
+  `--max-calls 40`; finished runs are reused).
 
 ---
 
@@ -528,9 +585,14 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 268 tests
+uv run pytest                             # 333 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
+uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
+uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
 uv run detectforge harden-selection --split dev   # every improvable dev rule, saved for review
+uv run detectforge harden-selection --split dev --write   # agent-written arm
+uv run detectforge review list --pending          # runs waiting for a decision (current prompts)
+uv run detectforge review approve 8e3abcbe -m "why"   # or reject; asks for your reviewer key
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl
@@ -547,6 +609,11 @@ no data leaks in errors), `test_compare` (before/after numbers, regressions repo
 alarms"), `test_ui` (UI renders, its numbers match the library, review approve flow, agent button off by default), `test_review` (decisions, history, approved copies, safe file names), `test_batch` (per-rule scoping, quota-saving skips, early stop), `test_agent_tools` (contracts,
 held-out isolation, budgets, malformed calls), `test_gate` (pass/fail reasons), `test_lint` (dropped fields/exclusions, deployability, memorised characters, copied strings), `test_agent_loop`
 (a scripted fake model drives every stop reason, held-out isolation end to end, client fallback),
+`test_eval_gate` (recomputed Arm 1 must match the committed results; changes are named rule by rule), `test_demo` (the demo's vague report, injected report, API failure and evasion caught), `test_ui_product` (coverage verdicts from the harness, strongest rule not first hit, guided jumps between sections, coverage report, agent operations),
+`test_contracts` (frozen snapshot of the shared formats and function signatures, interfaces.md matches the code, committed data is one consistent dataset, saved results still load, CLI JSON and exit codes; refresh after an agreed change with `UPDATE_CONTRACTS=1 uv run pytest tests/test_contracts.py`),
+`test_security` (an obedient model following injected rules and events, YAML tags, escaped display, five tools with no network or file writes, reviewer keys and lockout, API key never saved or printed, no secret tracked by git),
+`test_write_rule` (path chosen by code, writing loop, same-technique rules hidden, no-rule baseline,
+agent-written arm batch),
 `test_tracing` (trace shape, failures marked, no held-out data traced, the real Langfuse SDK exporting
 to memory, a broken backend never breaking a run), `test_config`.
 
@@ -568,8 +635,9 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
    machine a borderline regex could time out where it wouldn't on ours; 1 s is far above any normal
    rule's cost (microseconds).
 5. **Keyword search is simple** word overlap, not semantic search. Fine for technique-driven search.
-6. **"Usable rule" is defined but not yet wired to a fallback**: usable = evaluable and can fire. The
-   UI shows "No usable rule found" when no result is usable; the write-new-rule path itself is W6.
+6. **Writing a new rule is only checked with a scripted model so far.** The path, the gate and the
+   agent-written arm work end to end on the real data with a fake model; real-model runs are pending
+   (quota). Its prompt (`write-v1`) must be frozen before the agent-written arm is run on the test rules.
 
 ---
 
@@ -581,8 +649,8 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
 | 2 | `original_file_name`, `parent_command_line` added as optional event fields | Done in code | Confirm the attack data captures them |
 | 3 | Add `derived_from` (SigmaHQ id) to RuleRecord | Yes — links each "after" to its "before" | Both |
 | 4 | Evasion resistance = mutated attacks only | Yes | Metrics module must match |
-| 5 | What counts as a "usable" existing rule | Implemented: evaluable + can fire. Open: count parent/child technique matches too? | Us |
-| 6 | Who decides harden vs write-new | Deterministic code, not the LLM | Us |
+| 5 | What counts as a "usable" existing rule | Implemented: evaluable + can fire, tagged with exactly this technique (parent/sibling techniques don't count) | Done |
+| 6 | Who decides harden vs write-new | Implemented: deterministic code (`find_usable_rule`), never the model | Done |
 | 7 | Which LLM / provider and budget per rule | Decided: OpenRouter free models first, local fallback | Done |
 
 ## 11. What's next (W4, Nov 10–16)

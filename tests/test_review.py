@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from test_agent_loop import ScriptedClient, tool_call
 
 from detectforge.agent.runner import run_hardening
-from detectforge.review import decisions, list_runs, load_run, record_decision
+from detectforge.review import decisions, list_runs, load_run, record_decision, resolve_trace_id
 
 TECHNIQUE = "T1053.005"
 
@@ -87,3 +87,47 @@ def test_unreadable_files_are_skipped_not_fatal(runs_dir, make_run):
 
 def test_no_runs_directory_means_no_runs(tmp_path):
     assert list_runs(tmp_path / "missing") == []
+
+
+def test_a_trace_id_prefix_resolves_to_the_one_run(runs_dir, make_run):
+    trace_id = make_run().run.trace_id
+    assert resolve_trace_id(runs_dir, trace_id[:8].upper()) == trace_id
+    for bad in ("abc", "../../x", "zzzzzzzz"):  # too short, not hex, no match
+        with pytest.raises(ValueError):
+            resolve_trace_id(runs_dir, bad)
+
+
+@pytest.fixture
+def cli_env(runs_dir, monkeypatch):
+    from detectforge import review
+    from detectforge.config import get_settings
+
+    monkeypatch.setenv("DETECTFORGE_DATA_DIR", str(runs_dir.parent))
+    monkeypatch.setenv("DETECTFORGE_REVIEWER_KEYS", "analyst:correct-horse-battery")
+    monkeypatch.delenv("DETECTFORGE_REVIEWER_KEY", raising=False)
+    get_settings.cache_clear()
+    review._failed.clear()
+    yield monkeypatch
+    get_settings.cache_clear()
+    review._failed.clear()
+
+
+def test_review_from_the_command_line(runs_dir, make_run, cli_env, capsys):
+    from detectforge.cli import main
+
+    trace_id = make_run().run.trace_id
+    assert main(["review", "list", "--pending"]) == 0
+    assert trace_id[:8] in capsys.readouterr().out
+
+    cli_env.setenv("DETECTFORGE_REVIEWER_KEY", "wrong-key-wrong-key")
+    assert main(["review", "approve", trace_id[:8]]) == 1
+    assert decisions(runs_dir, trace_id) == []  # a wrong key records nothing
+
+    cli_env.setenv("DETECTFORGE_REVIEWER_KEY", "correct-horse-battery")
+    assert main(["review", "approve", trace_id[:8], "-m", "looks good"]) == 0
+    (decision,) = decisions(runs_dir, trace_id)
+    assert (decision.decision, decision.reviewer, decision.comment) == ("approved", "analyst", "looks good")
+    assert (runs_dir / "approved" / f"{trace_id}.yml").exists()
+    capsys.readouterr()
+    assert main(["review", "list", "--pending"]) == 0
+    assert trace_id[:8] not in capsys.readouterr().out

@@ -142,6 +142,29 @@ def short_bare_values(candidate_yaml: str, original_yaml: str | None = None) -> 
     return sorted(short)
 
 
+_INLINE_IGNORECASE = re.compile(r"^\(\?[a-zA-Z]*i[a-zA-Z]*\)")
+_REGEX_ESCAPE = re.compile(r"\\[A-Za-z]")  # escapes such as \s, \d, \b are not letters to match
+
+
+def case_sensitive_regexes(candidate_yaml: str, original_yaml: str | None = None) -> list[str]:
+    """New |re patterns with letters but no case-insensitive flag ((?i) or |re|i).
+
+    Sigma regexes are case-sensitive, Windows command lines and paths are not: '[/-]tn\\b' misses
+    '/TN'. Found on a real written rule that missed every capitalised option.
+    """
+    known = {v for _, v in _detection_values(original_yaml)} if original_yaml else set()
+    found = set()
+    for key, value in _detection_values(candidate_yaml):
+        modifiers = key.split("|")[1:]
+        if "re" not in modifiers or "i" in modifiers or value in known:
+            continue
+        if _INLINE_IGNORECASE.match(value.lstrip()):
+            continue
+        if re.search(r"[A-Za-z]", _REGEX_ESCAPE.sub("", value)):
+            found.add(value)
+    return sorted(found)
+
+
 def _characters(rule_yaml: str) -> set[str]:
     found = set()
     for _, value in _detection_values(rule_yaml):

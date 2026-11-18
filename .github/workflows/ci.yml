@@ -25,3 +25,38 @@ jobs:
           uv run ruff format --check .
       - name: Test
         run: uv run pytest
+
+  # Evaluation regression gate: Arm 1 (community rules as-is) needs no model, so it is
+  # deterministic. Recompute it and fail if any number differs from the committed results.
+  eval-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Cache the SigmaHQ index (pinned release)
+        uses: actions/cache@v4
+        with:
+          path: data/sigmahq
+          key: sigmahq-${{ hashFiles('src/detectforge/reference/sigmahq.py', 'src/detectforge/reference/index.py') }}
+      - name: Fetch SigmaHQ (checksum-verified)
+        run: test -f data/sigmahq/index.jsonl || uv run detectforge sigmahq fetch
+      - name: Arm 1 matches the committed results
+        run: uv run detectforge eval community --check
+      - name: Demo scenarios that need the SigmaHQ index
+        run: uv run pytest tests/test_demo.py
+
+  # The image builds, and the CLI inside it runs.
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker compose build
+      - name: CLI runs in the container
+        run: docker compose run --rm cli --help

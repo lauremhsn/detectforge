@@ -1,0 +1,40 @@
+# DetectForge with Docker Compose
+#
+#   docker compose up --build        UI at http://localhost:8501 (this machine only)
+#   docker compose run --rm cli llm quota
+#   docker compose run --rm cli harden-selection --split dev --dry-run
+#
+# Settings and keys come from .env (copy .env.example). Agent runs, review decisions and the SigmaHQ
+# index live in Docker volumes, shared by the UI and the CLI and kept across restarts. They are separate
+# from a local (non-Docker) checkout's data/runs; to share that folder instead, replace `runs:` below
+# with `./data/runs:` (Docker Desktop must be allowed to share the project folder).
+
+x-detectforge: &detectforge
+  build: .
+  image: detectforge:local
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DETECTFORGE_DATA_DIR: /app/data
+  volumes:
+    - runs:/app/data/runs
+    - sigmahq:/app/data/sigmahq
+
+services:
+  app:
+    <<: *detectforge
+    ports:
+      - "127.0.0.1:8501:8501"  # bound to this machine only, like the local UI
+    restart: unless-stopped
+
+  # One-off commands: docker compose run --rm cli <detectforge arguments>
+  cli:
+    <<: *detectforge
+    profiles: ["cli"]
+    entrypoint: ["detectforge"]
+    command: ["--help"]
+
+volumes:
+  runs:
+  sigmahq:
