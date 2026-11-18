@@ -3,7 +3,8 @@
 Each entry is a legit use of the same binary an attack abuses. Class A differs from the attack in a way
 you can see on the command line, so a precise rule shouldn't fire. Class B can't be told from the attack
 by command line alone, so it's reported on its own and never counts as a rule being too broad. All of
-these are benign events; split is just "heldout" since nothing ever tunes on them.
+these are benign events. Most are held out for measuring precision; a few per technique are marked
+split: tune so the agent sees "benign exists" during hardening (disjoint from the held-out ones).
 """
 
 from pathlib import Path
@@ -19,6 +20,7 @@ class Negative(BaseModel):
     cmd: str
     hn_class: str = Field(alias="class", pattern="^[AB]$")
     note: str
+    split: str = Field(default="heldout", pattern="^(tune|heldout)$")
 
 
 class HardNegatives(BaseModel):
@@ -65,7 +67,7 @@ def build_events(config: HardNegatives) -> tuple[list[Event], list[Event]]:
                 technique=technique,
                 transform="none",
                 base_id=eid,
-                split="heldout",
+                split=entry.split,
             )
             (class_a if entry.hn_class == "A" else class_b).append(event)
     return class_a, class_b

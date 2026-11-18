@@ -2,7 +2,8 @@
 
 Each transform is driven by what ArgFuscator reports the binary tolerates (see argfuscator.py), applied
 deterministically so the mutation set is reproducible. Mutations are not run here: a sample is confirmed
-in the VM (behaviour check). insertion/substitution/omission are tuning; reordering/recoding are held out.
+in the VM (behaviour check). tune = substitution/reordering; held-out = omission/insertion/recoding,
+so every binary has something held out (omission is near-universal; insertion/recoding don't always apply).
 """
 
 import base64
@@ -15,8 +16,8 @@ from detectforge.schemas import Event, Transform
 
 SPLIT_OF: dict[Transform, str] = {
     "substitution": "tune",
-    "omission": "tune",
     "reordering": "tune",
+    "omission": "heldout",
     "insertion": "heldout",
     "recoding": "heldout",
 }
