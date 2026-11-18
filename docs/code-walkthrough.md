@@ -36,6 +36,7 @@ src/detectforge/
     parse.py          Turn rule text into a rule object; reject anything out of scope
     validate.py       "Is this rule OK?" → errors and warnings
     lint.py           Broaden-never-narrow and overfitting checks (unusual characters, copied strings)
+    stamp.py          Id, status, author and date of an agent-written rule, set by code
     convert.py        Translate a rule into an Elastic query (for a real SIEM later)
   harness/
     matcher.py        The engine: does this rule fire on this event?
@@ -48,6 +49,7 @@ src/detectforge/
   review.py           Human review: list runs, open one, record approve/reject
   intake.py           Plain-language request → ATT&CK techniques (model, checked; keyword fallback)
   provenance.py       Which prompt, model, budgets, code and data produced a run (setup key)
+  eval/export.py      Every saved run as CSV + per-setup summary (mean, spread, cost per approved rule)
   agent/tools.py      The 5 typed tools the agent may call, with least-privilege context
   gate.py             Quality gate: accept, or "needs human review" with reasons
   llm.py              Provider-agnostic LLM client (OpenRouter / local), retries, fallback model
@@ -60,9 +62,10 @@ data/fixtures/        17 hand-written test events + 3 test rules
 docs/interfaces.md    The interface contract and open questions
 docs/failure-matrix.md  Every failure found or handled, what the system does, and its regression test
 docs/threat-model.md  What we protect, from whom, and the test behind each defence
+docs/limitations.md   Known limitations and assumptions, and what to do about each
 docs/architecture.md  Components, one agent run, the evaluation boundary, deployment, design decisions
 Dockerfile, docker-compose.yml  The UI and the CLI in one image (`docker compose up`)
-tests/                333 automated tests (run on every push by GitHub Actions)
+tests/                342 automated tests (run on every push by GitHub Actions)
 ```
 
 Rule of thumb for the architecture: **every number is computed once, in the library**. The CLI, the
@@ -585,7 +588,7 @@ harden (agent)            input: technique + original rule; output: status, reas
 
 ```bash
 uv sync --all-groups                      # install (incl. UI)
-uv run pytest                             # 333 tests
+uv run pytest                             # 342 tests
 uv run detectforge harden --rule RULE.yml --technique T1053.005 --events EVENTS.jsonl
 uv run detectforge cover --technique T1053.005 --events EVENTS.jsonl   # harden, or write if no usable rule
 uv run detectforge write --technique T1053.005 --events EVENTS.jsonl   # always write (community rules hidden)
@@ -593,6 +596,7 @@ uv run detectforge harden-selection --split dev   # every improvable dev rule, s
 uv run detectforge harden-selection --split dev --write   # agent-written arm
 uv run detectforge review list --pending          # runs waiting for a decision (current prompts)
 uv run detectforge review approve 8e3abcbe -m "why"   # or reject; asks for your reviewer key
+uv run detectforge export                        # every run as CSV + per-setup summary (data/exports)
 uv run detectforge llm models
 uv run detectforge validate RULE.yml
 uv run detectforge harness RULE.yml EVENTS.jsonl
@@ -635,9 +639,11 @@ GitHub Actions runs lint (ruff) + all tests on every push and pull request.
    machine a borderline regex could time out where it wouldn't on ours; 1 s is far above any normal
    rule's cost (microseconds).
 5. **Keyword search is simple** word overlap, not semantic search. Fine for technique-driven search.
-6. **Writing a new rule is only checked with a scripted model so far.** The path, the gate and the
-   agent-written arm work end to end on the real data with a fake model; real-model runs are pending
-   (quota). Its prompt (`write-v1`) must be frozen before the agent-written arm is run on the test rules.
+6. **Written rules are only as good as their tuning data.** The writing prompt (`write-v2`) is frozen
+   (`tests/test_prompt_freeze.py` fails if its text changes; a change needs `write-v3`). On the dev
+   rules it copied no test characters and every run submitted, but most written rules fired on
+   legitimate activity the agent never saw (no benign events in the tuning split yet), and they miss
+   held-out quote insertions more often than hardened community rules do.
 
 ---
 

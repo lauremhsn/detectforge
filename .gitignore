@@ -21,6 +21,7 @@ data/raw/
 data/sigmahq/
 data/atomic-red-team/
 data/runs/
+data/exports/
 *.evtx
 
 # Editors / OS

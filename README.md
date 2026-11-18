@@ -165,6 +165,13 @@ uv run detectforge review list --pending                        # trace prefix, 
 uv run detectforge review reject 13bf08a0 -m "misses /TN"       # or approve; asks for your reviewer key
 ```
 
+Export every run for the report (one row per run, model call and tool call; mean and spread, gate
+pass rate and cost per approved rule per prompt version and model):
+
+```bash
+uv run detectforge export                                       # writes data/exports/
+```
+
 Single rules:
 
 ```bash

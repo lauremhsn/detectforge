@@ -211,14 +211,15 @@ def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_ev
     from detectforge.config import get_settings
 
     client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale="behavior")])
-    run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
+    outcome = run_writing("T1053.005", fixture_events, client, "fake", out_dir=data_dir / "runs")
     get_settings.cache_clear()
     at = open_app("review")
     assert not at.exception
 
     page = " ".join(m.value for m in at.markdown)
     assert "**New rule**" in page and "What changed" not in page
-    assert any(c.language == "yaml" and c.value.strip() == WRITTEN.strip() for c in at.code)
+    shown = outcome.run.final_rule_yaml.strip()  # the written rule with its metadata stamped by code
+    assert any(c.language == "yaml" and c.value.strip() == shown for c in at.code)
     assert any("wrote a new rule" in c.value for c in at.caption)
     assert {m.label: m.value for m in at.metric}["Held-out evasion resistance"] == "100%"
 
