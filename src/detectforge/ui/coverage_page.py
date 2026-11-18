@@ -26,6 +26,7 @@ class RunCell(BaseModel):
     status: str
     heldout_before: float | None
     heldout_after: float | None
+    heldout_mutations: int = 0  # 0: no held-out mutation types for this rule, so held-out is n/a
     decision: str
 
 
@@ -72,6 +73,7 @@ def coverage_rows(
             status=summary.status,
             heldout_before=summary.heldout_before,
             heldout_after=summary.heldout_after,
+            heldout_mutations=summary.heldout_mutations,
             decision=summary.decision.decision if summary.decision else "pending review",
         )
         if summary.mode == "write":
@@ -108,11 +110,55 @@ def badge(score: float | None) -> str:
     return f"🟧 {pct(score)}" if score >= 0.5 else f"🟥 {pct(score)}"
 
 
+def _heldout_text(cell: RunCell) -> str:
+    """Before → after on held-out mutations; n/a when the rule has none (not 0%, not 100%)."""
+    if cell.heldout_mutations == 0:
+        return "n/a (no held-out mutations)"
+    after = "not evaluable" if cell.heldout_after is None else pct(cell.heldout_after)
+    return f"{pct(cell.heldout_before)} → {after}"
+
+
 def _run_text(cell: RunCell | None) -> str:
     if cell is None:
         return "—"
     result = "passed gate" if cell.status == "passed" else "needs review"
-    return f"{pct(cell.heldout_before)} → {pct(cell.heldout_after)} · {result} · {cell.decision}"
+    return f"{_heldout_text(cell)} · {result} · {cell.decision}"
+
+
+def scored_hardened(rows: list[CoverageRow]) -> list[RunCell]:
+    """Hardening runs that have a held-out score: the rule has held-out mutations."""
+    return [r.hardened for r in rows if r.hardened and r.hardened.heldout_mutations > 0]
+
+
+def best_hardened(rows: list[CoverageRow]) -> RunCell | None:
+    return max(scored_hardened(rows), key=lambda c: c.heldout_after or 0.0, default=None)
+
+
+class HeldoutMean(BaseModel):
+    """Mean held-out resistance before → after hardening, over rules with held-out mutations only.
+
+    Same rule as the batch output (agent/batch.heldout_summary): a rule with no held-out mutation is
+    n/a and left out; a hardened rule that can't be evaluated counts as 0, never dropped.
+    """
+
+    hardened: int
+    with_heldout: int
+    before: float | None
+    after: float | None
+
+
+def heldout_mean(rows: list[CoverageRow]) -> HeldoutMean:
+    cells = scored_hardened(rows)
+
+    def mean(values: list[float | None]) -> float | None:
+        return sum(v or 0.0 for v in values) / len(values) if values else None
+
+    return HeldoutMean(
+        hardened=sum(1 for r in rows if r.hardened),
+        with_heldout=len(cells),
+        before=mean([c.heldout_before for c in cells]),
+        after=mean([c.heldout_after for c in cells]),
+    )
 
 
 def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pending: int) -> None:
@@ -156,6 +202,14 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
         by_technique.setdefault(r.technique, []).append(r)
     if chart := resistance_chart(by_technique):
         st.vega_lite_chart(chart, width="stretch")
+    summary = heldout_mean(rows)
+    if summary.hardened:
+        st.caption(
+            "Chart: held-out evasion resistance of the same rule before and after hardening, on mutation "
+            f"types the agent never saw. Mean over the {summary.with_heldout} of {summary.hardened} hardened "
+            f"rules with held-out mutations: {pct(summary.before)} → {pct(summary.after)}; the others are "
+            "n/a and not averaged in."
+        )
     table(
         [
             {
@@ -166,16 +220,7 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
                     min((r.community for r in rs if r.community is not None), default=None)
                 ),
                 "evaded by": ", ".join(sorted({x for r in rs for x in r.evaded_by})) or "—",
-                "best hardened (held-out)": pct(
-                    max(
-                        (
-                            r.hardened.heldout_after
-                            for r in rs
-                            if r.hardened and r.hardened.heldout_after is not None
-                        ),
-                        default=None,
-                    )
-                ),
+                "best hardened (held-out)": _best_text(rs),
             }
             for t, rs in sorted(by_technique.items(), key=lambda kv: _worst(kv[1]))
         ]
@@ -226,6 +271,12 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
     )
 
 
+def _best_text(rows: list[CoverageRow]) -> str:
+    if best := best_hardened(rows):
+        return _heldout_text(best)
+    return "n/a (no held-out mutations)" if any(r.hardened for r in rows) else "—"
+
+
 def _guide(pending: int) -> None:
     with st.container(border=True):
         st.markdown("**What do you want to do?**")
@@ -250,6 +301,7 @@ def coverage_report(rows: list[CoverageRow]) -> str:
     """Markdown report for sharing (e.g. with management or an auditor). Rule titles are SigmaHQ text."""
     scored = [r for r in rows if r.community is not None]
     evaded = [r for r in scored if r.evaded_by]
+    mean = heldout_mean(rows)
     lines = [
         "# DetectForge coverage report",
         "",
@@ -263,6 +315,8 @@ def coverage_report(rows: list[CoverageRow]) -> str:
         f"covering {len({r.technique for r in rows})} techniques",
         f"- Evaded by at least one variation as published: {len(evaded)}",
         f"- Hardened by the agent: {sum(1 for r in rows if r.hardened)}",
+        f"- Held-out evasion resistance, mean over the {mean.with_heldout} hardened rules with held-out "
+        f"mutations: {pct(mean.before)} → {pct(mean.after)} (rules without held-out mutations are n/a)",
         "",
         "| Technique | Rule | As published | Evaded by | Hardened (held-out) | Written (held-out) |",
         "|---|---|---|---|---|---|",
@@ -285,27 +339,24 @@ def _worst(rows: list[CoverageRow]) -> float:
     return min((r.community for r in rows if r.community is not None), default=2.0)
 
 
-PUBLISHED = "As published (weakest rule)"
-HARDENED = "After hardening (held-out)"
+BEFORE = "Before hardening (held-out)"
+AFTER = "After hardening (held-out)"
 
 
 def resistance_chart(by_technique: dict[str, list[CoverageRow]]) -> dict | None:
-    """Grouped bars per technique: evasion resistance as published vs after hardening.
+    """Grouped bars per technique: held-out evasion resistance before vs after hardening.
 
-    A Vega-Lite spec with its data inline (no dataframe needed). Technique ids are validated ATT&CK
-    ids, so nothing untrusted reaches the chart.
+    Both bars are the same rule (the technique's best hardening run) on the same held-out events, so
+    the gap is the hardening's effect and nothing else. Techniques with no hardening run that has
+    held-out mutations aren't shown (n/a). A Vega-Lite spec with its data inline; technique ids are
+    validated ATT&CK ids, so nothing untrusted reaches the chart.
     """
     values = []
     for technique, rs in by_technique.items():
-        published = [r.community for r in rs if r.community is not None]
-        if not published:
+        if (best := best_hardened(rs)) is None:
             continue
-        values.append({"technique": technique, "series": PUBLISHED, "resistance": min(published)})
-        hardened = [
-            r.hardened.heldout_after for r in rs if r.hardened and r.hardened.heldout_after is not None
-        ]
-        if hardened:
-            values.append({"technique": technique, "series": HARDENED, "resistance": max(hardened)})
+        values.append({"technique": technique, "series": BEFORE, "resistance": best.heldout_before or 0.0})
+        values.append({"technique": technique, "series": AFTER, "resistance": best.heldout_after or 0.0})
     if not values:
         return None
     order = sorted({v["technique"] for v in values}, key=lambda t: _worst(by_technique[t]))
@@ -315,7 +366,7 @@ def resistance_chart(by_technique: dict[str, list[CoverageRow]]) -> dict | None:
         "mark": {"type": "bar", "cornerRadiusEnd": 3},
         "encoding": {
             "y": {"field": "technique", "type": "nominal", "sort": order, "title": None},
-            "yOffset": {"field": "series", "sort": [PUBLISHED, HARDENED]},
+            "yOffset": {"field": "series", "sort": [BEFORE, AFTER]},
             "x": {
                 "field": "resistance",
                 "type": "quantitative",
@@ -327,7 +378,7 @@ def resistance_chart(by_technique: dict[str, list[CoverageRow]]) -> dict | None:
                 "field": "series",
                 "type": "nominal",
                 "title": None,
-                "scale": {"domain": [PUBLISHED, HARDENED], "range": ["#F59E0B", "#3B82F6"]},
+                "scale": {"domain": [BEFORE, AFTER], "range": ["#F59E0B", "#3B82F6"]},
                 "legend": {"orient": "top"},
             },
             "tooltip": [

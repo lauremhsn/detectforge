@@ -60,6 +60,7 @@ class RunSummary(BaseModel):
     tuning_after: float | None
     heldout_before: float | None
     heldout_after: float | None
+    heldout_mutations: int = 0  # 0: held-out resistance is n/a (no held-out mutation types)
     model_calls: int
     tokens: int
     decision: ReviewDecision | None
@@ -92,6 +93,7 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
                 tuning_after=run.tuning_evasion_resistance_after,
                 heldout_before=heldout.evasion_resistance_before if heldout else None,
                 heldout_after=heldout.evasion_resistance_after if heldout else None,
+                heldout_mutations=heldout.mutated_attacks if heldout else 0,
                 model_calls=len(run.model_calls),
                 tokens=run.prompt_tokens + run.completion_tokens,
                 decision=history[-1] if history else None,

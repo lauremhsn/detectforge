@@ -23,8 +23,17 @@ jobs:
         run: |
           uv run ruff check .
           uv run ruff format --check .
-      - name: Test
-        run: uv run pytest
+      - name: Test (with line coverage)
+        # coverage runs only here (`--with`: not a project dependency), so local runs are unchanged
+        run: |
+          uv run --with coverage coverage run --source=src/detectforge -m pytest
+          uv run --with coverage coverage report --skip-empty --sort=cover
+          uv run --with coverage coverage xml -o coverage.xml
+      - name: Upload coverage to Codecov (public repo: no token needed)
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
 
   # Evaluation regression gate: Arm 1 (community rules as-is) needs no model, so it is
   # deterministic. Recompute it and fail if any number differs from the committed results.
