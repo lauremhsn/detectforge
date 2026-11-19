@@ -167,13 +167,12 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
         "Where each detection rule stands against attacker variations, and what the agent and your "
         "reviewers changed.",
     )
-    _guide(pending)
-
     eval_dir = data_dir / "eval"
     rows = coverage_rows(
         eval_dir / "selection.yml", eval_dir / "results" / "arm1_community.json", runs_dir, rule_texts
     )
     if not rows:
+        _actions(pending)
         st.info(
             "No evaluated rules yet. Build the rule set with `detectforge dataset select`, then score the "
             "community rules with `detectforge eval community`."
@@ -182,54 +181,97 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
 
     scored = [r for r in rows if r.community is not None]
     evaded = [r for r in scored if r.evaded_by]
+    by_technique: dict[str, list[CoverageRow]] = {}
+    for r in rows:
+        by_technique.setdefault(r.technique, []).append(r)
+    st.markdown(
+        f"#### {len(evaded)} of {len(scored)} community rules miss at least one attacker variation, across "
+        f"{sum(1 for rs in by_technique.values() if any(r.evaded_by for r in rs))} of "
+        f"{len(by_technique)} techniques."
+    )
+    _actions(pending)
+
     approved = sum(
         1 for r in rows for c in (r.hardened, r.written) if c is not None and c.decision == "approved"
     )
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Techniques", len({r.technique for r in rows}))
+    c1.metric("Techniques", len(by_technique))
     c2.metric(
-        "Rules evaded as published", f"{len(evaded)}/{len(scored)}", help="At least one mutation slips past."
+        "Rules evaded as published",
+        f"{len(evaded)}/{len(scored)}",
+        help="At least one attacker variation slips past the community rule as published.",
     )
     c3.metric("Hardened by the agent", sum(1 for r in rows if r.hardened))
     c4.metric("Approved changes", approved)
 
-    st.subheader("By technique")
+    head, choice = st.columns([3, 1], vertical_alignment="bottom")
+    head.subheader("Techniques")
+    show_all = choice.toggle("Show every technique", key="posture_all")
+    ordered = sorted(by_technique.items(), key=lambda kv: _worst(kv[1]))
+    shown = [(t, rs) for t, rs in ordered if show_all or _needs_attention(rs)]
     st.caption(
-        "🟩 every variation detected · 🟧 some slip past · 🟥 most slip past (community rules as published)"
+        "Weakest first. 🟩 every variation caught · 🟧 some slip past · 🟥 most slip past · "
+        "⬜ not measured. Each card opens its weakest rule to test or harden."
+        + ("" if show_all else f" {len(ordered) - len(shown)} fully covered techniques hidden.")
     )
-    by_technique: dict[str, list[CoverageRow]] = {}
-    for r in rows:
-        by_technique.setdefault(r.technique, []).append(r)
-    if chart := resistance_chart(by_technique):
-        st.vega_lite_chart(chart, width="stretch")
-    summary = heldout_mean(rows)
-    if summary.hardened:
-        st.caption(
-            "Chart: held-out evasion resistance of the same rule before and after hardening, on mutation "
-            f"types the agent never saw. Mean over the {summary.with_heldout} of {summary.hardened} hardened "
-            f"rules with held-out mutations: {pct(summary.before)} → {pct(summary.after)}; the others are "
-            "n/a and not averaged in."
-        )
-    table(
-        [
-            {
-                "technique": t,
-                "tactic": ", ".join(sorted({x for r in rs for x in r.tactics})) or "—",
-                "rules": len(rs),
-                "weakest rule as published": badge(
-                    min((r.community for r in rs if r.community is not None), default=None)
-                ),
-                "evaded by": ", ".join(sorted({x for r in rs for x in r.evaded_by})) or "—",
-                "best hardened (held-out)": _best_text(rs),
-            }
-            for t, rs in sorted(by_technique.items(), key=lambda kv: _worst(kv[1]))
-        ]
-    )
+    for start in range(0, len(shown), 3):
+        columns = st.columns(3)
+        for column, (technique, rs) in zip(columns, shown[start : start + 3], strict=False):
+            with column:
+                _technique_card(technique, rs, rule_texts)
 
-    st.subheader("Rules")
+    summary = heldout_mean(rows)
+    with st.expander("Before and after hardening (chart)", expanded=bool(summary.with_heldout)):
+        if chart := resistance_chart(by_technique):
+            st.vega_lite_chart(chart, width="stretch")
+            st.caption(
+                "The same rule before and after hardening, on variation types the agent never saw. Mean "
+                f"over the {summary.with_heldout} of {summary.hardened} hardened rules that have such "
+                f"variations: {pct(summary.before)} → {pct(summary.after)}; the others are n/a and not "
+                "averaged in."
+            )
+        else:
+            st.caption("No hardened rule with unseen variations to compare yet.")
+
+    with st.expander("Every rule (table, report download)"):
+        _rules_table(rows, rule_texts)
+
+
+def _needs_attention(rows: list[CoverageRow]) -> bool:
+    return any(r.evaded_by or r.community is None for r in rows)
+
+
+def _technique_card(technique: str, rows: list[CoverageRow], rule_texts: dict[str, str]) -> None:
+    weakest = min(rows, key=lambda r: r.community if r.community is not None else 2.0)
+    evaded_by = sorted({x for r in rows for x in r.evaded_by})
+    with st.container(border=True):
+        st.markdown(f"**{technique}** &nbsp; {badge(weakest.community)}")
+        st.caption(", ".join(sorted({x for r in rows for x in r.tactics})) or "no tactic tag")
+        st.markdown(
+            f"{len(rows)} rule{'s' if len(rows) != 1 else ''} · weakest: {md(weakest.title)}",
+            help="The community rule that catches the fewest attacker variations, as published.",
+        )
+        st.caption(
+            ("Evaded by " + ", ".join(evaded_by)) if evaded_by else "No variation slips past these rules."
+        )
+        best = best_hardened(rows)
+        if best:
+            st.caption(f"After hardening: {_heldout_text(best)} of unseen variations · {best.decision}")
+        elif any(r.hardened for r in rows):
+            st.caption("Hardened; no unseen variations to measure it on.")
+        if weakest.rule_id in rule_texts:
+            st.button(
+                "Open weakest rule →",
+                key=f"card_{technique}",
+                on_click=open_rule,
+                args=(rule_texts[weakest.rule_id], f"SigmaHQ: {weakest.title}", [technique]),
+            )
+
+
+def _rules_table(rows: list[CoverageRow], rule_texts: dict[str, str]) -> None:
     st.caption(
-        "Agent columns show held-out mutations only (evasion types the agent never saw): before → after, "
-        "the quality gate's verdict, and the reviewer's decision."
+        "Agent columns show variation types the agent never saw: before → after, the quality checks' "
+        "verdict, and the reviewer's decision."
     )
     c1, c2 = st.columns([2, 1])
     split = c1.radio("Rules", ["all", "dev", "test"], horizontal=True, key="overview_split")
@@ -246,15 +288,15 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
                 "split": r.split,
                 "as published": badge(r.community),
                 "evaded by": ", ".join(r.evaded_by) or ("none" if r.community is not None else "—"),
-                "hardened (held-out)": _run_text(r.hardened),
-                "written (held-out)": _run_text(r.written),
+                "hardened (unseen)": _run_text(r.hardened),
+                "written (unseen)": _run_text(r.written),
             }
             for r in shown
         ]
     )
     openable = [r for r in shown if r.rule_id in rule_texts]
     if openable:
-        c1, c2 = st.columns([3, 1])
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
         pick = c1.selectbox(
             "Open a rule to test or harden it", openable, format_func=lambda r: f"{r.technique} · {r.title}"
         )
@@ -277,24 +319,17 @@ def _best_text(rows: list[CoverageRow]) -> str:
     return "n/a (no held-out mutations)" if any(r.hardened for r in rows) else "—"
 
 
-def _guide(pending: int) -> None:
-    with st.container(border=True):
-        st.markdown("**What do you want to do?**")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown("**A new threat came in.** Paste the request or report; see whether you're covered.")
-            go_button("request", "Check a threat →", primary=True)
-        with c2:
-            st.markdown(
-                "**Find and fix weak rules.** Pick a rule below, test it against evasions, harden it."
-            )
-            go_button("rules", "Test a rule →")
-        with c3:
-            waiting = (
-                f"{pending} proposal{'s' if pending != 1 else ''} waiting" if pending else "Nothing waiting"
-            )
-            st.markdown(f"**Approve changes.** {waiting} for a reviewer.")
-            go_button("review", "Open the review queue →")
+def _actions(pending: int) -> None:
+    """The three jobs people come here for, one click each."""
+    waiting = f"{pending} proposal{'s' if pending != 1 else ''} waiting" if pending else "Nothing waiting"
+    c1, c2, c3, _ = st.columns([1.2, 1, 1.3, 2], vertical_alignment="center")
+    with c1:
+        go_button("request", "Check a new threat →", primary=True)
+    with c2:
+        go_button("rules", "Test a rule →")
+    with c3:
+        go_button("review", "Open the review queue →")
+    st.caption(f"Review: {waiting} for a decision.")
 
 
 def coverage_report(rows: list[CoverageRow]) -> str:

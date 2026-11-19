@@ -1,4 +1,4 @@
-"""New request: "a new threat came in, are we covered?" answered per technique, with the next step.
+"""Threats: "a new threat came in, are we covered?" answered per technique, with the next step.
 
 The request (or a pasted threat report) is mapped to ATT&CK techniques. For each one, code (not the
 model) checks the best usable community rule against the attacks and their variations in the test

@@ -36,7 +36,7 @@ def data_dir(tmp_path, monkeypatch):
 
 
 def open_app(page: str = "coverage") -> AppTest:
-    """Start the app on one section (as if picked in the sidebar menu)."""
+    """Start the app on one area (as if picked in the top bar)."""
     from detectforge.config import get_settings
 
     get_settings.cache_clear()
@@ -54,25 +54,24 @@ def app(data_dir):
     get_settings.cache_clear()
 
 
-SECTIONS = ["coverage", "request", "rules", "review", "operations"]
+SECTIONS = ["coverage", "request", "review", "rules", "operations"]
 
 
 @pytest.mark.parametrize("page", SECTIONS)
 def test_every_section_renders_and_says_what_it_is_for(data_dir, page):
     at = open_app(page)
     assert not at.exception
-    menu = at.sidebar.radio(key="page")
-    assert [o.split(" ", 1)[1].split("  (")[0] for o in menu.options] == [
-        "Coverage", "New request", "Rules", "Review queue", "Agent operations",
-    ]  # fmt: skip
+    menu = at.radio(key="page")  # the top bar, not the sidebar
+    assert [o.split("  (")[0] for o in menu.options] == ["Posture", "Threats", "Review", "Rules", "Lab"]
     assert menu.value == page
-    assert at.title and at.caption  # each section opens with its name and purpose
+    assert at.title and at.caption  # each area opens with its name and purpose
 
 
-def test_pipeline_status_shows_done_or_pending_only(app):
-    sidebar = [m.value for m in app.sidebar.markdown]
-    assert any("✅" in s for s in sidebar) and any(s.endswith("— pending") for s in sidebar)
-    page_text = " ".join(e.value for e in [*app.markdown, *app.caption, *app.sidebar.markdown])
+def test_pipeline_status_shows_done_or_pending_only(data_dir):
+    lab = open_app("operations")  # "About" lives in the Lab
+    text = [m.value for m in lab.markdown]
+    assert any("✅" in s for s in text) and any(s.endswith("— pending") for s in text)
+    page_text = " ".join(e.value for e in [*lab.markdown, *lab.caption, *lab.sidebar.markdown])
     assert not re.search(r"\bW\d\b|\bweek\b", page_text, re.IGNORECASE)
 
 
@@ -139,11 +138,11 @@ def test_review_shows_a_run_and_records_approval(data_dir, load_rule_text, fixtu
     at = open_app("review")
     assert not at.exception
 
-    page = unescaped(" ".join(m.value for m in at.markdown))
-    assert "pending review" in page and "33% → 100%" in page  # tuning before → after
+    assert any("Ready for your decision" in s.value for s in at.success)  # the verdict comes first
     assert any(c.language == "diff" and "+    CommandLine|contains: 'create'" in c.value for c in at.code)
     metrics = {m.label: m.value for m in at.metric}
-    assert metrics["Held-out evasion resistance"] == "100%"
+    assert metrics["Unseen variations"] == "100%" and metrics["Tuning variations"] == "100%"
+    assert metrics["New false alarms"] == "0"
 
     approve = next(b for b in at.button if b.label == "Approve")
     approve.click().run()
@@ -176,7 +175,7 @@ def test_review_warns_about_new_held_out_false_alarms(data_dir, load_rule_text, 
     at = open_app("review")
     assert not at.exception
     assert any("1 new false alarm(s)" in e.value and "benign-reg-query" in e.value for e in at.error)
-    assert "False alarms (held-out)" in {m.label for m in at.metric}
+    assert {m.label: m.value for m in at.metric}["New false alarms"] == "1"
 
 
 def test_injected_model_text_shows_literally_and_approving_is_off_without_keys(data_dir, fixture_events):
@@ -221,7 +220,7 @@ def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_ev
     shown = outcome.run.final_rule_yaml.strip()  # the written rule with its metadata stamped by code
     assert any(c.language == "yaml" and c.value.strip() == shown for c in at.code)
     assert any("wrote a new rule" in c.value for c in at.caption)
-    assert {m.label: m.value for m in at.metric}["Held-out evasion resistance"] == "100%"
+    assert {m.label: m.value for m in at.metric}["Unseen variations"] == "100%"
 
 
 def test_agent_button_is_off_by_default(data_dir):
@@ -263,3 +262,37 @@ def test_old_runs_without_a_conversation_still_open(data_dir, load_rule_text, fi
     at = open_app("review")
     assert not at.exception
     assert any("saved before conversations were recorded" in c.value for c in at.caption)
+
+
+def test_the_review_verdict_puts_what_matters_first(data_dir, load_rule_text, fixture_events):
+    """One headline per situation, most important first; a decision already made is never 'pending'."""
+    from datetime import UTC, datetime
+
+    from detectforge.gate import GateCheck
+    from detectforge.review import ReviewDecision
+    from detectforge.ui.review_tab import verdict
+
+    outcome = _saved_run(data_dir / "runs", load_rule_text, fixture_events)
+    assert verdict(outcome, None).headline == "Ready for your decision"
+    assert "100%" in verdict(outcome, None).text
+
+    made = ReviewDecision(decision="approved", reviewer="**boss**", decided_at=datetime.now(UTC))
+    approved = verdict(outcome, made)
+    assert (approved.kind, approved.headline) == ("success", "Approved")
+    assert r"\*\*boss\*\*" in approved.text  # a reviewer name is shown literally
+    rejected = verdict(outcome, made.model_copy(update={"decision": "rejected"}))
+    assert (rejected.kind, rejected.headline) == ("info", "Rejected")
+
+    heldout = outcome.heldout_evaluation.model_copy(update={"new_false_alarm_event_ids": ["benign-x"]})
+    noisy = outcome.model_copy(update={"heldout_evaluation": heldout})
+    assert (verdict(noisy, None).kind, verdict(noisy, None).headline) == ("error", "Check before approving")
+
+    failed_gate = outcome.run.gate.model_copy(
+        update={"passed": False, "checks": [GateCheck(name="no_lost_attacks", passed=False, detail="1")]}
+    )
+    failing = outcome.model_copy(update={"run": outcome.run.model_copy(update={"gate": failed_gate})})
+    assert verdict(failing, None).headline == "Needs your judgement"
+    assert "no lost attacks" in verdict(failing, None).text
+
+    empty = outcome.model_copy(update={"run": outcome.run.model_copy(update={"final_rule_yaml": ""})})
+    assert verdict(empty, None).headline == "Nothing to approve"

@@ -77,7 +77,7 @@ def pick_step(index: ReferenceIndex | str) -> None:
             hits = []
         if not any(h.rule.usable for h in hits):
             st.warning(
-                "No usable community rule here. DetectForge would write a new one: use **New request** "
+                "No usable community rule here. DetectForge would write a new one: use **Threats** "
                 "for this technique."
             )
         if hits:

@@ -1,4 +1,4 @@
-"""Agent operations: what the agent costs, how fast it is, how often it fails, and why.
+"""Lab (agent operations): what the agent costs, how fast it is, how often it fails, and why.
 
 Read from the saved runs (every model and tool call is recorded in them), so it works without the
 tracing backend. Free models cost nothing in money; the budget that matters is the provider's daily
@@ -18,7 +18,11 @@ from detectforge.ui.navigation import header
 
 
 def operations_page(runs_dir: Path) -> None:
-    header("operations", "What the agent costs, how fast it is, and how often it fails.")
+    header(
+        "operations",
+        "The research side: what the agent costs, how fast it is, how often it fails, per prompt version. "
+        "Which events rules are tested on is set in the sidebar (the arrow at the top left).",
+    )
     summaries = list_runs(runs_dir)
     if not summaries:
         st.info("No agent runs yet.")

@@ -3,6 +3,7 @@
 import re
 
 import streamlit as st
+import yaml
 
 from detectforge.rules.convert import TARGETS, convert_rule
 from detectforge.rules.parse import RuleError
@@ -37,6 +38,15 @@ def _cell(value: object) -> str:
 
 def pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.0%}"
+
+
+def rule_title(rule_yaml: str, fallback: str) -> str:
+    """The rule's own title (SigmaHQ or model text: escape it with md() before rendering)."""
+    try:
+        title = (yaml.safe_load(rule_yaml or "") or {}).get("title")
+    except (yaml.YAMLError, AttributeError):
+        return fallback
+    return str(title).strip() if title else fallback
 
 
 def delta_pct(before: float | None, after: float | None) -> str | None:
@@ -78,8 +88,39 @@ _STYLE = """
 }
 [data-testid="stMarkdownContainer"] tr:last-child td { border-bottom: none; }
 [data-testid="stMarkdownContainer"] tbody tr:hover { background: #111B30; }
-section[data-testid="stSidebar"] [role="radiogroup"] label { padding: 0.25rem 0; }
-.block-container { padding-top: 2.2rem; max-width: 1300px; }
+.block-container { padding-top: 3.6rem; max-width: 1300px; }
+h1 { font-size: 1.9rem !important; padding-top: 0.4rem !important; }
+
+/* Radios drawn as tabs (top bar) or as list rows (review inbox); still radios underneath, so they
+   stay keyboard-accessible. Streamlit 1.67 markup: label[data-testid=stRadioOption][data-selected]. */
+.st-key-topbar label[data-testid="stRadioOption"] > div > div:not([data-testid="stMarkdownContainer"]),
+.st-key-inbox label[data-testid="stRadioOption"] > div > div:not([data-testid="stMarkdownContainer"]) {
+  display: none;
+}
+
+.st-key-topbar { border-bottom: 1px solid #22304D; padding-bottom: 0.5rem; }
+.st-key-topbar [role="radiogroup"] { gap: 0.2rem; justify-content: flex-end; flex-wrap: wrap; }
+.st-key-topbar label[data-testid="stRadioOption"] {
+  padding: 0.4rem 0.95rem; margin: 0; border-radius: 0.5rem; cursor: pointer;
+}
+.st-key-topbar label[data-testid="stRadioOption"] p { color: #9FB0CC; font-weight: 500; }
+.st-key-topbar label[data-testid="stRadioOption"]:hover { background: #111B30; }
+.st-key-topbar label[data-testid="stRadioOption"][data-selected="true"] { background: #1A2847; }
+.st-key-topbar label[data-testid="stRadioOption"][data-selected="true"] p {
+  color: #E5ECF6; font-weight: 650;
+}
+
+.st-key-inbox [role="radiogroup"] { gap: 0; width: 100%; }
+.st-key-inbox [role="radiogroup"] > div {
+  width: 100%; padding: 0.7rem 0.85rem; cursor: pointer;
+  border-bottom: 1px solid #1C2942; border-left: 3px solid transparent;
+}
+.st-key-inbox [role="radiogroup"] > div:hover { background: #111B30; }
+.st-key-inbox [role="radiogroup"] > div[data-selected="true"] {
+  background: #131D33; border-left-color: #3B82F6;
+}
+.st-key-inbox label[data-testid="stRadioOption"] { margin: 0; padding: 0; }
+.st-key-inbox label[data-testid="stRadioOption"] p { font-weight: 600; }
 </style>
 """
 

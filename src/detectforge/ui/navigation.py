@@ -1,11 +1,14 @@
-"""Where everything is: the sections of the app, the question each one answers, and how to jump.
+"""Where everything is: the areas of the app, the question each one answers, and how to jump.
 
-Organised around what people come to do, not around pipeline steps:
-- Coverage: a SOC lead's "where are we weak, and can we prove it?"
-- New request: a detection engineer's "a new threat came in: are we covered?"
-- Rules: "test and harden one rule"
-- Review queue: a reviewer's "what's waiting for me, and is it safe to ship?"
-- Agent operations: "what does the agent cost, and is it failing?"
+Four product areas, organised around what people come to do, plus a Lab for the research side:
+- Posture: a SOC lead's "where are we weak, and can we prove it?"
+- Threats: a detection engineer's "a new threat came in: are we covered?"
+- Review: a reviewer's "what's waiting for me, and is it safe to ship?"
+- Rules: "test one rule against attacker variations, then harden it"
+- Lab: how the system is evaluated and how the agent behaves (arms, prompts, runs, test data)
+
+Product areas speak plainly ("variations the agent never saw"); evaluation vocabulary (tuning,
+held-out, prompt versions, setup hashes) lives in the Lab and in each review's audit trail.
 """
 
 from dataclasses import dataclass
@@ -16,29 +19,28 @@ import streamlit as st
 @dataclass(frozen=True)
 class Section:
     key: str
-    icon: str
     title: str
     question: str
 
 
 SECTIONS = [
-    Section("coverage", "🛡️", "Coverage", "Where are we weak, and can we prove it?"),
-    Section("request", "📨", "New request", "A new threat came in: are we covered?"),
-    Section("rules", "🧪", "Rules", "Test one rule against evasions, then harden it"),
-    Section("review", "✅", "Review queue", "Approve or reject what the agent proposed"),
-    Section("operations", "⚙️", "Agent operations", "Runs, model calls, failures"),
+    Section("coverage", "Posture", "Where are we weak, and can we prove it?"),
+    Section("request", "Threats", "A new threat came in: are we covered?"),
+    Section("review", "Review", "What's waiting for a decision, and is it safe to ship?"),
+    Section("rules", "Rules", "Test one rule against attacker variations, then harden it"),
+    Section("operations", "Lab", "How the agent is evaluated, what it costs, and where it fails"),
 ]
 BY_KEY = {s.key: s for s in SECTIONS}
-PAGE = "page"  # session key of the current section
+PAGE = "page"  # session key of the current area
 
 
 def go(key: str) -> None:
-    """Button callback: switch section (runs before widgets are drawn, so the menu follows)."""
+    """Button callback: switch area (runs before widgets are drawn, so the menu follows)."""
     st.session_state[PAGE] = key
 
 
 def open_rule(rule_yaml: str, label: str, techniques: list[str], step: str = "test") -> None:
-    """Button callback: make this the rule under test, scope the events to it, open the Rules section."""
+    """Button callback: make this the rule under test, scope the events to it, open the Rules area."""
     st.session_state.update(before_yaml=rule_yaml, after_editor=rule_yaml, rule_label=label)
     available = st.session_state.get("available_techniques", [])
     if match := next((t for t in techniques if t in available), None):
@@ -50,7 +52,7 @@ def open_rule(rule_yaml: str, label: str, techniques: list[str], step: str = "te
 def go_button(key: str, label: str | None = None, primary: bool = False, where=st) -> None:
     section = BY_KEY[key]
     where.button(
-        label or f"{section.icon} {section.title} →",
+        label or f"{section.title} →",
         key=f"go_{key}_{label or ''}",
         type="primary" if primary else "secondary",
         on_click=go,
@@ -59,23 +61,27 @@ def go_button(key: str, label: str | None = None, primary: bool = False, where=s
 
 
 def menu(pending: int) -> str:
-    """The section menu in the sidebar. Returns the current section key."""
+    """The top bar: product name and the five areas. Returns the current area key."""
     st.session_state.setdefault(PAGE, "coverage")
 
     def label(key: str) -> str:
-        s = BY_KEY[key]
         badge = f"  ({pending})" if key == "review" and pending else ""
-        return f"{s.icon} {s.title}{badge}"
+        return f"{BY_KEY[key].title}{badge}"
 
-    key = st.sidebar.radio(
-        "Sections", [s.key for s in SECTIONS], format_func=label, key=PAGE, label_visibility="collapsed"
-    )
-    st.sidebar.caption(BY_KEY[key].question)
-    return key
+    with st.container(key="topbar"):
+        brand, nav = st.columns([1, 4], vertical_alignment="center")
+        brand.markdown("**🛡️ DetectForge**")
+        return nav.radio(
+            "Areas",
+            [s.key for s in SECTIONS],
+            format_func=label,
+            key=PAGE,
+            horizontal=True,
+            label_visibility="collapsed",
+        )
 
 
 def header(key: str, purpose: str) -> None:
-    """Every section opens with what it's for, in one line, so nobody has to guess."""
-    s = BY_KEY[key]
-    st.title(f"{s.icon} {s.title}")
+    """Every area opens with its name and what it's for, in one line, so nobody has to guess."""
+    st.title(BY_KEY[key].title)
     st.caption(purpose)
