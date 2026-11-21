@@ -61,7 +61,7 @@ a production deployment would use single sign-on and a secrets manager.
 
 Our rule was that **every failure found becomes a regression test**, and that nothing fails
 silently: a run either passes the gate or ends as *needs human review* with its reasons. We logged
-26 failures on real runs and real data (failure matrix, Part 1). Grouped by cause, they tell a
+28 failures on real runs and real data (failure matrix, Part 1). Grouped by cause, they tell a
 consistent story.
 
 **1. The agent optimizes the tuning score, not the behavior.** Given mutated attacks to fit, the
@@ -98,12 +98,16 @@ answers were cut off by the output limit, and the provider was sometimes unavail
 handled by budgets, a reminder when an answer is cut off, a fallback model, retries with backoff,
 and, as a last resort, *needs human review* with the best attempt so far (D17).
 
-**6. Reporting integrity.** Two failures were in what we *reported*, not in the agent: a coverage
-verdict that judged a technique by one weak rule while another caught everything (D21), and the risk
-that a code change silently moves a published number (D22). CI now recomputes the community-rule
-baseline on every push and fails on any difference.
+**6. Integrity of the checks themselves.** Some failures were in what we *reported* or in the
+checking machinery, not in the agent: a coverage verdict that judged a technique by one weak rule while
+another caught everything (D21); the risk that a code change silently moves a published number (D22);
+an invalid CI workflow file that silently switched off every CI run for a day (D27); and a new
+exclusion check that blocked safe exclusions because it counted attacks the rule had already missed
+(D28). CI now recomputes the community-rule baseline on every push, workflow files are parsed by the
+test suite, and every check of the gate has a regression test, because a wrong evaluator is as
+misleading as a wrong agent.
 
-**What this suggests.** Of the 26 failures, most were closed by deterministic code (gate checks,
+**What this suggests.** Of the 28 failures, most were closed by deterministic code (gate checks,
 data checks, CI), and only a handful by prompt changes, several of which needed a code check behind
 them anyway. For agentic detection engineering, the reliability comes less from a better prompt than
 from a strict, explainable evaluator the agent must satisfy, with a human deciding on evidence the

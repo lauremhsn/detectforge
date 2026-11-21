@@ -15,22 +15,24 @@ uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.add
 
 - In `.env`: `DETECTFORGE_UI_ALLOW_AGENT_RUNS=true` (live agent buttons) and your
   `DETECTFORGE_REVIEWER_KEYS` entry (to approve). Have your reviewer key ready to paste.
-- Sidebar → **Test data: Evaluation set**.
+- Open the sidebar (the arrow at the top left) → **Test data: Evaluation set**, then close it again.
 - Run a hardening batch the day before, so finished runs exist even if the network fails on the day:
   `uv run detectforge harden-selection --split dev --max-calls 40`.
 - Backup plan if the model is down: every step below works from saved runs; the live agent call is
   optional.
 
-## 1. The problem (1 min): Coverage
+## 1. The problem (1 min): Posture
 
 Open **Posture** (the home page).
 
-- Point at **Rules evaded as published**: about 10 of 24 community rules miss at least one variation
-  an attacker would use. "Rules existing doesn't mean we're covered" (Uetz et al.: 129 of 292 widespread
+- Read the opening sentence: **10 of 24 community rules miss at least one attacker variation, across
+  8 of 19 techniques.** "Rules existing doesn't mean we're covered" (Uetz et al.: 129 of 292 widespread
   Sigma rules are evadable with five simple transforms).
-- **By technique**: 🟥/🟧 rows, and the *evaded by* column (insertion, substitution, …).
-- The chart: the **same rule before and after hardening, on held-out variations** the agent never
-  saw (mean 61% → 100% over the hardened rules that have held-out variations; the others are n/a).
+- **Techniques**: one card per technique that needs attention, weakest first, each saying what evades
+  it (insertion, substitution, …) and how hardening did.
+- Open **Before and after hardening (chart)**: the **same rule before and after hardening, on
+  variations the agent never saw**, with the mean over the hardened rules that have such variations
+  (the others are n/a). Check the numbers after the final dev runs.
 
 ## 2. A new threat comes in (2 min): Threats (+ failure case: injected report)
 
@@ -48,10 +50,12 @@ approved"*.
 
 ## 3. Evasion caught (3 min): Rules
 
-Go to **Posture → the T1053.005 card → Open weakest rule** (or **Every rule** → "T1053.005 · Schtasks Creation Or
-Modification With SYSTEM Privileges" → Open in Rules**.
+Go to **Posture → the T1053.005 card → Open weakest rule** (the weakest T1053.005 rule is "Schtasks
+Creation Or Modification With SYSTEM Privileges"; it can also be opened from **Every rule** → Open in
+Rules).
 
-- **② Test it against evasions**, toggle **Only missed attacks and false alarms**. The rule misses
+- **② Test it against evasions**: the first line says how many attacks and variations it catches and
+  what evades it. Open **Every event** (it shows only missed attacks and false alarms). The rule misses
   `schtasks /"create" …`: the exact insertion example from the paper. Quotes around an option are
   ignored by Windows, so the task is still created; the rule's `' /create '` string no longer matches.
 - That variant is in the **held-out** split: the agent never sees it, not even in error messages.
@@ -63,8 +67,11 @@ Modification With SYSTEM Privileges" → Open in Rules**.
 
 Open **Review**: the inbox on the left, the open proposal on the right, its verdict first.
 
-- The run's evidence: what changed (diff), **held-out before → after**, the quality gate's checks,
-  and the agent's full conversation (shown as plain text; model output is never rendered).
+- The verdict comes first (e.g. **Ready for your decision**), then four numbers: **unseen variations**
+  caught before → after, tuning variations, **new false alarms**, quality checks. Then the diff.
+- Folded underneath: why the agent changed it, every variation by type, the quality checks, what the
+  agent did (every call and the full conversation, shown as plain text; model output is never
+  rendered), and the audit trail.
 - Approve with the **reviewer key**: the decision is recorded under the key's owner, not a typed name.
   **Export** gives the Sigma YAML or a ready-to-paste Elastic query.
 
@@ -91,7 +98,8 @@ never fails silently. (PowerShell: `$env:DETECTFORGE_LLM_BASE_URL="http://127.0.
 ## 7. Operating it (30 s): Lab
 
 Open **Lab**: runs, pass rate per prompt version, model calls, tokens, time, fallbacks,
-answers cut off, and why runs needed human review. Free models only: the limit is requests per day,
+answers cut off, and why runs needed human review; the **Evaluation** tab shows the community rules'
+baseline per variation type. Free models only: the limit is requests per day,
 shown against today's usage.
 
 ## Closing line
