@@ -153,8 +153,8 @@ def test_tactics_come_from_the_rule_tags():
 def test_home_guides_people_to_each_job(evaluated, with_index):
     at = open_app("coverage")
     assert not at.exception
-    assert any("1 proposal waiting" in m.value for m in at.markdown)
-    assert at.sidebar.radio(key="page").options[3].endswith("(1)")  # pending count on the menu
+    assert any("1 proposal waiting" in c.value for c in at.caption)
+    assert at.radio(key="page").options[2].endswith("(1)")  # pending count on the top bar
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Rules evaded as published"] == "1/1" and metrics["Hardened by the agent"] == "1"
 
@@ -203,3 +203,12 @@ def evaded_rows(evaluated, rules):
         evaluated / "runs",
         {"literal-schtasks": rules["literal"]},
     )
+
+
+def test_a_rule_test_starts_with_one_plain_sentence(rules, fixture_events):
+    from detectforge.harness import run
+    from detectforge.ui.rules_page import summary_line
+
+    weak = summary_line(run(rules["literal"], [e for e in fixture_events if e.technique == TECHNIQUE]))
+    assert weak.startswith("**Catches 2 of 5 attacks and variations.**") and "Evaded by" in weak
+    assert "nothing to measure" in summary_line(run(rules["literal"], []))

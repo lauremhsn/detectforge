@@ -89,15 +89,16 @@ uv run detectforge intake "detect scheduled-task persistence" --no-model
 uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 ```
 
-It opens at http://localhost:8501, organised around what you came to do:
+It opens at http://localhost:8501. A top bar holds four product areas, organised around what you
+came to do, plus a Lab for the research side:
 
-| Section | Question it answers |
+| Area | Question it answers |
 |---|---|
-| **Coverage** (home) | Where are we weak, and can we prove it? Every evaluated rule as published vs after hardening, by technique and tactic; downloadable coverage report |
-| **New request** | A new threat came in: are we covered? Paste a request or threat report; get a verdict per technique (covered / evadable / not covered) and the next step |
+| **Posture** (home) | Where are we weak, and can we prove it? One sentence on the state of coverage, then a card per technique that needs attention (weakest first), each opening its weakest rule; before/after chart; every rule as a table; downloadable coverage report |
+| **Threats** | A new threat came in: are we covered? Paste a request or threat report; get a verdict per technique (covered / evadable / not covered) and the next step |
+| **Review** | What's waiting for me, and is it safe to ship? An inbox of proposals; for the open one a plain-language verdict, the numbers that decide it (unseen variations caught, new false alarms, quality checks), the change, deeper evidence folded away; Approve / Reject with your reviewer key |
 | **Rules** | Pick a rule → test it against evasions → harden it (by hand or with the agent); export as Sigma YAML or an Elastic query |
-| **Review queue** | What's waiting for me? Each proposal with its diff, held-out before → after, gate checks and the agent's reasoning; Approve / Reject with your reviewer key |
-| **Agent operations** | Runs, pass rate per prompt version, model calls, tokens, failures, today's quota |
+| **Lab** | How the agent behaves: runs, pass rate per prompt version, model calls, tokens, failures, today's quota; what's built. Which events rules are tested on is set in the sidebar |
 
 Approved rules are written to `data/runs/approved/`. A guided demo is in [demo/README.md](demo/README.md).
 
@@ -158,7 +159,7 @@ budgets, a fingerprint of the code and the events, and the git commit. Re-runnin
 finished runs with the same setup, so a batch can be spread over several days of free quota. Commit
 before an evaluation run so the recorded commit matches the code.
 
-Review the runs in the **Review queue**, or from the terminal (same reviewer-key check):
+Review the runs in **Review**, or from the terminal (same reviewer-key check):
 
 ```bash
 uv run detectforge review list --pending                        # trace prefix, technique, held-out before -> after

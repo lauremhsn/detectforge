@@ -16,10 +16,10 @@ harden weak rules (or write one when none exists), and leaves every change to a 
 
 | User | Job | Where |
 |---|---|---|
-| SOC lead / manager | Where are we weak? Prove coverage to an auditor | UI: Coverage, coverage report |
-| Detection engineer | A new threat came in: are we covered? Fix a weak rule | UI: New request, Rules; CLI |
-| Senior reviewer | Approve or reject what the agent proposed, with evidence | UI: Review queue |
-| Platform owner | What does the agent cost, is it failing? | UI: Agent operations; Langfuse traces |
+| SOC lead / manager | Where are we weak? Prove coverage to an auditor | UI: Posture, coverage report |
+| Detection engineer | A new threat came in: are we covered? Fix a weak rule | UI: Threats, Rules; CLI |
+| Senior reviewer | Approve or reject what the agent proposed, with evidence | UI: Review; CLI `review` |
+| Platform owner | What does the agent cost, is it failing? | UI: Lab; Langfuse traces; `detectforge export` |
 | Researcher (us) | Before/after evaluation on held-out variations | CLI: `eval`, `harden-selection` |
 
 ## 2. Components
@@ -54,7 +54,7 @@ flowchart LR
     end
 
     subgraph Human["Human decision"]
-        REV[Review queue<br/>reviewer key]
+        REV[Review<br/>reviewer key]
         APP[(approved/)]
     end
 
@@ -83,7 +83,7 @@ flowchart LR
 | Runner / batch | `agent/runner.py`, `agent/batch.py` | Chooses the path, scopes data, scores held-out after the run, saves it with provenance | no |
 | Review | `review.py` | Decisions by authenticated reviewers; approved rules copied to `approved/` | no |
 | Evaluation | `eval/` | Arms and metrics; regression gate on committed results | no |
-| UI | `ui/` | Coverage, New request, Rules, Review queue, Agent operations | intake/agent only when enabled |
+| UI | `ui/` | Posture, Threats, Review, Rules, Lab | intake/agent only when enabled |
 | Tracing | `tracing.py` | Every model and tool call to Langfuse (optional); always saved in the run file | no |
 
 The model touches **two** places only (intake and the agent loop). Everything that produces a number
@@ -113,7 +113,7 @@ sequenceDiagram
     L-->>R: proposal or best attempt + reasons, full trace
     R->>H: score original and proposal on held-out events
     R->>R: save run (status, evidence, provenance)
-    Note over R: Status is "proposed" until a human decides in the Review queue
+    Note over R: Status is "proposed" until a human decides in Review
 ```
 
 Budgets per run: model calls, tokens, tuning runs, submissions, per-answer output length, and

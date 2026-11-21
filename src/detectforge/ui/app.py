@@ -3,8 +3,8 @@
 Run from the repo root:
     uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 
-Organised around what people come to do (see navigation.py): check coverage, check a new threat, test
-and harden a rule, review proposals, watch the agent. A thin layer over the library: every number on
+Organised around what people come to do (see navigation.py): Posture, Threats, Review and Rules,
+plus a Lab for how the system is evaluated. A thin layer over the library: every number on
 screen comes from the same functions the CLI and tests use. The UI shows held-out events to the human;
 the agent itself only ever receives the tuning split.
 """
@@ -79,9 +79,14 @@ def event_sources(data_dir: Path) -> dict[str, list[Path]]:
 
 
 def test_data_sidebar() -> tuple[list[Event], list[Event]]:
-    """Which events rules are tested on. Returns (all loaded events, those in the technique/split scope)."""
-    st.sidebar.divider()
-    box = st.sidebar.expander("Test data", expanded=False)
+    """Which events rules are tested on. Returns (all loaded events, those in the technique/split scope).
+
+    In the sidebar (collapsed by default) because it's a lab setting, but drawn on every page: a widget
+    that isn't drawn loses its value, and the Rules area depends on it.
+    """
+    st.sidebar.markdown("**Test data**")
+    st.sidebar.caption("Which events rules are tested on (a lab setting).")
+    box = st.sidebar.container()
     data_dir = get_settings().data_dir
     events: list[Event] = []
     sources = event_sources(data_dir)
@@ -117,8 +122,9 @@ def test_data_sidebar() -> tuple[list[Event], list[Event]]:
     return events, filtered
 
 
-def about_sidebar() -> None:
-    with st.sidebar.expander("About DetectForge"):
+def about() -> None:
+    """What DetectForge is and what's built, shown in the Lab."""
+    with st.expander("About DetectForge"):
         st.caption(
             "Finds existing community Sigma rules, measures how they hold up against command-line "
             "evasion (Uetz et al., USENIX Security 2024), hardens them with an LLM agent, and routes "
@@ -129,17 +135,16 @@ def about_sidebar() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="DetectForge", page_icon="🛡️", layout="wide")
+    st.set_page_config(
+        page_title="DetectForge", page_icon="🛡️", layout="wide", initial_sidebar_state="collapsed"
+    )
     apply_style()
     settings = get_settings()
-    st.sidebar.title("🛡️ DetectForge")
-    st.sidebar.caption("Detection coverage you can prove")
     runs = list_runs(settings.runs_dir)
     current = latest_prompt_versions(runs)
     pending = sum(r.decision is None and r.prompt_version in current for r in runs)
     page = menu(pending)
     all_events, events = test_data_sidebar()
-    about_sidebar()
 
     index = load_index(str(settings.data_dir / "sigmahq"), settings.ui_auto_fetch_index)
     loaded = index if isinstance(index, ReferenceIndex) else None
@@ -154,6 +159,7 @@ def main() -> None:
         review_tab(settings.runs_dir)
     else:
         operations_page(settings.runs_dir)
+        about()
 
 
 main()
