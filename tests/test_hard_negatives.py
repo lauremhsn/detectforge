@@ -63,8 +63,10 @@ def test_build_events_sets_benign_fields():
 def test_loads_the_committed_config():
     config = load(Path("data/eval/hard_negatives.yml"))
     class_a, class_b = build_events(config)
-    assert len(class_a) == 34
+    assert len(class_a) == 52
     assert len(class_b) == 6
+    tune = [e for e in class_a if e.split == "tune"]
+    assert len(tune) == 18 and all(e.split == "tune" and e.label == "benign" for e in tune)
     # every class B is tagged with a reason it can't be told from the attack by command line
     for entries in config.negatives.values():
         for entry in entries:

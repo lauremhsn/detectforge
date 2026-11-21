@@ -5,6 +5,9 @@
 # class B = inherent-ambiguity benign. The same (or near-identical) command, run legitimately.
 #           Command line alone can't separate it from the attack. Reported SEPARATELY, not a defect.
 #
+# split: heldout (default) = used to measure precision. split: tune = a disjoint class-A near-miss the
+#        agent sees during hardening so it learns benign exists. Tune and held-out never share a command.
+#
 # Placeholder user is "analyst", matching the base events. Paths/values are invented.
 
 negatives:
@@ -17,42 +20,56 @@ negatives:
        cmd: 'reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v OneDrive'}
     - {class: A, note: "exporting a benign application hive, not sam/security/system",
        cmd: 'reg export "HKLM\SOFTWARE\MyCompany\App" C:\Users\analyst\Desktop\app-backup.reg'}
+    - {class: A, split: tune, note: "reg save of a benign app hive, not sam/security/system",
+       cmd: 'reg save "HKLM\SOFTWARE\MyCompany\App" C:\Users\analyst\Desktop\app.hiv'}
 
   T1027:       # Suspicious Download Via Certutil.EXE   (attack uses -verifyctl/-urlcache -f <url>)
     - {class: A, note: "hashing a local file, no download",
        cmd: 'certutil -hashfile C:\Users\analyst\Downloads\installer.exe SHA256'}
     - {class: A, note: "inspecting a local certificate, no download",
        cmd: 'certutil -dump C:\Users\analyst\Documents\company.cer'}
+    - {class: A, split: tune, note: "verifyctl of a local CTL, not downloading one",
+       cmd: 'certutil -verifyctl -split -f C:\ProgramData\Company\trust.ctl'}
 
   T1036.003:   # File Download Via Bitsadmin   (attack /transfer <url>)
     - {class: A, note: "listing BITS jobs, no transfer",
        cmd: 'bitsadmin /list /allusers /verbose'}
     - {class: B, note: "legit software updaters also /transfer from a URL (SigmaHQ FP: some legit apps use this)",
        cmd: 'bitsadmin /transfer UpdateJob /priority normal https://download.company.com/patch.msp C:\ProgramData\patch.msp'}
+    - {class: A, split: tune, note: "/transfer from an internal UNC share, not a web URL",
+       cmd: 'bitsadmin /transfer PatchJob \\fileserver\share\patch.msp C:\ProgramData\patch.msp'}
 
   T1047:       # Process Creation via Wmic / XSL Script Execution via Wmic
     - {class: A, note: "read-only process listing",
        cmd: 'wmic process list brief'}
     - {class: A, note: "benign output format (htable), not /format:xsl",
        cmd: 'wmic process get name,processid /format:htable'}
+    - {class: A, split: tune, note: "process call create of a signed company binary, not a payload",
+       cmd: 'wmic process call create "C:\Program Files\Company\agent.exe"'}
 
   T1053.005:   # Suspicious Schtasks Schedule Types / Schtasks with SYSTEM privileges
     - {class: A, note: "listing tasks, no creation",
        cmd: 'schtasks /query /fo LIST /v'}
     - {class: A, note: "legit daily task, normal user, benign binary (not onlogon/onstart, not /ru system)",
        cmd: 'schtasks /create /tn "CompanyUpdate" /tr "C:\Program Files\Company\update.exe" /sc daily /st 03:00'}
+    - {class: A, split: tune, note: "legit weekly maintenance /create, not onlogon/onstart/system",
+       cmd: 'schtasks /create /tn "DiskCleanup" /tr "cleanmgr.exe /sagerun:1" /sc weekly /d SUN /st 02:00'}
 
   T1059.001:   # PowerShell base64 / download pattern
     - {class: A, note: "ordinary PowerShell, no -e/-enc and no download",
        cmd: 'powershell.exe -Command "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5"'}
     - {class: A, note: "running a local signed script with bypass (no encoded command)",
        cmd: 'powershell.exe -ExecutionPolicy Bypass -File C:\Scripts\inventory.ps1'}
+    - {class: A, split: tune, note: "legit internal download, not an external payload or encoded command",
+       cmd: 'powershell.exe -ExecutionPolicy Bypass -Command "iwr https://intranet.company.com/agent.ps1 -OutFile C:\ProgramData\agent.ps1"'}
 
   T1059.003:   # Read Contents From Stdin Via Cmd.EXE   (attack uses cmd < file)
     - {class: A, note: "ordinary cmd, no stdin redirection",
        cmd: 'cmd /c dir C:\Users\analyst\Documents'}
     - {class: A, note: "reading a file the normal way, no stdin redirection",
        cmd: 'cmd /c type C:\Users\analyst\notes.txt'}
+    - {class: A, split: tune, note: "legit stdin redirect (sort a data file), not piping an attack script",
+       cmd: 'cmd /c sort < C:\Users\analyst\Documents\list.txt'}
 
   T1105:       # Suspicious Curl Download / File Download via MpCmdRun
     - {class: A, note: "health check, HEAD only, no file written",
@@ -61,28 +78,38 @@ negatives:
        cmd: '"C:\Program Files\Windows Defender\MpCmdRun.exe" -SignatureUpdate'}
     - {class: B, note: "a legit curl file download is indistinguishable from the attack by command line alone",
        cmd: 'curl -o C:\Users\analyst\Downloads\logo.png https://www.company.com/logo.png'}
+    - {class: A, split: tune, note: "curl to localhost, not an external download",
+       cmd: 'curl -k http://localhost:8080/status -o C:\ProgramData\status.json'}
 
   T1218.005:   # Remotely Hosted HTA via Mshta   (attack runs remote script:)
     - {class: A, note: "running a local, legit HTA, not a remote URL",
        cmd: 'mshta.exe "C:\Program Files\Company\dialog.hta"'}
+    - {class: A, split: tune, note: "a different local HTA, not a remote URL",
+       cmd: 'mshta.exe "C:\ProgramData\Company\wizard.hta"'}
 
   T1218.007:   # Msiexec Quiet Install From Remote   (attack /i <url>)
     - {class: A, note: "installing a local MSI, not from a URL",
        cmd: 'msiexec /i "C:\Users\analyst\Downloads\app.msi" /qn'}
     - {class: A, note: "uninstall by product code",
        cmd: 'msiexec /x {3F2504E0-4F89-11D3-9A0C-0305E82C3301} /quiet'}
+    - {class: A, split: tune, note: "/i install from an internal share, not a URL",
+       cmd: 'msiexec /i "\\deploy\software\tool.msi" /qn'}
 
   T1218.010:   # Regsvr32 HTTP/FTP Pattern   (attack /i:<url> scrobj.dll)
     - {class: A, note: "registering a local DLL, no URL",
        cmd: 'regsvr32 /s "C:\Program Files\Company\plugin.dll"'}
     - {class: A, note: "unregistering a local DLL, no URL",
        cmd: 'regsvr32 /u /s "C:\Program Files\Company\plugin.dll"'}
+    - {class: A, split: tune, note: "/i: with a local DLL, not a URL/scrobj",
+       cmd: 'regsvr32 /s /i:"C:\Program Files\Company\setup.dll"'}
 
   T1218.011:   # Potentially Suspicious Rundll32 Activity
     - {class: A, note: "classic benign rundll32 (open display settings)",
        cmd: 'rundll32.exe shell32.dll,Control_RunDLL desk.cpl'}
     - {class: A, note: "classic benign rundll32 (lock workstation)",
        cmd: 'rundll32.exe user32.dll,LockWorkStation'}
+    - {class: A, split: tune, note: "adding a network printer, classic benign rundll32",
+       cmd: 'rundll32.exe printui.dll,PrintUIEntry /in /n "\\printserver\HP"'}
 
   T1490:       # Shadow Copies Deletion / Wbadmin / Bcdedit Boot Config Tampering
     - {class: A, note: "listing shadow copies (read), not deleting",
@@ -93,30 +120,40 @@ negatives:
        cmd: 'wbadmin get versions'}
     - {class: B, note: "backup software / admin maintenance deletes shadows with the SAME command (Huntress, Elastic 'benign true positive')",
        cmd: 'vssadmin delete shadows /all /quiet'}
+    - {class: A, split: tune, note: "bcdedit /set of a benign boot field, not recoveryenabled/bootstatuspolicy",
+       cmd: 'bcdedit /set {current} description "Production Boot"'}
 
   T1543.003:   # Suspicious New Service Creation
     - {class: A, note: "querying a service (read)",
        cmd: 'sc query wuauserv'}
     - {class: A, note: "installer creating a normal service (benign binPath, not svchost -k / cmd / powershell)",
        cmd: 'sc create "CompanyAgent" binPath= "C:\Program Files\Company\agent.exe" start= auto'}
+    - {class: A, split: tune, note: "sc create of a benign service, not svchost -k / cmd / powershell binPath",
+       cmd: 'sc create "BackupSvc" binPath= "C:\Program Files\Backup\bksvc.exe" start= demand'}
 
   T1547.001:   # Run Keys persistence
     - {class: A, note: "reading the Run key, not writing",
        cmd: 'reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"'}
     - {class: B, note: "legit software writes autorun on install with the same pattern (SigmaHQ FP: Discord, installers)",
        cmd: 'reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /t REG_SZ /d "C:\Program Files\OneDrive\OneDrive.exe" /f'}
+    - {class: A, split: tune, note: "reading a specific Run value, not writing one",
+       cmd: 'reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v CompanyApp'}
 
   T1555.003:   # Potential Browser Data Stealing (esentutl /y copy)
     - {class: A, note: "esentutl /y copying a benign database, not browser Login Data",
        cmd: 'esentutl.exe /y "C:\ProgramData\App\cache.edb" /d "C:\Temp\cache_copy.edb"'}
     - {class: A, note: "dumping a database header (maintenance)",
        cmd: 'esentutl /mh "C:\ProgramData\App\store.edb"'}
+    - {class: A, split: tune, note: "/y copy of a benign database, not browser Login Data",
+       cmd: 'esentutl.exe /y "C:\ProgramData\App\index.edb" /d "C:\Temp\index_copy.edb"'}
 
   T1685:       # Disable Windows Defender AV (sc config/stop WinDefend)
     - {class: A, note: "querying the Defender service (read)",
        cmd: 'sc query WinDefend'}
     - {class: A, note: "disabling a NON-defender service (legit admin)",
        cmd: 'sc config Fax start=disabled'}
+    - {class: A, split: tune, note: "stopping a non-defender service (legit admin)",
+       cmd: 'sc stop Spooler'}
 
   T1685.001:   # Audit Policy Tampering / Eventlog Clearing
     - {class: A, note: "reading audit policy, not changing it",
@@ -125,3 +162,5 @@ negatives:
        cmd: 'auditpol /set /category:"Logon/Logoff" /success:enable'}
     - {class: B, note: "admins/maintenance clear event logs legitimately (SigmaHQ FP: admin activity, maintenance)",
        cmd: 'wevtutil cl Application'}
+    - {class: A, split: tune, note: "auditpol /set ENABLING a different category, not disabling",
+       cmd: 'auditpol /set /category:"Policy Change" /success:enable'}

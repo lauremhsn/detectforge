@@ -11,8 +11,8 @@
     "recoding": 0.0
   },
   "resistance_by_mutation_split": {
-    "tune": 0.8671875,
-    "heldout": 0.7213114754098361
+    "tune": 0.7951807228915663,
+    "heldout": 0.839622641509434
   },
   "resistance_by_selection_split": {
     "dev": 0.8135593220338984,
@@ -40,8 +40,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 0.2,
-        "heldout": 0.0
+        "tune": 0.0,
+        "heldout": 0.5
       },
       "evaded_by": [
         "insertion",
@@ -69,7 +69,7 @@
       },
       "resistance_by_mutation_split": {
         "tune": 1.0,
-        "heldout": 0.5
+        "heldout": 0.6666666666666666
       },
       "evaded_by": [
         "recoding"
@@ -120,8 +120,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 0.8333333333333334,
-        "heldout": null
+        "tune": 0.6666666666666666,
+        "heldout": 1.0
       },
       "evaded_by": [
         "substitution"
@@ -198,7 +198,7 @@
       },
       "resistance_by_mutation_split": {
         "tune": 1.0,
-        "heldout": null
+        "heldout": 1.0
       },
       "evaded_by": [],
       "false_alarm_rate": null
@@ -249,8 +249,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 1.0,
-        "heldout": 0.4
+        "tune": null,
+        "heldout": 0.625
       },
       "evaded_by": [
         "insertion"
@@ -276,8 +276,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 0.7142857142857143,
-        "heldout": 0.6666666666666666
+        "tune": 0.6666666666666666,
+        "heldout": 0.7142857142857143
       },
       "evaded_by": [
         "insertion",
@@ -304,8 +304,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 0.7142857142857143,
-        "heldout": 0.6666666666666666
+        "tune": 0.6666666666666666,
+        "heldout": 0.7142857142857143
       },
       "evaded_by": [
         "insertion",
@@ -357,8 +357,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 0.6666666666666666,
-        "heldout": 0.5
+        "tune": 0.5,
+        "heldout": 0.6666666666666666
       },
       "evaded_by": [
         "insertion",
@@ -385,7 +385,7 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 1.0,
+        "tune": null,
         "heldout": 1.0
       },
       "evaded_by": [],
@@ -485,8 +485,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 1.0,
-        "heldout": null
+        "tune": null,
+        "heldout": 1.0
       },
       "evaded_by": [],
       "false_alarm_rate": null
@@ -535,8 +535,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 1.0,
-        "heldout": null
+        "tune": null,
+        "heldout": 1.0
       },
       "evaded_by": [],
       "false_alarm_rate": null
@@ -561,7 +561,7 @@
       },
       "resistance_by_mutation_split": {
         "tune": 1.0,
-        "heldout": null
+        "heldout": 1.0
       },
       "evaded_by": [],
       "false_alarm_rate": null
@@ -585,8 +585,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 1.0,
-        "heldout": null
+        "tune": null,
+        "heldout": 1.0
       },
       "evaded_by": [],
       "false_alarm_rate": null
@@ -638,8 +638,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 1.0,
-        "heldout": null
+        "tune": null,
+        "heldout": 1.0
       },
       "evaded_by": [],
       "false_alarm_rate": null
@@ -713,8 +713,8 @@
         "recoding": null
       },
       "resistance_by_mutation_split": {
-        "tune": 0.6666666666666666,
-        "heldout": null
+        "tune": 0.0,
+        "heldout": 1.0
       },
       "evaded_by": [
         "substitution"
