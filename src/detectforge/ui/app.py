@@ -158,7 +158,7 @@ def main() -> None:
     elif page == "review":
         review_tab(settings.runs_dir)
     else:
-        operations_page(settings.runs_dir)
+        operations_page(settings.runs_dir, settings.data_dir)
         about()
 
 

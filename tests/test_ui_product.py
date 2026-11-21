@@ -168,6 +168,7 @@ def test_agent_operations_summarises_runs(evaluated):
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Agent runs"] == "1" and metrics["Passed the gate"] == "1/1"
     assert metrics["Model calls"] == "2"
+    assert metrics["Rules evaluated"] == "1/1"  # the Evaluation tab: Arm 1, community rules as published
 
 
 def test_coverage_chart_compares_the_same_rule_before_and_after_on_held_out(evaded_rows):

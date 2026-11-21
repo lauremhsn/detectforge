@@ -33,6 +33,7 @@ from detectforge.tracing import NoopTracer, Tracer
 #     empty, cut-off answers); the system prompt itself is unchanged from v5
 # v7: regex escapes written once inside single quotes (a dev run's '\\bSYSTEM\\b' matched nothing);
 #     one key per selection (a dev run repeated CommandLine|re and YAML silently dropped its 'add' check)
+# FROZEN Nov 22: the text may not change (tests/test_prompt_freeze.py); a change needs harden-v8.
 PROMPT_VERSION = "harden-v7"
 # Writing a new rule (the fallback when no usable community rule exists) has its own prompt and version.
 # write-v1: the hardening prompt's Sigma lessons (v2-v7), framed for writing a rule from scratch.

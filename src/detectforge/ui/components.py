@@ -100,6 +100,7 @@ h1 { font-size: 1.9rem !important; padding-top: 0.4rem !important; }
 
 .st-key-topbar { border-bottom: 1px solid #22304D; padding-bottom: 0.5rem; }
 .st-key-topbar [role="radiogroup"] { gap: 0.2rem; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 640px) { .st-key-topbar [role="radiogroup"] { justify-content: flex-start; } }
 .st-key-topbar label[data-testid="stRadioOption"] {
   padding: 0.4rem 0.95rem; margin: 0; border-radius: 0.5rem; cursor: pointer;
 }

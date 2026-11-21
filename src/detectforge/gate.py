@@ -121,6 +121,7 @@ def check(
                 detail=f"{card.false_alarms} (maximum {config.max_false_alarms})",
             )
         )
+        checks.extend(_exclusion_bypass(None, rule_yaml, events))  # written rules add exclusions too
     else:
         report = compare(original_yaml, rule_yaml, events)
         checks.append(
@@ -166,30 +167,42 @@ def _inject_exclusion(event: Event, field: str | None, value: str) -> Event:
     attr = attr or "command_line"
     val = str(value).strip("*")  # pySigma stores a contains-match as *x*; inject the real token
     current = getattr(event, attr) or ""
-    new = f"{current} {val}".strip() if attr in ("command_line", "parent_command_line") else val
+    # Never strip: an exclusion like ' query ' only matches with its spaces, and an attacker can type them.
+    new = f"{current} {val}" if attr in ("command_line", "parent_command_line") else val
     return event.model_copy(update={attr: new, "transform": "none", "event_id": event.event_id + "-xab"})
 
 
 def _bypassable(rule_yaml: str, field: str | None, value: str, attacks: list[Event]) -> bool:
-    if not attacks:
+    """True if an attack the rule catches is missed once it also satisfies this exclusion.
+
+    Only attacks the rule catches un-injected are probed: one it already misses says nothing about the
+    exclusion (otherwise every exclusion of a rule that misses anything would look like a bypass).
+    """
+    caught = set(run(rule_yaml, attacks).matched_event_ids) if attacks else set()
+    probes = [a for a in attacks if a.event_id in caught]
+    if not probes:
         return False
-    variants = [_inject_exclusion(a, field, value) for a in attacks]
+    variants = [_inject_exclusion(a, field, value) for a in probes]
     card = run(rule_yaml, variants)
     return card.valid and card.hits < len(variants)
 
 
-def _exclusion_bypass(original_yaml: str, rule_yaml: str, events: list[Event]) -> list[GateCheck]:
-    """Judge agent-ADDED exclusions: block a proven cheap bypass, warn on judgment calls or original ones."""
-    original, candidate = load_rule(original_yaml), load_rule(rule_yaml)
+def _exclusion_bypass(original_yaml: str | None, rule_yaml: str, events: list[Event]) -> list[GateCheck]:
+    """Judge agent-ADDED exclusions: block a proven cheap bypass, warn on judgment calls or original ones.
+
+    A written rule (no original) has nothing to inherit: every exclusion in it was added by the agent.
+    """
+    candidate = load_rule(rule_yaml)
+    original = load_rule(original_yaml) if original_yaml else None
+    added = added_filters(original, candidate) if original else rule_filters(candidate)
     attacks = [e for e in events if e.label == "attack"]
     blocked, warned = [], []
-    for field, value in sorted(added_filters(original, candidate), key=str):
+    for field, value in sorted(added, key=str):
         if _bypassable(rule_yaml, field, value, attacks):
             label = f"{field or '<keyword>'}={str(value).strip('*')}"
             (blocked if _anchor(field, value) == "free" else warned).append(label)
-    for field, value in sorted(
-        rule_filters(original), key=str
-    ):  # original ones can't be dropped, so warn only
+    inherited = rule_filters(original) if original else set()
+    for field, value in sorted(inherited, key=str):  # original ones can't be dropped, so warn only
         if _bypassable(rule_yaml, field, value, attacks):
             warned.append(f"(original) {field or '<keyword>'}={str(value).strip('*')}")
     checks = [
