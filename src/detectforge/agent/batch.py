@@ -124,11 +124,18 @@ def harden_selection(
         tuning = [e for e in in_scope if e.split == "tune"]
         start_rule = None if writing else reference.rule_yaml  # writing starts from no rule
         baseline = evasion_resistance(no_rule(tuning) if writing else run(reference.rule_yaml, tuning))
-        if baseline is None or (only_improvable and not writing and baseline >= 1.0):
+        # Hardening needs tuning variations to improve against. Writing doesn't: with none, the rule is
+        # written from the base attacks alone (zero-shot) and reported as its own subset (eval/export).
+        no_attacks = not any(e.label == "attack" for e in tuning)
+        if (baseline is None and (not writing or no_attacks)) or (
+            only_improvable and not writing and baseline is not None and baseline >= 1.0
+        ):
             item = new_item()
             item.tuning_before = baseline
             item.note = (
-                "no mutated tuning attacks to test"
+                "no tuning attacks to write a rule from"
+                if writing
+                else "no mutated tuning attacks to test"
                 if baseline is None
                 else "already detects every tuning mutation"
             )

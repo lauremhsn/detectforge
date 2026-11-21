@@ -18,7 +18,8 @@ from detectforge.rules.stamp import stamp_written_rule
 
 TECHNIQUE = "T1053.005"
 
-# The behavior-based fixture rule plus an exclusion for the vendor updater (a benign tuning event):
+# The behavior-based fixture rule plus an exclusion for the vendor updater (a benign tuning event), keyed on
+# its installer's path under Program Files (costly for an attacker), not on command-line text (free);
 # a new rule has no original to compare with, so it must raise no false alarm at all.
 WRITTEN = """\
 title: Scheduled Task Created With Schtasks
@@ -35,7 +36,7 @@ detection:
   selection_cli:
     CommandLine|contains: 'create'
   filter_vendor:
-    CommandLine|contains: '\\Program Files\\'
+    ParentImage|startswith: 'C:\\Program Files\\ExampleVendor\\'
   condition: all of selection_* and not filter_vendor
 falsepositives:
   - Software installers that register update tasks
@@ -135,9 +136,10 @@ def test_writing_that_never_produces_a_rule_proposes_nothing(tuning, settings):
 
 def test_a_rule_the_gate_rejected_is_still_the_best_attempt(tuning, settings):
     """Regression: a rehearsal said "no valid rule" when the agent only submitted (never tested) rules."""
-    noisy = WRITTEN.replace("  filter_vendor:\n    CommandLine|contains: '\\Program Files\\'\n", "").replace(
-        "  condition: all of selection_* and not filter_vendor", "  condition: all of selection_*"
-    )
+    noisy = WRITTEN.replace(
+        "  filter_vendor:\n    ParentImage|startswith: 'C:\\Program Files\\ExampleVendor\\'\n", ""
+    ).replace("  condition: all of selection_* and not filter_vendor", "  condition: all of selection_*")
+    assert "filter_vendor" not in noisy
     submit = tool_call("submit", rule_yaml=noisy, rationale="flags the vendor updater too")
     run = write_rule(TECHNIQUE, tuning, ScriptedClient([submit] * 3), "fake", settings=settings)
     assert any("rejected every submission" in r for r in run.reasons)
@@ -223,3 +225,29 @@ def test_write_v2_forbids_look_alike_characters_and_asks_to_submit_early():
     assert "Never list those characters" in WRITE_SYSTEM_PROMPT and "|windash" in WRITE_SYSTEM_PROMPT
     assert "Submit early" in WRITE_SYSTEM_PROMPT
     assert "Never list those characters" not in SYSTEM_PROMPT  # hardening prompt unchanged (v7)
+
+
+def test_a_rule_with_no_tuning_variations_is_written_zero_shot_but_not_hardened(
+    setup,  # noqa: F811  (the pytest fixture imported from test_batch)
+    fixture_events,
+    tmp_path,
+):
+    """With no tuning variations there is nothing to harden against, but a rule can still be written from
+    the base attacks: that's the zero-shot subset of the written arm, reported apart by the export."""
+    from detectforge.eval.export import export_runs
+
+    index, selection, _ = setup
+    no_variations = [e for e in fixture_events if not (e.split == "tune" and e.transform != "none")]
+    hardening = harden_selection(selection[:1], no_variations, index, None, "fake", tmp_path, dry_run=True)
+    assert hardening[0].action == "skipped" and "no mutated tuning attacks" in hardening[0].note
+
+    client = ScriptedClient([tool_call("submit", rule_yaml=WRITTEN, rationale="behavior")])
+    items = harden_selection(selection[:1], no_variations, index, client, "fake", tmp_path, mode="write")
+    assert items[0].action == "written" and items[0].tuning_before is None
+
+    export_runs(tmp_path, tmp_path / "out")
+    (row,) = [r for r in (tmp_path / "out" / "runs.csv").read_text(encoding="utf-8").splitlines()[1:]]
+    assert ",write,True," in row  # mode, zero_shot
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
+    (group,) = summary
+    assert group["subsets"]["zero_shot"]["runs"] == 1 and group["subsets"]["with_variations"] is None

@@ -71,3 +71,28 @@ def test_anchor_grading():
     assert _anchor("CommandLine", "anything") == "free"
     assert _anchor("ParentImage", "\\notepad.exe") == "free"  # bare filename
     assert _anchor("ParentImage", "C:\\Program Files\\Co\\x.exe") == "privileged"
+
+
+def test_an_attack_the_rule_already_misses_does_not_make_an_exclusion_a_bypass():
+    """Regression: an unsatisfiable exclusion was blocked because the rule already missed one attack."""
+    missed = _attack("a3", "schtasks /change /tn evil")  # no 'create': the rule misses it un-injected
+    candidate = _with_filter(
+        "filter_x: {CommandLine|re: '^backup-job-[0-9]+$'}", "selection and not filter_x"
+    )
+    checks = _exclusion_bypass(ORIGINAL, candidate, [*ATTACKS, missed])
+    assert _named(checks, "no_bypassable_exclusions").passed
+
+
+def test_a_written_rule_is_checked_too_every_exclusion_counts_as_added():
+    candidate = _with_filter("filter_x: {CommandLine|contains: 'Backup'}", "selection and not filter_x")
+    blk = _named(_exclusion_bypass(None, candidate, ATTACKS), "no_bypassable_exclusions")
+    assert not blk.passed and "backup" in blk.detail
+
+
+def test_the_gate_runs_the_exclusion_check_on_written_rules():
+    from detectforge.gate import check
+
+    candidate = _with_filter("filter_x: {CommandLine|contains: 'Backup'}", "selection and not filter_x")
+    result = check(candidate, ATTACKS)  # no original: a written rule
+    assert not result.passed
+    assert any(c.name == "no_bypassable_exclusions" and not c.passed for c in result.checks)
