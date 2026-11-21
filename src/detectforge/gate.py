@@ -12,16 +12,18 @@ from detectforge.harness.matcher import required_fields
 from detectforge.harness.run import run
 from detectforge.rules.convert import convert_rule
 from detectforge.rules.lint import (
+    added_filters,
     case_sensitive_regexes,
     copied_literals,
     dropped_fields,
     dropped_filters,
+    rule_filters,
     short_bare_values,
     unusual_characters,
 )
 from detectforge.rules.parse import load_rule
 from detectforge.rules.validate import validate_rule
-from detectforge.schemas import Event
+from detectforge.schemas import SIGMA_FIELD_MAP, Event
 
 
 class GateConfig(BaseModel):
@@ -139,7 +141,80 @@ def check(
             )
         )
         checks.extend(_keeps_original_scope(original_yaml, rule_yaml))
+        checks.extend(_exclusion_bypass(original_yaml, rule_yaml, events))
     return GateResult(passed=all(c.passed for c in checks if c.blocking), checks=checks)
+
+
+# Exclusions the attacker writes freely are evadable; ones under a protected path cost them privilege.
+_CONTENT_FIELDS = ("CommandLine", "ParentCommandLine")
+_PROTECTED = (r"\windows\system32", r"\windows\syswow64", r"\program files")
+
+
+def _anchor(field: str | None, value: str) -> str:
+    if field is None or field in _CONTENT_FIELDS:
+        return "free"
+    v = str(value).lower()
+    if v.startswith("*") or (not v.startswith("\\") and ":" not in v):
+        return "free"  # leading wildcard or bare filename: location-independent
+    return "privileged" if any(p in v for p in _PROTECTED) else "free"
+
+
+def _inject_exclusion(event: Event, field: str | None, value: str) -> Event:
+    # make the attack satisfy the exclusion (keep what the rule matches on, add the excluded value).
+    # transform stays "none": these are exclusion-abuse probes, their own category, not a Uetz type.
+    attr = SIGMA_FIELD_MAP.get(field) if field else "command_line"
+    attr = attr or "command_line"
+    val = str(value).strip("*")  # pySigma stores a contains-match as *x*; inject the real token
+    current = getattr(event, attr) or ""
+    new = f"{current} {val}".strip() if attr in ("command_line", "parent_command_line") else val
+    return event.model_copy(update={attr: new, "transform": "none", "event_id": event.event_id + "-xab"})
+
+
+def _bypassable(rule_yaml: str, field: str | None, value: str, attacks: list[Event]) -> bool:
+    if not attacks:
+        return False
+    variants = [_inject_exclusion(a, field, value) for a in attacks]
+    card = run(rule_yaml, variants)
+    return card.valid and card.hits < len(variants)
+
+
+def _exclusion_bypass(original_yaml: str, rule_yaml: str, events: list[Event]) -> list[GateCheck]:
+    """Judge agent-ADDED exclusions: block a proven cheap bypass, warn on judgment calls or original ones."""
+    original, candidate = load_rule(original_yaml), load_rule(rule_yaml)
+    attacks = [e for e in events if e.label == "attack"]
+    blocked, warned = [], []
+    for field, value in sorted(added_filters(original, candidate), key=str):
+        if _bypassable(rule_yaml, field, value, attacks):
+            label = f"{field or '<keyword>'}={str(value).strip('*')}"
+            (blocked if _anchor(field, value) == "free" else warned).append(label)
+    for field, value in sorted(
+        rule_filters(original), key=str
+    ):  # original ones can't be dropped, so warn only
+        if _bypassable(rule_yaml, field, value, attacks):
+            warned.append(f"(original) {field or '<keyword>'}={str(value).strip('*')}")
+    checks = [
+        GateCheck(
+            name="no_bypassable_exclusions",
+            passed=not blocked,
+            detail=(
+                "an attacker satisfies these added exclusions and the rule then misses the attack: "
+                + "; ".join(blocked)
+                if blocked
+                else "no added exclusion is a proven bypass"
+            ),
+        )
+    ]
+    if warned:
+        checks.append(
+            GateCheck(
+                name="exclusion_bypass_judgment",
+                passed=False,
+                blocking=False,
+                detail="judgment call, satisfiable but at a cost (privileged path) or inherited from the "
+                "original rule (can't be dropped): " + "; ".join(warned),
+            )
+        )
+    return checks
 
 
 def _not_overfitted(rule_yaml: str, events: list[Event], original_yaml: str | None) -> list[GateCheck]:
