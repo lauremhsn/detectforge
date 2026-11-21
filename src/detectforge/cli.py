@@ -160,6 +160,11 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("trace_id", help="the trace id, or its first 6+ characters as `review list` shows")
         p.add_argument("--comment", "-m", default="", help="why (kept with the decision)")
         p.set_defaults(handler=_review_decide, decision=decision)
+    p = review_sub.add_parser(
+        "apply", help="several decisions from a file, one per line: approve|reject <trace id> <comment>"
+    )
+    p.add_argument("file", type=Path)
+    p.set_defaults(handler=_review_apply)
 
     p = sub.add_parser("export", help="saved runs as CSV/JSON: traces, metrics, mean and spread per setup")
     p.add_argument("--out", type=Path, help="output directory (default: data/exports)")
@@ -496,6 +501,48 @@ def _review_decide(args: argparse.Namespace) -> int:
         return 1
     approved = settings.runs_dir / "approved" / f"{trace_id}.yml"
     print(f"{trace_id[:8]} {record.status}" + (f" -> {approved}" if record.status == "approved" else ""))
+    return 0
+
+
+VERBS = {"approve": "approved", "reject": "rejected"}
+
+
+def parse_decisions(text: str) -> list[tuple[str, str, str]]:
+    """(decision, trace id prefix, comment) per line; blank lines and # comments are skipped."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        verb, _, rest = line.partition(" ")
+        prefix, _, comment = rest.strip().partition(" ")
+        if verb.lower() not in VERBS or not prefix:
+            raise ValueError(f"line {n}: expected 'approve|reject <trace id> <comment>'")
+        out.append((VERBS[verb.lower()], prefix, comment.strip()))
+    return out
+
+
+def _review_apply(args: argparse.Namespace) -> int:
+    """Every decision in the file, checked first, then recorded with one reviewer key (asked once)."""
+    settings = get_settings()
+    try:
+        keys = parse_reviewer_keys(settings.reviewer_keys)
+        planned = [
+            (decision, resolve_trace_id(settings.runs_dir, prefix), comment)
+            for decision, prefix, comment in parse_decisions(args.file.read_text(encoding="utf-8"))
+        ]
+    except (OSError, ValueError) as e:
+        print(f"error: {e}; nothing was recorded", file=sys.stderr)
+        return 1
+    key = os.environ.get(REVIEWER_KEY_ENV) or getpass.getpass("Reviewer key: ")
+    for decision, trace_id, comment in planned:
+        try:
+            record = decide(settings.runs_dir, trace_id, decision, key, keys, comment)
+        except (ReviewAuthError, ValidationError) as e:
+            print(f"error at {trace_id[:8]}: {e}; stopped (earlier decisions are recorded)", file=sys.stderr)
+            return 1
+        print(f"{trace_id[:8]} {record.status}")
+    print(f"{len(planned)} decisions recorded")
     return 0
 
 

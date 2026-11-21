@@ -167,7 +167,8 @@ def _inject_exclusion(event: Event, field: str | None, value: str) -> Event:
     attr = attr or "command_line"
     val = str(value).strip("*")  # pySigma stores a contains-match as *x*; inject the real token
     current = getattr(event, attr) or ""
-    new = f"{current} {val}".strip() if attr in ("command_line", "parent_command_line") else val
+    # Never strip: an exclusion like ' query ' only matches with its spaces, and an attacker can type them.
+    new = f"{current} {val}" if attr in ("command_line", "parent_command_line") else val
     return event.model_copy(update={attr: new, "transform": "none", "event_id": event.event_id + "-xab"})
 
 

@@ -131,3 +131,23 @@ def test_review_from_the_command_line(runs_dir, make_run, cli_env, capsys):
     capsys.readouterr()
     assert main(["review", "list", "--pending"]) == 0
     assert trace_id[:8] not in capsys.readouterr().out
+
+
+def test_several_decisions_from_one_file(runs_dir, make_run, cli_env, tmp_path, capsys):
+    from detectforge.cli import main
+
+    first, second = make_run().run.trace_id, make_run(passes=False).run.trace_id
+    cli_env.setenv("DETECTFORGE_REVIEWER_KEY", "correct-horse-battery")
+    decisions_file = tmp_path / "decisions.txt"
+    decisions_file.write_text(
+        f"# dev runs\napprove {first[:8]} keys on the create verb\n\nreject {second[:8]} never submitted\n",
+        encoding="utf-8",
+    )
+    assert main(["review", "apply", str(decisions_file)]) == 0
+    assert "2 decisions recorded" in capsys.readouterr().out
+    assert decisions(runs_dir, first)[-1].comment == "keys on the create verb"
+    assert decisions(runs_dir, second)[-1].decision == "rejected"
+
+    decisions_file.write_text(f"approve {first[:8]} ok\napprove zzzzzzzz typo\n", encoding="utf-8")
+    assert main(["review", "apply", str(decisions_file)]) == 1  # checked before anything is recorded
+    assert len(decisions(runs_dir, first)) == 1

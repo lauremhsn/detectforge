@@ -96,3 +96,11 @@ def test_the_gate_runs_the_exclusion_check_on_written_rules():
     result = check(candidate, ATTACKS)  # no original: a written rule
     assert not result.passed
     assert any(c.name == "no_bypassable_exclusions" and not c.passed for c in result.checks)
+
+
+def test_an_exclusion_with_spaces_is_probed_with_its_spaces():
+    """Regression: a written rule excluded ' query ' (spaces included); the probe stripped the trailing
+    space, no longer matched, and the gate called it safe, though appending ' query x' evades the rule."""
+    candidate = _with_filter("filter_x: {CommandLine|contains: ' query '}", "selection and not filter_x")
+    blk = _named(_exclusion_bypass(None, candidate, ATTACKS), "no_bypassable_exclusions")
+    assert not blk.passed and "query" in blk.detail
