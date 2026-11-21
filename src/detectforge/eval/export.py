@@ -26,7 +26,8 @@ from detectforge.llm import ModelCallRecord
 from detectforge.review import RunSummary, latest_prompt_versions, list_runs, load_run
 
 RUN_COLUMNS = [
-    "trace_id", "created", "mode", "technique", "rule_id", "rule_title", "prompt_version", "model",
+    "trace_id", "created", "mode", "zero_shot", "technique", "rule_id", "rule_title", "prompt_version",
+    "model",
     "status", "final_source", "gate_passed", "failed_checks", "decision", "reviewer",
     "tuning_resistance_before", "tuning_resistance_after", "heldout_resistance_before",
     "heldout_resistance_after", "tuning_false_alarms_before", "tuning_false_alarms_after",
@@ -46,6 +47,16 @@ def cost_usd(model: str, tokens: int) -> float | None:
     return 0.0 if model.endswith(":free") or tokens == 0 else None
 
 
+def zero_shot(outcome: HardeningOutcome) -> bool:
+    """A written rule whose agent saw no attack variation at all, only the base attacks.
+
+    Its held-out score is pure zero-shot generalization, so it's reported as its own subset rather than
+    pulling down (or up) the written arm's average. "No variations to measure" is a None tuning score.
+    """
+    run = outcome.run
+    return run.mode == "write" and run.tuning_evasion_resistance_before is None
+
+
 def run_row(outcome: HardeningOutcome, summary: RunSummary) -> dict[str, Any]:
     run, heldout, prov = outcome.run, outcome.heldout_evaluation, outcome.provenance
     meta = _metadata(run.original_rule_yaml or run.final_rule_yaml)
@@ -55,6 +66,7 @@ def run_row(outcome: HardeningOutcome, summary: RunSummary) -> dict[str, Any]:
         "trace_id": run.trace_id,
         "created": summary.created.isoformat(timespec="seconds"),
         "mode": run.mode,
+        "zero_shot": zero_shot(outcome),
         "technique": run.technique,
         "rule_id": meta.get("id", ""),
         "rule_title": meta.get("title", ""),
@@ -97,35 +109,43 @@ def summarise(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         groups[(row["mode"], row["prompt_version"], row["model"])].append(row)
     out = []
     for (mode, version, model), group in sorted(groups.items()):
-        passed = [r for r in group if r["status"] == "passed"]
-        approved = [r for r in group if r["decision"] == "approved"]
-        costs = [r["cost_usd"] for r in group]
-        out.append(
-            {
-                "mode": mode,
-                "prompt_version": version,
-                "model": model,
-                "runs": len(group),
-                "techniques": len({r["technique"] for r in group}),
-                "passed_gate": len(passed),
-                "approved": len(approved),
-                "rejected": sum(r["decision"] == "rejected" for r in group),
-                "pending": sum(r["decision"] == "pending" for r in group),
-                "gate_pass_rate": len(passed) / len(group),
-                "runs_with_failed_model_calls": sum(r["failed_model_calls"] > 0 for r in group),
-                "runs_with_fallback": sum(r["fallback_calls"] > 0 for r in group),
-                # Everything spent in the configuration, divided by what a human accepted.
-                "cost_usd_per_approved_rule": (
-                    sum(costs) / len(approved) if approved and None not in costs else None
-                ),
-                "model_calls_per_approved_rule": (
-                    sum(r["model_calls"] for r in group) / len(approved) if approved else None
-                ),
-                "metrics": {m: _spread([r[m] for r in group]) for m in SUMMARY_METRICS},
-                "metrics_passed_runs": {m: _spread([r[m] for r in passed]) for m in SUMMARY_METRICS},
+        entry = {"mode": mode, "prompt_version": version, "model": model, **_stats(group)}
+        if mode == "write":  # written with variations to learn from vs zero-shot, reported apart
+            entry["subsets"] = {
+                name: _stats(rows) if rows else None
+                for name, rows in (
+                    ("with_variations", [r for r in group if not r["zero_shot"]]),
+                    ("zero_shot", [r for r in group if r["zero_shot"]]),
+                )
             }
-        )
+        out.append(entry)
     return out
+
+
+def _stats(group: list[dict[str, Any]]) -> dict[str, Any]:
+    passed = [r for r in group if r["status"] == "passed"]
+    approved = [r for r in group if r["decision"] == "approved"]
+    costs = [r["cost_usd"] for r in group]
+    return {
+        "runs": len(group),
+        "techniques": len({r["technique"] for r in group}),
+        "passed_gate": len(passed),
+        "approved": len(approved),
+        "rejected": sum(r["decision"] == "rejected" for r in group),
+        "pending": sum(r["decision"] == "pending" for r in group),
+        "gate_pass_rate": len(passed) / len(group),
+        "runs_with_failed_model_calls": sum(r["failed_model_calls"] > 0 for r in group),
+        "runs_with_fallback": sum(r["fallback_calls"] > 0 for r in group),
+        # Everything spent in the configuration, divided by what a human accepted.
+        "cost_usd_per_approved_rule": (
+            sum(costs) / len(approved) if approved and None not in costs else None
+        ),
+        "model_calls_per_approved_rule": (
+            sum(r["model_calls"] for r in group) / len(approved) if approved else None
+        ),
+        "metrics": {m: _spread([r[m] for r in group]) for m in SUMMARY_METRICS},
+        "metrics_passed_runs": {m: _spread([r[m] for r in passed]) for m in SUMMARY_METRICS},
+    }
 
 
 def export_runs(runs_dir: Path, out_dir: Path, current_prompts_only: bool = False) -> dict[str, int]:
