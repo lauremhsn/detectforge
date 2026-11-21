@@ -53,6 +53,16 @@ def dropped_filters(original: SigmaRule, candidate: SigmaRule) -> list[str]:
     return [f"{field or '<keyword>'}: {value}" for field, value in sorted(missing, key=str)]
 
 
+def added_filters(original: SigmaRule, candidate: SigmaRule) -> set[FilterKey]:
+    """Exclusions (field, value) the candidate added that the original didn't."""
+    return _filters(candidate) - _filters(original)
+
+
+def rule_filters(rule: SigmaRule) -> set[FilterKey]:
+    """Every exclusion (field, value) under a NOT in the rule's condition."""
+    return _filters(rule)
+
+
 def _filters(rule: SigmaRule) -> set[FilterKey]:
     found: set[FilterKey] = set()
 
