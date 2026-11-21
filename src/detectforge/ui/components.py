@@ -110,6 +110,19 @@ h1 { font-size: 1.9rem !important; padding-top: 0.4rem !important; }
   color: #E5ECF6; font-weight: 650;
 }
 
+.st-key-stepper label[data-testid="stRadioOption"] > div > div:not([data-testid="stMarkdownContainer"]) {
+  display: none;
+}
+.st-key-stepper [role="radiogroup"] { gap: 0.4rem; }
+.st-key-stepper label[data-testid="stRadioOption"] {
+  padding: 0.45rem 1rem; margin: 0; border-radius: 999px; cursor: pointer; border: 1px solid #22304D;
+}
+.st-key-stepper label[data-testid="stRadioOption"] p { color: #9FB0CC; font-weight: 500; }
+.st-key-stepper label[data-testid="stRadioOption"][data-selected="true"] {
+  background: #1D4ED8; border-color: #3B82F6;
+}
+.st-key-stepper label[data-testid="stRadioOption"][data-selected="true"] p { color: #FFFFFF; }
+
 .st-key-inbox [role="radiogroup"] { gap: 0; width: 100%; }
 .st-key-inbox [role="radiogroup"] > div {
   width: 100%; padding: 0.7rem 0.85rem; cursor: pointer;

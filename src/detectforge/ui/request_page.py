@@ -91,54 +91,78 @@ def request_page(index: ReferenceIndex | str, all_events: list[Event]) -> None:
     if isinstance(index, str):
         st.info(index)
         return
-    result = intake_panel(index)
+    with st.container(border=True):
+        result = intake_panel(index)
+        st.caption("Or try an example:")
+        for column, example in zip(st.columns(len(EXAMPLES)), EXAMPLES, strict=True):
+            column.button(
+                example, key=f"example_{example}", on_click=st.session_state.update,
+                kwargs={"intake_request": example}, width="stretch",
+            )  # fmt: skip
     if result is None or result.status != "mapped":
-        with st.expander("Try an example"):
-            st.markdown(
-                "- *detect scheduled-task persistence*\n"
-                "- *attackers deleting shadow copies before ransomware*\n"
-                "- *registry run keys used for persistence*"
-            )
         return
-    st.divider()
-    for match in result.techniques:
-        _verdict_card(assess(match.technique, index, all_events), all_events, index)
+    count = len(result.techniques)
+    st.markdown(f"#### {count} technique{'s' if count != 1 else ''}")
+    verdicts = [assess(match.technique, index, all_events) for match in result.techniques]
+    for start in range(0, len(verdicts), 2):
+        for column, c in zip(st.columns(2), verdicts[start : start + 2], strict=False):
+            with column:
+                _verdict_card(c, all_events, index)
+
+
+EXAMPLES = [
+    "detect scheduled-task persistence",
+    "attackers deleting shadow copies before ransomware",
+    "registry run keys used for persistence",
+]
+HEADLINE = {
+    "not_covered": ("🟥", "not covered"),
+    "untested": ("⬜", "rule found, not measured"),
+    "robust": ("🟩", "covered"),
+    "evadable": ("🟧", "covered, but evadable"),
+}
 
 
 def _verdict_card(c: Coverage, events: list[Event], index: ReferenceIndex) -> None:
+    icon, words = HEADLINE[c.verdict]
     with st.container(border=True):
+        st.markdown(f"#### {icon} {c.technique} — {words}")
         if c.verdict == "not_covered":
-            st.markdown(f"### 🟥 {c.technique} — not covered")
             st.markdown("No usable community rule exists for this technique. The agent can write one.")
             write_panel(c.technique, events, index)
             return
 
         title = md(c.rule_title or "")
         if c.verdict == "untested":
-            st.markdown(f"### ⬜ {c.technique} — rule found, not measured")
             st.markdown(
                 f"Best community rule: **{title}**. There are no attacks for this technique in the "
                 "current test data, so its evasion resistance can't be measured yet."
             )
-        elif c.verdict == "robust":
-            st.markdown(f"### 🟩 {c.technique} — covered")
-            st.markdown(f"**{title}** detects all {c.attacks} attacks and variations, with no false alarms.")
         else:
-            st.markdown(f"### 🟧 {c.technique} — covered, but evadable")
-            what = f"evaded by {', '.join(c.evaded_by)}" if c.evaded_by else "misses some attacks"
-            alarms = f", {c.false_alarms} false alarm(s)" if c.false_alarms else ""
-            st.markdown(
-                f"Strongest single rule: **{title}**. It detects {c.detected} of {c.attacks} attacks and "
-                f"variations ({pct(c.resistance)} of variations); {what}{alarms}."
+            left, right = st.columns([1, 2], vertical_alignment="center")
+            left.metric(
+                "Caught",
+                f"{c.detected}/{c.attacks}",
+                help="Attacks and their variations caught by the strongest single community rule, "
+                "replayed by the harness (not judged by the model).",
             )
+            if c.verdict == "robust":
+                right.markdown(f"**{title}** catches every attack and variation, with no false alarms.")
+            else:
+                what = f"evaded by {', '.join(c.evaded_by)}" if c.evaded_by else "misses some attacks"
+                alarms = f"; {c.false_alarms} false alarm(s)" if c.false_alarms else ""
+                right.markdown(
+                    f"Strongest single rule: **{title}**, {what}{alarms} "
+                    f"({pct(c.resistance)} of variations caught)."
+                )
         if c.attacks and c.usable_rules > 1:
             st.caption(
                 f"Best of {c.usable_rules} usable community rules for {c.technique}. All of them deployed "
-                f"together would detect {c.detected_together} of {c.attacks}."
+                f"together would catch {c.detected_together} of {c.attacks}."
             )
         if not c.rule_yaml:
             return
-        c1, c2, _ = st.columns([1, 1, 2])
+        c1, c2 = st.columns(2)
         label = f"SigmaHQ: {c.rule_title}"
         c1.button(
             "See the evidence →",

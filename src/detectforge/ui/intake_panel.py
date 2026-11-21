@@ -17,7 +17,7 @@ def intake_panel(index: ReferenceIndex) -> IntakeResult | None:
     """The request box. Returns the interpreted request (techniques, or a clarifying question)."""
     request = st.text_area(
         "What do you want to detect?",
-        placeholder="e.g. scheduled-task persistence, or paste a short threat report",
+        placeholder="Scheduled-task persistence, or paste a short threat report",
         key="intake_request",
         height=110,
     )

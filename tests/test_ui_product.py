@@ -203,3 +203,12 @@ def evaded_rows(evaluated, rules):
         evaluated / "runs",
         {"literal-schtasks": rules["literal"]},
     )
+
+
+def test_a_rule_test_starts_with_one_plain_sentence(rules, fixture_events):
+    from detectforge.harness import run
+    from detectforge.ui.rules_page import summary_line
+
+    weak = summary_line(run(rules["literal"], [e for e in fixture_events if e.technique == TECHNIQUE]))
+    assert weak.startswith("**Catches 2 of 5 attacks and variations.**") and "Evaded by" in weak
+    assert "nothing to measure" in summary_line(run(rules["literal"], []))

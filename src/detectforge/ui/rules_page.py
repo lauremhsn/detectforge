@@ -26,18 +26,20 @@ STEPS = {
 
 def rules_page(events: list[Event], all_events: list[Event], index: ReferenceIndex | str) -> None:
     header("rules", "Measure one rule against attacker variations, then make it harder to evade.")
-    if label := st.session_state.get("rule_label"):
-        st.info(f"**Rule under test:** {md(label)}")
     st.session_state.setdefault("rules_step", "pick")
-    step = st.radio(
-        "Step",
-        list(STEPS),
-        format_func=STEPS.get,
-        horizontal=True,
-        key="rules_step",
-        label_visibility="collapsed",
-    )
-    st.divider()
+    with st.container(key="stepper"):
+        step = st.radio(
+            "Step",
+            list(STEPS),
+            format_func=STEPS.get,
+            horizontal=True,
+            key="rules_step",
+            label_visibility="collapsed",
+        )
+    if label := st.session_state.get("rule_label"):
+        technique = st.session_state.get("technique_filter", "(all)")
+        scope = "all techniques" if technique == "(all)" else technique
+        st.info(f"**Rule under test:** {md(label)} · tested on {scope} (test data: sidebar)")
     if step == "pick":
         pick_step(index)
     elif step == "test":
@@ -136,19 +138,32 @@ def test_step(events: list[Event]) -> None:
         st.info("Pick a rule first (step ①).")
         return
     st.caption(
-        "The rule is replayed on attacks, their mutations (the five evasion types of Uetz et al.) and "
-        "benign look-alikes. Use the sidebar to choose the test data."
+        "The rule is replayed on attacks, their variations (the five evasion types of Uetz et al.) and "
+        "legitimate look-alike commands."
     )
     validation_view(rule_yaml)
-    with st.expander("Rule YAML"):
-        st.code(rule_yaml, language="yaml")
     card = run(rule_yaml, events)
     scorecard_view(card, events)
     if card.valid and card.misses:
         st.button(
             "Harden it →", type="primary", on_click=st.session_state.update, kwargs={"rules_step": "harden"}
         )
+    with st.expander("Rule YAML"):
+        st.code(rule_yaml, language="yaml")
     export_view(rule_yaml, "rule")
+
+
+def summary_line(card: Scorecard) -> str:
+    """The test result in one sentence, before any table."""
+    attacks = card.hits + card.misses
+    if not attacks:
+        return "No attacks in the test data for this rule, so nothing to measure yet."
+    evaded = [t for t, b in card.per_transform.items() if t != "none" and b.misses]
+    parts = [f"**Catches {card.hits} of {attacks} attacks and variations.**"]
+    parts.append(f"Evaded by {', '.join(evaded)}." if evaded else "No variation slips past.")
+    if card.false_alarms:
+        parts.append(f"{card.false_alarms} false alarm(s) on legitimate commands.")
+    return " ".join(parts)
 
 
 def scorecard_view(card: Scorecard, events: list[Event]) -> None:
@@ -156,6 +171,7 @@ def scorecard_view(card: Scorecard, events: list[Event]) -> None:
         st.error(f"Rule could not be evaluated: {md(card.error)}")
         return
     attacks = card.hits + card.misses
+    (st.success if not card.misses and not card.false_alarms else st.warning)(summary_line(card))
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Attacks detected", f"{card.hits}/{attacks}")
     c2.metric("Evasion resistance (mutations)", pct(evasion_resistance(card)))
@@ -177,11 +193,16 @@ def scorecard_view(card: Scorecard, events: list[Event]) -> None:
         ],
     )
     matched = set(card.matched_event_ids)
-    st.markdown("**Events**")
-    if st.toggle("Only missed attacks and false alarms", key="only_problems"):
-        events = [e for e in events if (e.event_id in matched) == (e.label == "benign")]
-        if not events:
-            st.success("Nothing missed and no false alarms on these events.")
+    problems = [e for e in events if (e.event_id in matched) == (e.label == "benign")]
+    with st.expander(f"Every event ({len(problems)} missed or false alarm, of {len(events)})"):
+        if st.toggle("Only missed attacks and false alarms", value=True, key="only_problems"):
+            events = problems
+            if not events:
+                st.success("Nothing missed and no false alarms on these events.")
+        _events_table(events, matched)
+
+
+def _events_table(events: list[Event], matched: set[str]) -> None:
     table(
         [
             {
@@ -222,8 +243,15 @@ def harden_step(events: list[Event], all_events: list[Event], index: ReferenceIn
     if not before:
         st.info("Pick a rule first (step ①).")
         return
-    agent_panel(before, all_events, index)
-    st.caption("Or edit the candidate on the right: every edit is re-tested on the same events.")
+    with st.container(border=True):
+        st.markdown("**Let the agent harden it**")
+        st.caption(
+            "The agent sees only the tuning variations; its proposal goes to Review with the evidence, "
+            "never straight to deployment."
+        )
+        agent_panel(before, all_events, index)
+    st.markdown("**Or edit it yourself**")
+    st.caption("Every edit of the candidate on the right is re-tested on the same events.")
     left, right = st.columns(2)
     left.markdown("**Before (as-is)**")
     left.code(before, language="yaml")
