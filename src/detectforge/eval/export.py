@@ -27,7 +27,7 @@ from detectforge.review import RunSummary, latest_prompt_versions, list_runs, lo
 
 RUN_COLUMNS = [
     "trace_id", "created", "mode", "zero_shot", "technique", "rule_id", "rule_title", "prompt_version",
-    "model",
+    "model", "model_call_budget",
     "status", "final_source", "gate_passed", "failed_checks", "decision", "reviewer",
     "tuning_resistance_before", "tuning_resistance_after", "heldout_resistance_before",
     "heldout_resistance_after", "tuning_false_alarms_before", "tuning_false_alarms_after",
@@ -72,6 +72,7 @@ def run_row(outcome: HardeningOutcome, summary: RunSummary) -> dict[str, Any]:
         "rule_title": meta.get("title", ""),
         "prompt_version": run.prompt_version,
         "model": run.model,
+        "model_call_budget": prov.budgets.get("model_calls") if prov else None,
         "status": run.status,
         "final_source": run.final_source,
         "gate_passed": run.gate.passed,
@@ -103,13 +104,24 @@ def run_row(outcome: HardeningOutcome, summary: RunSummary) -> dict[str, Any]:
 
 
 def summarise(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Per configuration (mode, prompt version, model): counts, rates, and each metric's spread."""
-    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    """Per configuration (mode, prompt version, model, model-call budget): counts, rates, spreads.
+
+    The budget is part of the configuration: an ablation run with a larger budget is a different
+    setup, and averaging it with the frozen-budget runs would blur both.
+    """
+    groups: dict[tuple[str, str, str, int], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        groups[(row["mode"], row["prompt_version"], row["model"])].append(row)
+        budget = row["model_call_budget"] if row["model_call_budget"] is not None else -1
+        groups[(row["mode"], row["prompt_version"], row["model"], budget)].append(row)
     out = []
-    for (mode, version, model), group in sorted(groups.items()):
-        entry = {"mode": mode, "prompt_version": version, "model": model, **_stats(group)}
+    for (mode, version, model, budget), group in sorted(groups.items()):
+        entry = {
+            "mode": mode,
+            "prompt_version": version,
+            "model": model,
+            "model_call_budget": None if budget == -1 else budget,
+            **_stats(group),
+        }
         if mode == "write":  # written with variations to learn from vs zero-shot, reported apart
             entry["subsets"] = {
                 name: _stats(rows) if rows else None
