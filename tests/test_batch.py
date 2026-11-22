@@ -178,7 +178,8 @@ def test_held_out_mean_leaves_out_rules_without_held_out_mutations(setup, fixtur
         rule_id="y", title="y", technique="T2", action="hardened", heldout_before=0.5, heldout_mutations=2
     )  # the hardened rule couldn't be evaluated (after = None): it detects nothing, so it counts as 0
     summary = heldout_summary([*items, no_heldout, invalid])
-    assert (summary.rules, summary.rules_with_heldout) == (3, 2)
+    assert (summary.runs, summary.runs_with_heldout, summary.rules) == (3, 2, 3)
+    assert heldout_summary([no_heldout, no_heldout]).rules == 1  # --repeat: 2 runs of 1 rule
     assert summary.mean_before == pytest.approx((hardened.heldout_before + 0.5) / 2)
     assert summary.mean_after == pytest.approx(hardened.heldout_after / 2)
     assert heldout_summary([no_heldout]).mean_after is None  # n/a, not 0%

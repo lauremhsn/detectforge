@@ -49,6 +49,47 @@ def test_fingerprints_are_stable(fixture_events, tmp_path):
     assert code_fingerprint(pkg) != first
 
 
+def test_reporting_files_are_left_out_by_path_not_folder(tmp_path):
+    pkg = tmp_path / "pkg"
+    (pkg / "eval").mkdir(parents=True)
+    (pkg / "eval" / "arms.py").write_text("scores = 1\n")
+    first = code_fingerprint(pkg)
+    (pkg / "eval" / "export.py").write_text("report only")  # reporting: no effect on a result
+    (pkg / "eval" / "thresholds.py").write_text("report only")
+    assert code_fingerprint(pkg) == first
+    (pkg / "eval" / "arms.py").write_text("scores = 2\n")  # same folder, but it scores: counts
+    second = code_fingerprint(pkg)
+    assert second != first
+    (pkg / "export.py").write_text("x")  # the name alone isn't enough: only eval/export.py is out
+    assert code_fingerprint(pkg) != second
+
+
+def test_nothing_on_the_run_path_imports_the_reporting_files():
+    """The files left out of the fingerprint must not affect a run, so no run code may import them."""
+    import ast
+
+    import detectforge.provenance as prov
+
+    package = prov.PACKAGE_DIR
+    excluded = {p.removesuffix(".py").replace("/", ".") for p in prov._NOT_RESULT_FILES}
+    for path in package.rglob("*.py"):
+        relative = path.relative_to(package).as_posix()
+        if relative == "cli.py" or relative in prov._NOT_RESULT_FILES or relative.startswith("ui/"):
+            continue  # the CLI only calls them for its report commands; the UI is left out already
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imported = {
+            n.module.removeprefix("detectforge.")
+            for n in ast.walk(tree)
+            if isinstance(n, ast.ImportFrom) and n.module
+        } | {
+            a.name.removeprefix("detectforge.")
+            for n in ast.walk(tree)
+            if isinstance(n, ast.Import)
+            for a in n.names
+        }
+        assert not imported & excluded, f"{relative} imports reporting code left out of the fingerprint"
+
+
 def test_rerunning_a_batch_reuses_runs_with_the_same_setup(setup, fixture_events, tmp_path):  # noqa: F811
     index, selection, robust = setup
     client = ScriptedClient([tool_call("submit", rule_yaml=robust, rationale="verb")])

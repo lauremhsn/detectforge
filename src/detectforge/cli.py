@@ -385,11 +385,12 @@ def _harden_selection(args: argparse.Namespace) -> int:
         )
         return 0
     summary = heldout_summary(items)
-    if summary.rules:
+    if summary.runs:
+        of_rules = f" ({summary.rules} rules)" if summary.rules != summary.runs else ""
         print(
-            f"\nheld-out evasion resistance, mean over the {summary.rules_with_heldout} of {summary.rules} "
-            f"rules with held-out mutations: {_pct(summary.mean_before)} -> {_pct(summary.mean_after)} "
-            "(rules without held-out mutations are n/a and not averaged in)"
+            f"\nheld-out evasion resistance, mean over the {summary.runs_with_heldout} of {summary.runs} "
+            f"runs{of_rules} with held-out mutations: {_pct(summary.mean_before)} -> "
+            f"{_pct(summary.mean_after)} (runs of rules without held-out mutations are n/a, not averaged in)"
         )
     calls = sum(i.model_calls for i in items)
     print(f"\n{calls} model calls; runs saved to {settings.runs_dir} (see the Review tab)")

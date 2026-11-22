@@ -21,8 +21,12 @@ from detectforge.config import Settings
 from detectforge.schemas import Event
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-# Code that can't change a run's result: the UI only displays runs.
-_NOT_RESULT_CODE = {"ui"}
+# Code that can't change a run's result, so editing it must not change the setup key (which would
+# make every saved run look stale). Folders: the UI only displays runs. Files, by path: reporting
+# that only reads saved runs, imported by nothing on the run path (checked by a test). cli.py stays
+# in: it wires the run (events, budgets, batch options).
+_NOT_RESULT_DIRS = {"ui"}
+_NOT_RESULT_FILES = {"eval/export.py", "eval/thresholds.py"}
 
 
 class Provenance(BaseModel):
@@ -85,7 +89,7 @@ def code_fingerprint(package_dir: Path = PACKAGE_DIR) -> str:
     digest = hashlib.sha256()
     for path in sorted(package_dir.rglob("*.py")):
         relative = path.relative_to(package_dir)
-        if relative.parts[0] in _NOT_RESULT_CODE:
+        if relative.parts[0] in _NOT_RESULT_DIRS or relative.as_posix() in _NOT_RESULT_FILES:
             continue
         digest.update(relative.as_posix().encode() + b"\0" + _normalize(path.read_bytes()) + b"\0")
     return digest.hexdigest()[:16]

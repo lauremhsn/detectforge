@@ -211,14 +211,15 @@ def _fill(item: BatchItem, outcome: HardeningOutcome, action: str) -> None:
 
 
 class HeldoutSummary(BaseModel):
-    """Held-out evasion resistance of a batch, averaged only over rules that have held-out mutations.
+    """Held-out evasion resistance of a batch, averaged only over runs whose rule has held-out mutations.
 
     A rule whose attacks have no held-out mutation type (e.g. nothing to insert into or recode) has
     no held-out score: it is n/a, not 0% or 100%, and is left out of the mean instead of skewing it.
     """
 
-    rules: int  # rules that ran (or were reused)
-    rules_with_heldout: int
+    runs: int  # runs that ran or were reused (with --repeat, several per rule)
+    runs_with_heldout: int
+    rules: int  # distinct rules among those runs
     mean_before: float | None
     mean_after: float | None
 
@@ -232,8 +233,9 @@ def heldout_summary(items: list[BatchItem]) -> HeldoutSummary:
         return sum(v or 0.0 for v in values) / len(values) if values else None
 
     return HeldoutSummary(
-        rules=len(ran),
-        rules_with_heldout=len(scored),
+        runs=len(ran),
+        runs_with_heldout=len(scored),
+        rules=len({i.rule_id for i in ran}),
         mean_before=mean([i.heldout_before for i in scored]),
         mean_after=mean([i.heldout_after for i in scored]),
     )
