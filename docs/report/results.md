@@ -2,8 +2,7 @@
 
 Draft text for the final report. Every number comes from the test split, run once after the
 hardening prompt (harden-v7) and the writing prompt (write-v2) were frozen; nothing was changed
-in response to these results. Items marked **[pending]** wait for the dev ablation or for runs not
-done yet. Sources: `data/eval/results/arm1_community.json`, the saved runs (`detectforge export`),
+in response to these results. Items marked **[pending]** wait for runs not done yet. Sources: `data/eval/results/arm1_community.json`, the saved runs (`detectforge export`),
 `docs/limitations.md`.
 
 ---
@@ -98,8 +97,8 @@ because 6 test rules have no tuning variation, so their rule is written from the
 
 The main failure is **generalizing to unseen evasion types** (16), not gate-level mistakes. Every
 mistake the gate can see (case, copied characters, bypassable exclusions, false alarms on tuning
-look-alikes) was blocked before reaching a reviewer. The budget limit (7) is tested by the dev
-ablation below.
+look-alikes) was blocked before reaching a reviewer. The dev ablation below tests the budget limit (7): more
+calls turn those runs into passes but don't raise the unseen score.
 
 ## Arm 2 vs Arm 3
 
@@ -108,14 +107,15 @@ ablation below.
 | Starting point on unseen variations | 50% (the community rule) | 0% (no rule) |
 | After | 72% | 78% |
 | Passed the checks | 9 / 9 | 45 / 54 |
+| Approved by the reviewer | 7 / 9 | 27 / 54 |
 | New false alarms on unseen legitimate commands | 0 / 9 runs | 4 / 54 runs |
 | Model calls / run | 8.0 | 11.0 |
 | Time / run | 5.4 min | 2.0 min |
 
 The two "after" numbers are not on the same rules, so don't compare them as a ranking. The
 fair comparison is the one each arm was built for:
-- **Hardening:** raises an existing rule without adding false alarms.
-- **Writing:** covers a technique from nothing, but more of its rules need rejecting, 27 of 54 after review against the stated policy.
+- **Hardening:** raises an existing rule without adding measured false alarms, though a reviewer still rejected 2 of 9 for over-breadth.
+- **Writing:** covers a technique from nothing, but more of its rules need rejecting: 27 of 54 after review against the stated policy.
 
 ## Human review
 
@@ -123,12 +123,14 @@ The reviewer's policy (stated in the decisions file, the same for every run):
 - **Hardened:** approve if the rule passed the checks and adds no false alarm.
 - **Written:** approve if the rule passed the checks, raises no false alarm on unseen legitimate commands, and catches at least 80% of unseen variations, or has none to measure and is tightly scoped on reading.
 
-Result: **37 of 63 approved** (9 hardened, 28 written) and 26 rejected, plus 1 outage run rejected
-as unusable. **[pending: counts as recorded by `detectforge review apply`]**
+A third rule, for both arms: reject a rule that fires on everyday legitimate commands checked by hand, even when they aren't in the benign set.
+
+Result: **34 of 63 approved** (7 of 9 hardened, 27 of 54 written) and 29 rejected, plus 1 outage
+run rejected as unusable.
 
 Review also caught two things the gate couldn't:
 - **A written rule that requires both `Image` and `OriginalFileName`:** it would stay silent on logs without the second field, so it was rejected.
-- **Three rules that fire on everyday `reg query`, `reg add` and `reg delete` commands:** two hardened, one written, all found by testing four hand-written administrator commands. **[pending: the reviewer's decision on these three]**
+- **Three rules that fire on everyday `reg query`, `reg add` and `reg delete` commands:** two hardened, one written, all found by testing four hand-written administrator commands. All three were rejected, so 2 of the 3 hardened runs that gained on unseen variations were not approved.
 
 The second shows the limit of a fixed set of look-alike commands. It is suggested as an
 addition to the held-out benign set, re-scored on the saved rules without re-running the agent.
@@ -139,17 +141,20 @@ addition to the held-out benign set, re-scored on the saved rules without re-run
 - **Model calls per run:** 8.0 hardened, 11.0 written. **[pending: tokens per approved rule from `detectforge export`]**
 - **Time per run, dominated by free-tier response time:** about 5 minutes hardened, 2 minutes written.
 
-## Dev ablation: model-call budget for writing **[pending]**
+## Dev ablation: model-call budget for writing
 
-The dev split (9 rules, 2 runs each) at the frozen budget of 15 calls:
-- 10 of 18 runs passed;
-- all 8 failures ran out of calls;
-- unseen variations went from 0% to 77% (16 runs scored).
+Run on the dev split only (9 rules, 2 runs each, so 18 runs per budget), after the test split was done. The question:
+does a larger budget turn the "ran out of calls" failures into passes, and does it help on unseen
+variations?
 
-The same batch at 25 calls is running.
+| Budget | Passed the checks | Failures from the budget | Unseen caught, mean (16 runs) | Runs with new unseen false alarms | Model calls in total |
+|---|---|---|---|---|---|
+| 15 (frozen) | 10 / 18 | 8 | 77% | 4 | 212 |
+| 25 | **17 / 18** | 0 | 71% | 2 | 216 |
 
-The question: does a larger budget turn the "ran out of calls" failures into passes, and does it
-help on unseen variations? The test split stays at 15: the ablation is reported next to it, not used to re-run test.
+- **More calls buy passes, not generalization.** At 15 calls, every failure was the budget running out. At 25, 17 of 18 passed, at about the same total cost, because runs that pass stop early.
+- **The unseen score did not rise:** 71% vs 77%, within the run-to-run spread on 16 runs. The extra calls let the agent satisfy the checks on what it can see, which says nothing about what it can't (L11).
+- **The test split stays at 15 calls.** Choosing a budget because it scores better on test would tune on test data. This ablation is reported next to the main result, never in its place.
 
 ## Not yet measured **[pending]**
 
