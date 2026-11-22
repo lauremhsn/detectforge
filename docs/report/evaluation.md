@@ -130,7 +130,16 @@ How each failure kind is handled:
   - **Written:** approve if the rule also catches at least 80% of unseen variations, or is tightly scoped when there's nothing to measure.
   - **Both:** reject a rule that fires on everyday legitimate commands checked by hand.
 
-  Human review caught what the deterministic checks couldn't: three over-broad `reg` rules, and one rule that would stay silent on logs without `OriginalFileName`. **[pending: inter-rater agreement, with both team members reviewing the same 20 runs blind, reported as Cohen's kappa]**
+  Human review caught what the deterministic checks couldn't: three over-broad `reg` rules, and one rule that would stay silent on logs without `OriginalFileName`.
+- **Human labels, checked for agreement:** the one judgment that feeds a headline number is the class of each legitimate look-alike.
+  - **A, near-miss:** a precise rule should stay silent on it, so it counts toward false alarms.
+  - **B, inherently ambiguous:** the command line alone can't tell it from the attack. Reported apart.
+
+  Rule scores need no agreement check: the harness computes them. The labels do. `scripts/label_agreement.py` gives a blind sheet with the written A/B rubric:
+  - **Main set (58 items):** an independent labeller against the dataset author's labels.
+  - **Pilot (7 new look-alikes):** both team members label blind.
+
+  With 2 labellers, a few dozen items and far more A than B, kappa is unstable and can be near 0 even at high agreement. A labeller marking everything A scores 90% raw agreement and kappa 0.00. So raw agreement is reported next to Cohen's kappa, and every disagreement is discussed as a gap in the rubric. **[pending: the labels]**
 - **LLM-as-judge: deliberately not used.** Everything we need to judge can be checked deterministically. A judge model would add cost, its own biases, and memorization risk: it may know the SigmaHQ rules.
 
 ## Benchmarks versus the real world
