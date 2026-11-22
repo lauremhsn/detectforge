@@ -65,6 +65,23 @@ def test_summary_reports_rates_and_spread_per_configuration(tmp_path, fixture_ev
     assert group["metrics_passed_runs"]["heldout_resistance_after"]["mean"] == 1.0
 
 
+def test_a_different_model_call_budget_is_a_different_configuration():
+    from detectforge.eval.export import SUMMARY_METRICS, summarise
+
+    def row(budget: int, passed: bool) -> dict:
+        return {
+            "mode": "write", "prompt_version": "write-v2", "model": "m:free", "model_call_budget": budget,
+            "zero_shot": False, "technique": "T1", "status": "passed" if passed else "needs_human_review",
+            "decision": "pending", "cost_usd": 0.0, "failed_model_calls": 0, "fallback_calls": 0,
+            **{m: 1.0 for m in SUMMARY_METRICS},
+        }  # fmt: skip
+
+    groups = summarise([row(15, False), row(15, True), row(25, True), row(25, True)])
+    by_budget = {g["model_call_budget"]: g for g in groups}
+    assert set(by_budget) == {15, 25}  # the ablation is never averaged into the frozen budget
+    assert (by_budget[15]["gate_pass_rate"], by_budget[25]["gate_pass_rate"]) == (0.5, 1.0)
+
+
 def test_unknown_prices_are_not_reported_as_free():
     assert cost_usd("vendor/model:free", 500) == 0.0
     assert cost_usd("vendor/paid-model", 500) is None
