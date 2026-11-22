@@ -24,9 +24,16 @@ TECH = "T1053.005"
 
 def attack(event_id, command, transform, base_id, split="tune"):
     return Event(
-        event_id=event_id, image="C:\\Windows\\System32\\schtasks.exe", command_line=command,
-        parent_image="C:\\Windows\\System32\\cmd.exe", original_file_name="schtasks.exe",
-        label="attack", technique=TECH, transform=transform, base_id=base_id, split=split,
+        event_id=event_id,
+        image="C:\\Windows\\System32\\schtasks.exe",
+        command_line=command,
+        parent_image="C:\\Windows\\System32\\cmd.exe",
+        original_file_name="schtasks.exe",
+        label="attack",
+        technique=TECH,
+        transform=transform,
+        base_id=base_id,
+        split=split,
     )
 
 
@@ -34,28 +41,51 @@ BASE = attack("b01", "schtasks.exe /create /tn X /sc onlogon", "none", "b01")
 SUB = attack("b01-sub1", "schtasks.exe -create -tn X -sc onlogon", "substitution", "b01")
 OMIT = attack("b01-omi1", "schtasks /create /tn X /sc onlogon", "omission", "b01", split="heldout")
 EVENTS = [BASE, SUB, OMIT]
-SELECTION = {"rules": [{"id": "r1", "title": "sched", "technique": TECH, "split": "dev",
-                        "base_attacks": ["b01"]}]}
+SELECTION = {
+    "rules": [{"id": "r1", "title": "sched", "technique": TECH, "split": "dev", "base_attacks": ["b01"]}]
+}
 
 
 def _ref(rule_id, yaml_text):
     return ReferenceRule(
-        id=rule_id, title=rule_id, path=f"rules/{rule_id}.yml", status="test", level="medium",
-        description="", techniques=[TECH], falsepositives=[], fields=["CommandLine"], unmapped_fields=[],
-        evaluable=True, can_fire=True, detection_text="", rule_yaml=yaml_text,
+        id=rule_id,
+        title=rule_id,
+        path=f"rules/{rule_id}.yml",
+        status="test",
+        level="medium",
+        description="",
+        techniques=[TECH],
+        falsepositives=[],
+        fields=["CommandLine"],
+        unmapped_fields=[],
+        evaluable=True,
+        can_fire=True,
+        detection_text="",
+        rule_yaml=yaml_text,
     )
 
 
 def _run(final_yaml, *, calls=3, status="passed"):
     return AgentRun(
-        trace_id="t01", technique=TECH, model="m", status=status, original_rule_yaml="",
-        final_rule_yaml=final_yaml, final_source="accepted", gate=GateResult(passed=True, checks=[]),
-        tuning_evasion_resistance_before=0.5, tuning_evasion_resistance_after=1.0,
-        tuning_false_alarms_before=0, tuning_false_alarms_after=0, tuning_runs_used=1,
+        trace_id="t01",
+        technique=TECH,
+        model="m",
+        status=status,
+        original_rule_yaml="",
+        final_rule_yaml=final_yaml,
+        final_source="accepted",
+        gate=GateResult(passed=True, checks=[]),
+        tuning_evasion_resistance_before=0.5,
+        tuning_evasion_resistance_after=1.0,
+        tuning_false_alarms_before=0,
+        tuning_false_alarms_after=0,
+        tuning_runs_used=1,
         model_calls=[ModelCallRecord(model="m", ok=True, latency_ms=1.0) for _ in range(calls)],
-        tool_calls=[], prompt_tokens=100, completion_tokens=50, duration_s=2.0,
-        record=RuleRecord(rule_yaml=final_yaml, source="adapted", technique=TECH, trace_id="t01",
-                          version=1),
+        tool_calls=[],
+        prompt_tokens=100,
+        completion_tokens=50,
+        duration_s=2.0,
+        record=RuleRecord(rule_yaml=final_yaml, source="adapted", technique=TECH, trace_id="t01", version=1),
     )
 
 
@@ -95,10 +125,16 @@ def test_written_mode_starts_from_no_rule(tmp_path):
 
 def _benign(event_id, split):
     return Event(
-        event_id=event_id, image="C:\\Windows\\System32\\schtasks.exe",
-        command_line="schtasks /create /tn Backup /sc daily", parent_image="C:\\Windows\\System32\\cmd.exe",
-        original_file_name="schtasks.exe", label="benign", technique=TECH, transform="none",
-        base_id=event_id, split=split,
+        event_id=event_id,
+        image="C:\\Windows\\System32\\schtasks.exe",
+        command_line="schtasks /create /tn Backup /sc daily",
+        parent_image="C:\\Windows\\System32\\cmd.exe",
+        original_file_name="schtasks.exe",
+        label="benign",
+        technique=TECH,
+        transform="none",
+        base_id=event_id,
+        split=split,
     )
 
 

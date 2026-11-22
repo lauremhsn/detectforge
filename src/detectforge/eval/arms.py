@@ -75,8 +75,9 @@ def _micro(values: list[bool]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def _score_arm(selection: dict, events: list[Event], arm: RuleSource,
-               rule_yaml_of: Callable[[dict], str | None]) -> _Scored:
+def _score_arm(
+    selection: dict, events: list[Event], arm: RuleSource, rule_yaml_of: Callable[[dict], str | None]
+) -> _Scored:
     """Score every selection rule with the YAML rule_yaml_of returns (None = no rule, all missed)."""
     results: list[RuleResult] = []
     trials: list[_Trial] = []
@@ -86,8 +87,13 @@ def _score_arm(selection: dict, events: list[Event], arm: RuleSource,
         rule_yaml = rule_yaml_of(rule)
         card = run(rule_yaml, rule_events) if rule_yaml else no_rule(rule_events)
         result = score_from_card(
-            card, rule_events, rule_id=rule["id"], title=rule["title"],
-            technique=rule["technique"], selection_split=rule["split"], source=arm,
+            card,
+            rule_events,
+            rule_id=rule["id"],
+            title=rule["title"],
+            technique=rule["technique"],
+            selection_split=rule["split"],
+            source=arm,
         )
         if rule_yaml is None:  # no agent run produced a rule: a coverage gap, not a valid rule
             result = result.model_copy(update={"valid": False, "error": "no saved agent run"})
@@ -95,7 +101,8 @@ def _score_arm(selection: dict, events: list[Event], arm: RuleSource,
         matched = set(card.matched_event_ids)
         trials += [
             _Trial(e, e.event_id in matched, rule["split"])
-            for e in rule_events if e.label == "attack" and e.transform != "none"
+            for e in rule_events
+            if e.label == "attack" and e.transform != "none"
         ]
         heldout_benign = [e for e in rule_events if e.label == "benign" and e.split == "heldout"]
         fa_hits += sum(e.event_id in matched for e in heldout_benign)
@@ -130,13 +137,24 @@ def _arm_result(arm: RuleSource, s: _Scored, cost: ArmCost | None = None) -> Arm
 
 def run_community_arm(selection: dict, index: ReferenceIndex, events: list[Event]) -> ArmResult:
     by_id = {r.id: r for r in index.rules}
-    scored = _score_arm(selection, events, "community",
-                        lambda rule: by_id[rule["id"]].rule_yaml if rule["id"] in by_id else None)
+    scored = _score_arm(
+        selection,
+        events,
+        "community",
+        lambda rule: by_id[rule["id"]].rule_yaml if rule["id"] in by_id else None,
+    )
     return _arm_result("community", scored)
 
 
-def run_agent_arm(selection: dict, index: ReferenceIndex, events: list[Event], runs_dir: Path,
-                  model_name: str, *, mode: Mode) -> ArmResult:
+def run_agent_arm(
+    selection: dict,
+    index: ReferenceIndex,
+    events: list[Event],
+    runs_dir: Path,
+    model_name: str,
+    *,
+    mode: Mode,
+) -> ArmResult:
     """Score the agent's rules for an arm. mode="harden" is adapted, "write" is written.
 
     Each selection rule is matched to its saved run by the same setup_key the batch computes (no model
@@ -177,8 +195,9 @@ def _cost(runs: list[AgentRun]) -> ArmCost:
     )
 
 
-def three_arm_comparison(selection: dict, index: ReferenceIndex, events: list[Event], runs_dir: Path,
-                         model_name: str) -> ThreeArmComparison:
+def three_arm_comparison(
+    selection: dict, index: ReferenceIndex, events: list[Event], runs_dir: Path, model_name: str
+) -> ThreeArmComparison:
     """All three arms from one selection + one runs dir (harden and write runs share it, keyed apart)."""
     return ThreeArmComparison(
         community=run_community_arm(selection, index, events),

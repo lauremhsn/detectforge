@@ -714,6 +714,7 @@ def _eval_community(args: argparse.Namespace) -> int:
     print(f"wrote {out_dir / 'arm1_community.json'}", file=sys.stderr)
     return 0
 
+
 def _eval_compare(args: argparse.Namespace) -> int:
     import yaml
 
