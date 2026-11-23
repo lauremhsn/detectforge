@@ -14,6 +14,52 @@
   "models": {
     "ArmResult": {
       "$defs": {
+        "ArmCost": {
+          "description": "What the agent spent on an arm; None for community (no model).",
+          "properties": {
+            "accepted_rules": {
+              "title": "Accepted Rules",
+              "type": "integer"
+            },
+            "calls_per_accepted_rule": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Calls Per Accepted Rule"
+            },
+            "completion_tokens": {
+              "title": "Completion Tokens",
+              "type": "integer"
+            },
+            "duration_s": {
+              "title": "Duration S",
+              "type": "number"
+            },
+            "model_calls": {
+              "title": "Model Calls",
+              "type": "integer"
+            },
+            "prompt_tokens": {
+              "title": "Prompt Tokens",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "accepted_rules",
+            "model_calls",
+            "prompt_tokens",
+            "completion_tokens",
+            "duration_s",
+            "calls_per_accepted_rule"
+          ],
+          "title": "ArmCost",
+          "type": "object"
+        },
         "RuleResult": {
           "properties": {
             "base_detected": {
@@ -176,6 +222,28 @@
           "title": "Arm",
           "type": "string"
         },
+        "cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArmCost"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "false_alarm_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "False Alarm Rate"
+        },
         "overall_evasion_resistance": {
           "anyOf": [
             {
@@ -277,6 +345,7 @@
         "resistance_by_transform",
         "resistance_by_mutation_split",
         "resistance_by_selection_split",
+        "false_alarm_rate",
         "rules_fully_robust",
         "rules_evaded",
         "rules"

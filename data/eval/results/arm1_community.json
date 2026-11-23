@@ -18,8 +18,10 @@
     "dev": 0.8135593220338984,
     "test": 0.823076923076923
   },
+  "false_alarm_rate": null,
   "rules_fully_robust": 14,
   "rules_evaded": 10,
+  "cost": null,
   "rules": [
     {
       "rule_id": "fb843269-508c-4b76-8b8d-88679db22ce7",

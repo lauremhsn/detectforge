@@ -190,6 +190,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.set_defaults(handler=_eval_community)
     p = eval_sub.add_parser(
+        "compare", help="the headline: community vs agent-adapted vs agent-written, scored the same way"
+    )
+    p.add_argument("--runs", type=Path, default=None, help="agent runs dir (default: settings.runs_dir)")
+    p.set_defaults(handler=_eval_compare)
+    p = eval_sub.add_parser(
         "gate-thresholds", help="ablation: saved rules passing at each evasion-resistance minimum (no model)"
     )
     p.add_argument("--thresholds", type=float, nargs="+", default=list(DEFAULT_THRESHOLDS))
@@ -708,6 +713,40 @@ def _eval_community(args: argparse.Namespace) -> int:
     )
     print(f"wrote {out_dir / 'arm1_community.json'}", file=sys.stderr)
     return 0
+
+
+def _eval_compare(args: argparse.Namespace) -> int:
+    import yaml
+
+    settings = get_settings()
+    data_dir = settings.data_dir
+    selection = yaml.safe_load((data_dir / "eval" / "selection.yml").read_text(encoding="utf-8"))
+    index = ReferenceIndex.load(_sigmahq_dir())
+    events = (
+        load_events(data_dir / "eval" / "base_events.jsonl")
+        + load_events(data_dir / "eval" / "mutations.jsonl")
+        + load_events(data_dir / "eval" / "benign_events.jsonl")
+    )
+    runs_dir = args.runs or settings.runs_dir
+    comparison = arms.three_arm_comparison(selection, index, events, runs_dir, settings.model)
+    out = data_dir / "eval" / "results" / "comparison.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(comparison.model_dump_json(indent=2), encoding="utf-8")
+    _print_comparison(comparison)
+    print(f"wrote {out}", file=sys.stderr)
+    return 0
+
+
+def _print_comparison(c: arms.ThreeArmComparison) -> None:
+    print(f"{'arm':10} {'evasion':>8} {'tune':>7} {'held-out':>9} {'FP':>6} {'calls/rule':>11}")
+    for name, a in (("community", c.community), ("adapted", c.adapted), ("written", c.written)):
+        calls = a.cost.calls_per_accepted_rule if a.cost else None
+        split = a.resistance_by_mutation_split
+        print(
+            f"{name:10} {_pct(a.overall_evasion_resistance):>8} {_pct(split.get('tune')):>7} "
+            f"{_pct(split.get('heldout')):>9} {_pct(a.false_alarm_rate):>6} "
+            f"{('n/a' if calls is None else f'{calls:.1f}'):>11}"
+        )
 
 
 if __name__ == "__main__":  # also runnable as `python -m detectforge.cli`
