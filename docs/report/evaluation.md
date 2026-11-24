@@ -150,11 +150,51 @@ A fixed benchmark can be overfitted, and the professor's point stands: a few ben
 |---|---|---|
 | The agent memorizes the variations it tunes on | Held-out **variation types** (omission, insertion, recoding); the agent never sees them | done |
 | Prompts tuned until the numbers look good | Held-out **techniques**: dev for iterating, test run once after the freeze | done |
-| "0 false alarms" only because the look-alike set is small | Stress-check look-alikes, re-scored on the saved rules (three rules already failed it by hand) | **[pending]** |
+| "0 false alarms" only because the look-alike set is small | Stress check: 7 new look-alikes, outside the dataset, re-scored on every saved rule (below) | done; **[pending: pilot labels]** |
 | The model recalls SigmaHQ rules instead of reasoning | Memorization probe: report memorized vs clean techniques separately | **[pending]** |
 | A mutation no longer works as an attack | VM check: run a sample in Windows with Sysmon | **[pending]** |
 | A result depends on one lucky run | 3 runs per setup, reported with spread and pass@k | done |
 | Results come from a different setup than claimed | Provenance per run: prompt, model, budgets, code and data fingerprints | done |
+
+### Stress check: look-alikes the dataset doesn't have
+
+`scripts/stress_check.py` replays every saved rule, in all three arms, against 7 legitimate commands found while reviewing the test split, with no model calls:
+- reg query / add / delete on `HKLM\SYSTEM` and `HKLM\SECURITY`;
+- deleting a Run-key value;
+- `wmic service … delete`;
+- a system-state backup.
+
+They're kept out of the main event files, whose hash is part of every run's setup key, and reported apart from the frozen results.
+
+| Rules | Test split | Dev split (frozen budget, 15 calls) |
+|---|---|---|
+| Community (Arm 1) firing on at least one | **0 / 18** | **0 / 9** |
+| Hardened (Arm 2) | 2 / 9 | 1 / 4 |
+| Written with variations (Arm 3) | 1 / 36 | 5 / 18 |
+| Written zero-shot (Arm 3) | 0 / 18 | 1 / 8 |
+| **Approved rules firing** | **0** | **0** |
+
+**What it shows:**
+- **The agent's rules are broader than the community rules, and the dataset's look-alikes didn't reveal it.** Making a rule catch more evasions tends to make it catch more legitimate commands too.
+- **On the test split, human review rejected every rule that fires on a look-alike.** On dev, the firing rules are rejected or not yet reviewed.
+- **The gate alone isn't enough here, which is the case for a human approval step.**
+
+All count as false alarms until the pilot labels decide which look-alikes are A (a precise rule must stay silent) and which are B (inherently ambiguous). `--labels` applies them.
+
+## The evaluation set: what it covers and what it doesn't (slide 31)
+
+| Dimension | Covered | Not covered |
+|---|---|---|
+| Techniques | 19 ATT&CK techniques, 27 SigmaHQ rules, across 6 tactics: credential access (T1003.001, T1003.002, T1555.003), defense evasion (T1027, T1036.003, T1218.005/.007/.010/.011, T1685, T1685.001), execution (T1047, T1059.001, T1059.003), persistence (T1053.005, T1543.003, T1547.001), command and control (T1105), impact (T1490) | Lateral movement, discovery, exfiltration; techniques with no process-creation signal |
+| Normal cases | 66 base attack command lines from Atomic Red Team | Captured logs from real intrusions |
+| Adversarial cases | 176 mutations from the 5 Uetz transforms: substitution 67 and reordering 10 for tuning; insertion 54, omission 44, recoding 1 held out | Binary renaming, other parents, longer chains; recoding has 1 mutation (L4) |
+| Legitimate look-alikes | 58 hard negatives for 19 techniques: 52 class A (34 held out, 18 for tuning), 6 class B reported apart, plus 7 stress-check look-alikes | Real benign telemetry at volume (a SIEM's normal day); the false-alarm *rate* in production |
+| Splits | By variation type (tuning vs held-out) and by technique (9 dev rules to iterate on, 18 test rules run once) | A second, independent test set |
+| Edge cases | Rules with no tuning variation (zero-shot writes), no held-out variation (n/a, not averaged), no community rule (the write fallback), model outages, budget exhaustion | Very long command lines, non-ASCII paths in real logs |
+| Request intake | Vague, injected and API-failure scenarios in the demo and the tests | A user study with analysts |
+| Log source | Sysmon Event ID 1 (Image, CommandLine, ParentImage, OriginalFileName) | Windows 4688 (no OriginalFileName), Linux, EDR-specific fields |
+
+The "not covered" column is the honest scope: results hold for Windows process-creation rules facing these five transform types, not for detection engineering in general.
 
 ## From offline evaluation to monitoring
 
@@ -165,4 +205,27 @@ A fixed benchmark can be overfitted, and the professor's point stands: a few ben
   3. where needed, it becomes a gate check or a new prompt version.
 
   Prompts v1 to v7 were each a response to measured failures on dev, never on test.
-- **In production, a team would add** (future work): reviewer rejection rate per technique as a drift signal, alert rate per deployed rule (shadow deployment to a SIEM, a stretch goal), and the same evaluation as a CI gate before a prompt or model change ships.
+### What we would monitor in production (slides 44–46)
+
+Offline evaluation says a rule was good on our data the day it was approved. In production three things drift:
+- **The attacks:** new evasions appear.
+- **The environment:** new legitimate software that looks like an attack.
+- **The agent:** a provider updates the model behind the same name.
+
+| Signal | Where it comes from | Act when | Action |
+|---|---|---|---|
+| Alerts per deployed rule per day | the SIEM (shadow deployment first) | a rule's volume jumps, or it fires on a process a reviewer marks benign | add the command as a look-alike, re-run the agent with it in tuning, review the new version |
+| Reviewer rejection rate, per technique and prompt version | review decisions (already recorded) | rejections rise for a technique, or after a model change | inspect the traces; a recurring cause becomes a failure-matrix row and a gate check |
+| Gate pass rate, model calls and tokens per run | saved runs (Lab tab) | pass rate drops, or calls per run rise, with no prompt change: the provider's model changed | re-run the dev split, compare with the frozen baseline before trusting new runs |
+| Held-out evasion resistance of deployed rules | the harness, re-run when the mutation set grows | a deployed rule falls below the gate's 80% on new mutation types | queue it for hardening (it is the "before" of a new run) |
+| Model errors, fallbacks, outages | model-call records | failures above a few percent of calls, or near the daily limit (already a warning in the Lab) | pause batches; switch to the fallback model, labelled in provenance |
+| Prompt-injection attempts | tool calls the dispatcher refused; text the UI escaped | any attempt to call a non-existent tool or reach held-out data | inspect the source rule or report; add it to the injection tests |
+
+**Experimenting safely (slide 46):** a new prompt or model never replaces the frozen one directly.
+1. It runs in **shadow** first: same requests, results saved under its own prompt version (provenance keeps them apart), nothing deployed.
+2. It's compared on the dev split and on live reviewer decisions.
+3. It's promoted only if it isn't worse on held-out resistance, false alarms and rejection rate.
+
+**Human feedback (slides 47–48):** every reviewer rejection already carries a reason. In production those reasons are the main signal: they find what the dataset didn't anticipate, as the three over-broad reg rules did here. They feed back as new look-alikes, new gate checks and new prompt versions.
+
+What exists today: the tracing, the Lab tab and its quota warning, recorded decisions with reasons, and provenance per run. The SIEM side (alert volume, shadow deployment) is future work.
