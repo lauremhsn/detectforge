@@ -22,11 +22,20 @@ from detectforge.schemas import Event
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 # Code that can't change a run's result, so editing it must not change the setup key (which would
-# make every saved run look stale). Folders: the UI only displays runs. Files, by path: reporting
-# that only reads saved runs, imported by nothing on the run path (checked by a test). cli.py stays
-# in: it wires the run (events, budgets, batch options).
+# make every saved run look stale, and the arm runner would then need the model again to rescore).
+# Folders: the UI only displays runs. Files, by path: evaluation and reporting that score or read
+# saved runs after the fact (the arm scorer and its metrics, the Arm 1 regression check, export,
+# thresholds). Nothing on the run path imports them (checked by a test); a change to how they score
+# is caught by their own tests and the CI eval gate instead. Stay in: the harness and the gate (they
+# produce what the agent sees and what a run saves) and cli.py (it wires the run).
 _NOT_RESULT_DIRS = {"ui"}
-_NOT_RESULT_FILES = {"eval/export.py", "eval/thresholds.py"}
+_NOT_RESULT_FILES = {
+    "eval/arms.py",
+    "eval/metrics.py",
+    "eval/regression.py",
+    "eval/export.py",
+    "eval/thresholds.py",
+}
 
 
 class Provenance(BaseModel):
