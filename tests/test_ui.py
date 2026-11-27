@@ -355,3 +355,21 @@ def test_testbench_highlights_what_the_rule_looks_for_and_escapes_everything():
     assert "<mark> /CREATE </mark>" in shown  # case-insensitive, like Windows and Sigma
     assert "<b>" not in shown and "&lt;b&gt;" in shown  # command lines are untrusted: escaped
     assert highlight("schtasks /cre­ate", rule_patterns(rule)).count("<mark>") == 0  # the disguise breaks it
+
+
+def test_the_ui_falls_back_to_the_committed_snapshot_only_without_runs_of_its_own(tmp_path, monkeypatch):
+    from detectforge.config import get_settings
+    from detectforge.ui import workspace
+
+    monkeypatch.setenv("DETECTFORGE_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        snap = tmp_path / "snapshot" / "runs"
+        snap.mkdir(parents=True)
+        (snap / "a.json").write_text("{}")
+        assert workspace.using_snapshot()  # a deployed copy: no runs of its own
+        (tmp_path / "runs").mkdir()
+        (tmp_path / "runs" / "b.json").write_text("{}")
+        assert not workspace.using_snapshot()  # local runs always win
+    finally:
+        get_settings.cache_clear()

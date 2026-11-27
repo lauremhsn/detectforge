@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "False alarm on an unseen legitimate bcdedit command and on 'bcdedit /timeout 10'; checks failed.",
+    "decided_at": "2026-11-27T13:42:10.388709Z"
+  }
+]

@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Detection logic good: matches create/change without surrounding spaces and with - or /, so quoted and dash variants are caught (held-out 50% -> 100%). Revert the reference URL to learn.microsoft.com before deploying. False alarms unverified: no benign tuning events.",
+    "decided_at": "2026-11-17T13:17:25.058574Z"
+  }
+]

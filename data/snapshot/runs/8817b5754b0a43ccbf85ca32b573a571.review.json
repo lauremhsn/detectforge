@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Misses 1 of 4 unmutated attacks: each selection requires both Image and OriginalFileName.",
+    "decided_at": "2026-11-21T17:17:28.202025Z"
+  }
+]

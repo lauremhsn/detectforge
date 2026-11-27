@@ -1,0 +1,25 @@
+title: Suspicious WMIC XSL Stylesheet Execution
+id: 337e6cf9-f1d8-566d-a9a1-d4802c192330
+status: experimental
+description: Detects WMIC execution with FORMAT parameter pointing to an XSL stylesheet file, which can be used to execute arbitrary code via WMI.
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    - OriginalFileName: wmic.exe
+    - Image|endswith: \wmic.exe
+  selection_format:
+    CommandLine|contains|windash:
+      - 'FORMAT:'
+  selection_xsl:
+    CommandLine|contains: '.xsl'
+  condition: all of selection_*
+falsepositives:
+  - Legitimate administrative use of WMIC with XSL formatting
+level: high
+tags:
+  - attack.t1047
+  - attack.execution

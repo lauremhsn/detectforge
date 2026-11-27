@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Fires on wmic service delete; no gain on unseen variations.",
+    "decided_at": "2026-11-21T17:17:28.185548Z"
+  }
+]

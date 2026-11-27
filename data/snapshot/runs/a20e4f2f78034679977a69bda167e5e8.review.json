@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Blocked by the gate: copied look-alike Unicode characters from the test attacks (overfitting). Held-out only 17%.",
+    "decided_at": "2026-11-17T13:22:05.488421Z"
+  }
+]

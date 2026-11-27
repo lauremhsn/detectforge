@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Case-sensitive regex and a false alarm (gate blocked).",
+    "decided_at": "2026-11-22T11:42:11.681662Z"
+  },
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Case-sensitive regex and a false alarm (gate blocked).",
+    "decided_at": "2026-11-22T12:36:21.141226Z"
+  }
+]

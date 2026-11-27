@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Adds dash variants (-create, -change, -ru); no new false alarms; unseen insertion unchanged. Only inherited exclusions warned.",
+    "decided_at": "2026-11-21T17:17:28.185548Z"
+  }
+]

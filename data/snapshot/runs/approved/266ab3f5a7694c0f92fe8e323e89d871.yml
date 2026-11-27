@@ -1,0 +1,29 @@
+title: Certutil Download with Verifyctl and Split
+id: 0b3fd4e2-086d-5b3f-99a9-4150d2e53985
+status: experimental
+description: Detects certutil.exe being used with -verifyctl -split -f and a remote URL, which can indicate file download for obfuscated file transfer (T1027).
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    Image|endswith: '\certutil.exe'
+  selection_original:
+    OriginalFileName: 'certutil.exe'
+  selection_verifyctl:
+    CommandLine|re: '(?i)\bverifyctl\b'
+  selection_split:
+    CommandLine|re: '(?i)\bsplit\b'
+  selection_f:
+    CommandLine|re: '(?i)\bf\b'
+  selection_url:
+    CommandLine|re: '(?i)https?://'
+  condition: (selection_image or selection_original) and selection_verifyctl and selection_split and selection_f and selection_url
+falsepositives:
+  - Legitimate administrative use of certutil to download CTL files from trusted internal HTTPS servers
+level: medium
+tags:
+  - attack.t1027
+  - attack.defense_evasion

@@ -1,0 +1,39 @@
+title: "Suspicious MSHTA Execution with Script Protocol Handler"
+id: 3e298130-211a-56dc-8170-e874b087dcd0
+status: experimental
+description: |
+  Detects mshta.exe executing JavaScript or VBScript code that uses the GetObject function
+  with the 'script:' protocol to download and execute remote Scriptlet (.sct) files.
+  This is a known technique for bypassing application control (ATT&CK T1218.005).
+references:
+  - "https://attack.mitre.org/techniques/T1218/005/"
+  - "https://github.com/redcanaryco/atomic-red-team/tree/master/atomics/T1218.005"
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_mshta:
+    - Image|endswith: '\mshta.exe'
+    - OriginalFileName: 'MSHTA.EXE'
+  selection_script_protocol:
+    CommandLine|contains:
+      - 'javascript:'
+      - 'vbscript:'
+  selection_getobject_script:
+    CommandLine|contains:
+      - 'GetObject('
+      - 'script:'
+  selection_sct_exec:
+    CommandLine|contains:
+      - '.sct'
+      - '.Exec('
+  condition: all of selection_*
+falsepositives:
+  - "Legitimate HTA applications using script: protocol (rare)"
+  - "Administrative scripts using mshta for remote execution (uncommon)"
+level: high
+tags:
+  - attack.defense_evasion
+  - attack.t1218.005

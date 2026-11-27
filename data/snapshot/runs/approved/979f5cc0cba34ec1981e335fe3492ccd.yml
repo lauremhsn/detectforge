@@ -1,0 +1,26 @@
+title: Registry Hive Dump via reg.exe - SAM, SYSTEM, SECURITY
+id: a0af1233-949a-5c9b-9529-c7a8ea6f9d60
+status: experimental
+description: Detects the use of reg.exe to save/export sensitive registry hives (SAM, SYSTEM, SECURITY) which can be used to extract credentials offline. Keys on reg.exe accessing HKLM\sam, HKLM\system, or HKLM\security directly.
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    - Image|endswith: \reg.exe
+    - OriginalFileName: reg.exe
+  selection_hklm:
+    CommandLine|contains: 'HKLM\'
+  selection_sensitive_hive:
+    CommandLine|re: '(?i)HKLM\\(sam|system|security)(\s|\\\\|$)'
+  condition: all of selection_*
+falsepositives:
+  - Legitimate administrative backup of system hives (rare)
+level: high
+tags:
+  - attack.credential_access
+  - attack.t1003.002

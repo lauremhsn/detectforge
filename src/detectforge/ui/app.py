@@ -23,6 +23,7 @@ from detectforge.config import get_settings
 from detectforge.reference import sigmahq
 from detectforge.reference.index import ReferenceIndex
 from detectforge.review import latest_prompt_versions, list_runs
+from detectforge.ui import workspace
 from detectforge.ui.bench import bench_events
 from detectforge.ui.components import apply_style
 from detectforge.ui.coverage_page import coverage_page
@@ -82,31 +83,37 @@ def main() -> None:
     )
     apply_style()
     settings = get_settings()
-    runs = list_runs(settings.runs_dir)
+    runs_dir = workspace.runs_dir()
+    runs = list_runs(runs_dir)
     current = latest_prompt_versions(runs)
     pending = sum(r.decision is None and r.prompt_version in current for r in runs)
     page = menu(pending)
+    if workspace.using_snapshot() and page != "home":
+        st.caption(
+            f"Showing a read-only snapshot of the evaluation's runs and decisions ({workspace.snapshot_date()}). "
+            "Run DetectForge locally to work on your own rules."
+        )
     all_events, events = bench_events()
 
     index = load_index(str(settings.data_dir / "sigmahq"), settings.ui_auto_fetch_index)
     loaded = index if isinstance(index, ReferenceIndex) else None
     rule_texts = {r.id: r.rule_yaml for r in loaded.rules} if loaded else {}
     if page == "home":
-        home_page(settings.data_dir, settings.runs_dir, pending)
+        home_page(settings.data_dir, runs_dir, pending)
     elif page == "coverage":
-        coverage_page(settings.data_dir, settings.runs_dir, rule_texts, pending)
+        coverage_page(settings.data_dir, runs_dir, rule_texts, pending)
     elif page == "request":
         request_page(index, all_events)
     elif page == "rules":
         rules_page(events, all_events, index)
     elif page == "review":
-        review_tab(settings.runs_dir)
+        review_tab(runs_dir)
     elif page == "reports":
-        reports_page(settings.data_dir, settings.runs_dir, rule_texts)
+        reports_page(settings.data_dir, runs_dir, rule_texts)
     elif page == "settings":
-        settings_page(settings.data_dir, settings.runs_dir)
+        settings_page(settings.data_dir, runs_dir)
     else:
-        operations_page(settings.runs_dir, settings.data_dir)
+        operations_page(runs_dir, settings.data_dir)
         about()
 
 

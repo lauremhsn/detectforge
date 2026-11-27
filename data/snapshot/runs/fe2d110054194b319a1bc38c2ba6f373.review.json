@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Model unavailable during the run (outage); no usable rule. Redone by the batch.",
+    "decided_at": "2026-11-22T11:42:11.709820Z"
+  },
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Model unavailable during the run (outage); no usable rule. Redone by the batch.",
+    "decided_at": "2026-11-22T12:36:21.157030Z"
+  }
+]

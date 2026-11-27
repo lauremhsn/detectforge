@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Catches 100% unseen but wmic ' delete' fires on everyday 'wmic service where name=... delete'.",
+    "decided_at": "2026-11-27T13:42:10.380967Z"
+  }
+]

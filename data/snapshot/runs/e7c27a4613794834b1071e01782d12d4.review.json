@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Zero-shot: requires start=auto exactly; silent on the legitimate install only because of spacing; misses services without auto-start.",
+    "decided_at": "2026-11-21T17:17:28.202025Z"
+  }
+]

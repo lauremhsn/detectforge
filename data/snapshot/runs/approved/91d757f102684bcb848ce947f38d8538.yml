@@ -1,0 +1,24 @@
+title: Regsvr32 Execution with Remote Scriptlet
+id: dfea414a-25bd-51b4-b782-005b5ac979e9
+status: experimental
+description: 'Detects regsvr32.exe being used to load and execute a remote scriptlet (.sct file) via the /i: or -i: option, which can be used to bypass application whitelisting.'
+references:
+    - https://attack.mitre.org/techniques/T1218/010/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_exe:
+        - Image|endswith: '\regsvr32.exe'
+        - OriginalFileName: 'regsvr32.exe'
+    selection_i_option:
+        CommandLine|re: '(?i)[/-]i:https?://\S+\.sct'
+    condition: selection_exe and selection_i_option
+falsepositives:
+    - Legitimate software registration using remote scriptlets (unlikely)
+level: high
+tags:
+    - attack.defense_evasion
+    - attack.t1218.010

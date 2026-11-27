@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "Marwa",
+    "comment": "Duplicate CommandLine|re key silently dropped the add check; fires on reg query.",
+    "decided_at": "2026-11-16T20:39:25.367202Z"
+  }
+]

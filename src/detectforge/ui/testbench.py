@@ -79,13 +79,13 @@ def _verdict(event: Event, fired: bool) -> str:
 _STYLE = """
 <style>
 .tb{width:100%;border-collapse:collapse;font-size:.86rem}
-.tb td,.tb th{border-bottom:1px solid #D5DEE9;padding:.4rem .5rem;vertical-align:top;text-align:left}
-.tb th{color:#4B5B73;font-weight:600}
-.tb .cmd{font-family:ui-monospace,Consolas,monospace;color:#0F1F3D;word-break:break-all}
-.tb mark{background:#1F4FB8;color:#fff;border-radius:.2rem;padding:0 .1rem}
-.tb .chip{background:#D6E2F5;color:#1E2B45;border-radius:999px;padding:.1rem .5rem;font-size:.75rem;white-space:nowrap}
-.tb .grp td{background:#E3EAF3;color:#1E2B45;font-weight:600}
-.tb .ok{color:#15803D;white-space:nowrap}.tb .bad{color:#B91C1C;white-space:nowrap;font-weight:600}
+.tb td,.tb th{border-bottom:1px solid #E3DDD3;padding:.4rem .5rem;vertical-align:top;text-align:left}
+.tb th{color:#5B5348;font-weight:600}
+.tb .cmd{font-family:ui-monospace,Consolas,monospace;color:#1F2328;word-break:break-all}
+.tb mark{background:#C2551F;color:#fff;border-radius:.2rem;padding:0 .1rem}
+.tb .chip{background:#F6E4D8;color:#2A2622;border-radius:999px;padding:.1rem .5rem;font-size:.75rem;white-space:nowrap}
+.tb .grp td{background:#EFEAE2;color:#2A2622;font-weight:600}
+.tb .ok{color:#15803D;white-space:nowrap}.tb .bad{color:#B42318;white-space:nowrap;font-weight:600}
 </style>
 """
 
@@ -126,5 +126,5 @@ def grid(events: list[Event], rules: dict[str, tuple[str, set[str]]], changed_on
             rows += body
             shown += len(body)
     if not shown:
-        return "<p style='color:#4B5B73'>No events to show here.</p>"
+        return "<p style='color:#5B5348'>No events to show here.</p>"
     return "".join(rows) + "</table>"

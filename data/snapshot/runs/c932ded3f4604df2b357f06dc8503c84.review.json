@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Zero-shot sc create; unseen 100%, no false alarms. Narrow: requires start=auto written without a space.",
+    "decided_at": "2026-11-27T13:42:10.367945Z"
+  }
+]

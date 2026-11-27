@@ -1,0 +1,27 @@
+title: LSASS Memory Dump via Rundll32 and Comsvcs.dll
+id: ef4d348e-0a3a-561f-b540-95695d12cabc
+description: Detects the use of rundll32.exe to call comsvcs.dll MiniDump function for dumping LSASS process memory, a technique used for credential access.
+status: experimental
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    - Image|endswith: \rundll32.exe
+    - OriginalFileName: rundll32.exe
+  selection_dll:
+    CommandLine|contains: comsvcs.dll
+  selection_function:
+    CommandLine|contains: MiniDump
+  selection_args:
+    CommandLine|re: '(?i)MiniDump\s+\d+\s+.*\.(dmp|DMP)'
+  condition: all of selection_*
+falsepositives:
+  - Legitimate debugging or memory analysis by administrators
+  - Some EDR/AV tools may use similar techniques for memory scanning
+level: high
+tags:
+  - attack.credential_access
+  - attack.t1003.001

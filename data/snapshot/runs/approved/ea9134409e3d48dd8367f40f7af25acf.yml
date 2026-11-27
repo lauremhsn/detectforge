@@ -1,0 +1,27 @@
+title: Windows Service Creation via sc.exe
+id: 44da4803-958e-5948-bd14-c8e9d2bea997
+status: experimental
+description: Detects creation of Windows services using sc.exe with the create subcommand, which is commonly used by attackers to establish persistence via T1543.003.
+references:
+  - https://attack.mitre.org/techniques/T1543/003/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: \sc.exe
+    - OriginalFileName: sc.exe
+  selection_cli:
+    CommandLine|contains|all:
+      - ' create '
+      - 'binpath='
+      - 'type='
+  condition: all of selection_*
+falsepositives:
+  - Legitimate service installation by administrators or software installers that explicitly specify service type
+level: medium
+tags:
+  - attack.persistence
+  - attack.t1543.003

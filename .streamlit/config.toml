@@ -10,29 +10,29 @@ gatherUsageStats = false
 # No "Deploy" button or developer menu: this is a product, not a notebook.
 toolbarMode = "minimal"
 
-# A calm, light "security console" look that reads well on a projector or LCD: soft blue-grey
-# background (not white, so no glare), off-white cards, deep navy text, steel-blue accent, teal second.
-# Fonts come from Google Fonts; without a connection the browser falls back to its sans-serif.
+# "Forge": a warm, light look that reads well on a projector or LCD and isn't another blue dashboard.
+# Warm stone background (no glare), charcoal ink, ember-orange accent (the forge), steel blue as the
+# second colour, signal green for "caught". Fonts from Google Fonts, falling back to the system sans.
 [theme]
 base = "light"
-primaryColor = "#1F4FB8"
-backgroundColor = "#E9EEF4"
-secondaryBackgroundColor = "#DCE4EE"
-textColor = "#13203A"
-borderColor = "#C9D4E2"
-linkColor = "#1F4FB8"
+primaryColor = "#C2551F"
+backgroundColor = "#F3F0EB"
+secondaryBackgroundColor = "#EAE5DD"
+textColor = "#1F2328"
+borderColor = "#D8D1C6"
+linkColor = "#A8461A"
 font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap, sans-serif"
 codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap, monospace"
 headingFontWeights = [800, 700, 650, 600, 600, 600]
 baseRadius = "0.7rem"
 buttonRadius = "0.55rem"
 showWidgetBorder = true
-greenColor = "#15803D"
+greenColor = "#2F7D4F"
 orangeColor = "#B45309"
-redColor = "#B91C1C"
-blueColor = "#1F4FB8"
+redColor = "#B42318"
+blueColor = "#3D5A73"
 
 [theme.sidebar]
-backgroundColor = "#DCE4EE"
-secondaryBackgroundColor = "#CFD9E6"
-borderColor = "#C9D4E2"
+backgroundColor = "#EAE5DD"
+secondaryBackgroundColor = "#E0D9CE"
+borderColor = "#D8D1C6"

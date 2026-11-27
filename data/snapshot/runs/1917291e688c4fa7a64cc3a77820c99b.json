@@ -1,0 +1,158 @@
+{
+  "run": {
+    "trace_id": "1917291e688c4fa7a64cc3a77820c99b",
+    "technique": "T1547.001",
+    "mode": "harden",
+    "prompt_version": "harden-v2",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "status": "passed",
+    "reasons": [],
+    "original_rule_yaml": "title: Potential Persistence Attempt Via Run Keys Using Reg.EXE\nid: de587dce-915e-4218-aac4-835ca6af6f70\nstatus: test\ndescription: Detects suspicious command line reg.exe tool adding key to RUN key in Registry\nreferences:\n    - https://app.any.run/tasks/9c0f37bc-867a-4314-b685-e101566766d7/\n    - https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys\n    - https://github.com/HackTricks-wiki/hacktricks/blob/e4c7b21b8f36c97c35b7c622732b38a189ce18f7/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-with-autorun-binaries.md\nauthor: Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)\ndate: 2021-06-28\nmodified: 2025-02-17\ntags:\n    - attack.privilege-escalation\n    - attack.persistence\n    - attack.t1547.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection:\n        Image|endswith: '\\reg.exe'\n        CommandLine|contains|all:\n            - 'reg'\n            - ' add '\n        CommandLine|contains:\n            - 'Software\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run'\n    condition: selection\nfalsepositives:\n    - Legitimate software automatically (mostly, during installation) sets up autorun keys for legitimate reasons.\n    - Legitimate administrator sets up autorun keys for legitimate reasons.\n    - Discord\nlevel: medium\nregression_tests_path: regression_data/rules/windows/process_creation/proc_creation_win_reg_add_run_key/info.yml\n",
+    "final_rule_yaml": "title: Potential Persistence Attempt Via Run Keys Using Reg.EXE\nid: de587dce-915e-4218-aac4-835ca6af6f70\nstatus: test\ndescription: Detects suspicious command line reg.exe tool adding key to RUN key in Registry\nreferences:\n    - https://app.any.run/tasks/9c0f37bc-867a-4314-b685-e101566766d7/\n    - https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys\n    - https://github.com/HackTricks-wiki/hacktricks/blob/e4c7b21b8f36c97c35b7c622732b38a189ce18f7/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-with-autorun-binaries.md\nauthor: Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)\ndate: 2021-06-28\nmodified: 2025-02-17\ntags:\n    - attack.privilege-escalation\n    - attack.persistence\n    - attack.t1547.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection_reg:\n        Image|endswith: '\\reg.exe'\n        CommandLine|contains: 'reg'\n    selection_add:\n        CommandLine|re:\n            - '(?i)\\s+a[\\xad\\u200b\\u200c\\u200d\\ufeff]*d[\\xad\\u200b\\u200c\\u200d\\ufeff]*d\\s+'\n            - '(?i)\\s+\\u1d43\\u1d48\\u1d48\\s+'\n    selection_path:\n        CommandLine|contains:\n            - 'Software\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run'\n            - '\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnceEx'\n    condition: selection_reg and selection_add and selection_path\nfalsepositives:\n    - Legitimate software automatically (mostly, during installation) sets up autorun keys for legitimate reasons.\n    - Legitimate administrator sets up autorun keys for legitimate reasons.\n    - Discord\nlevel: medium\nregression_tests_path: regression_data/rules/windows/process_creation/proc_creation_win_reg_add_run_key/info.yml",
+    "final_source": "accepted",
+    "rationale": "The rule detects reg.exe adding values to Windows Run/RunOnce registry keys for persistence (T1547.001). Key improvements:\n\n1. **Resilient \"add\" detection**: Uses regex `(?i)\\s+a[\\xad\\u200b\\u200c\\u200d\\ufeff]*d[\\xad\\u200b\\u200c\\u200d\\ufeff]*d\\s+` to match \"add\" with Unicode soft hyphens (U+00AD), zero-width spaces (U+200B-U+200D), or BOM (U+FEFF) inserted between letters \u2014 the exact evasion seen in missed attacks. Also matches the superscript substitution variant \"\u1d43\u1d48\u1d48\" (U+1D43 U+1D48 U+1D48).\n\n2. **Broader Run key coverage**: Added `RunOnceEx` path which is a legitimate Run key variant used by malware.\n\n3. **Preserved all original logic**: Kept Image check, \"reg\" token, and all original Run key paths. No fields or exclusions removed.\n\nResult: 15/15 attacks detected (100% evasion resistance), 0 false alarms \u2014 up from 11/15 (69%) originally.",
+    "gate": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "valid",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "name": "deployable",
+          "passed": true,
+          "detail": "converts to lucene"
+        },
+        {
+          "name": "detects_unmutated_attacks",
+          "passed": true,
+          "detail": "2/2 unmutated attacks detected"
+        },
+        {
+          "name": "evasion_resistance",
+          "passed": true,
+          "detail": "100% (minimum 80%)"
+        },
+        {
+          "name": "no_lost_attacks",
+          "passed": true,
+          "detail": "0 attacks the original caught are now missed"
+        },
+        {
+          "name": "no_new_false_alarms",
+          "passed": true,
+          "detail": "0 new false alarms (0 before, 0 after)"
+        },
+        {
+          "name": "keeps_original_fields",
+          "passed": true,
+          "detail": "all original fields still used"
+        },
+        {
+          "name": "keeps_original_filters",
+          "passed": true,
+          "detail": "all original exclusions kept"
+        }
+      ]
+    },
+    "tuning_evasion_resistance_before": 0.6923076923076923,
+    "tuning_evasion_resistance_after": 1.0,
+    "tuning_false_alarms_before": 0,
+    "tuning_false_alarms_after": 0,
+    "tuning_runs_used": 3,
+    "model_calls": [
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 19823.3,
+        "prompt_tokens": 1952,
+        "completion_tokens": 634,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 79640.8,
+        "prompt_tokens": 3233,
+        "completion_tokens": 3836,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 9407.5,
+        "prompt_tokens": 4344,
+        "completion_tokens": 755,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 5872.3,
+        "prompt_tokens": 5234,
+        "completion_tokens": 671,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 11626.2,
+        "prompt_tokens": 5910,
+        "completion_tokens": 957,
+        "used_fallback": false,
+        "error": null
+      }
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 10.39,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 11.92,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 11.04,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 6.29,
+        "error": null
+      },
+      {
+        "tool": "submit",
+        "ok": true,
+        "latency_ms": 26.32,
+        "error": null
+      }
+    ],
+    "prompt_tokens": 20673,
+    "completion_tokens": 6853,
+    "duration_s": 126.45,
+    "record": {
+      "rule_yaml": "title: Potential Persistence Attempt Via Run Keys Using Reg.EXE\nid: de587dce-915e-4218-aac4-835ca6af6f70\nstatus: test\ndescription: Detects suspicious command line reg.exe tool adding key to RUN key in Registry\nreferences:\n    - https://app.any.run/tasks/9c0f37bc-867a-4314-b685-e101566766d7/\n    - https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys\n    - https://github.com/HackTricks-wiki/hacktricks/blob/e4c7b21b8f36c97c35b7c622732b38a189ce18f7/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-with-autorun-binaries.md\nauthor: Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)\ndate: 2021-06-28\nmodified: 2025-02-17\ntags:\n    - attack.privilege-escalation\n    - attack.persistence\n    - attack.t1547.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection_reg:\n        Image|endswith: '\\reg.exe'\n        CommandLine|contains: 'reg'\n    selection_add:\n        CommandLine|re:\n            - '(?i)\\s+a[\\xad\\u200b\\u200c\\u200d\\ufeff]*d[\\xad\\u200b\\u200c\\u200d\\ufeff]*d\\s+'\n            - '(?i)\\s+\\u1d43\\u1d48\\u1d48\\s+'\n    selection_path:\n        CommandLine|contains:\n            - 'Software\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run'\n            - '\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnceEx'\n    condition: selection_reg and selection_add and selection_path\nfalsepositives:\n    - Legitimate software automatically (mostly, during installation) sets up autorun keys for legitimate reasons.\n    - Legitimate administrator sets up autorun keys for legitimate reasons.\n    - Discord\nlevel: medium\nregression_tests_path: regression_data/rules/windows/process_creation/proc_creation_win_reg_add_run_key/info.yml",
+      "source": "adapted",
+      "technique": "T1547.001",
+      "trace_id": "1917291e688c4fa7a64cc3a77820c99b",
+      "version": 1,
+      "status": "proposed"
+    }
+  },
+  "heldout_evaluation": null,
+  "saved_to": "data\\runs\\1917291e688c4fa7a64cc3a77820c99b.json",
+  "trace_url": "https://cloud.langfuse.com/project/cmwev3m5600gkad0kc5h1s6ij/traces/1917291e688c4fa7a64cc3a77820c99b"
+}

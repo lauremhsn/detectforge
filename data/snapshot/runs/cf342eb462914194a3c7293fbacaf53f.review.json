@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Regsvr32 remote scriptlet; unseen 100%, no false alarms.",
+    "decided_at": "2026-11-22T11:42:11.634554Z"
+  },
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Regsvr32 remote scriptlet; unseen 100%, no false alarms.",
+    "decided_at": "2026-11-22T12:36:21.085441Z"
+  }
+]

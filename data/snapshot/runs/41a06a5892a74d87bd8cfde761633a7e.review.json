@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Reg save of SAM/SECURITY/SYSTEM hives; unseen 100%, no false alarms.",
+    "decided_at": "2026-11-22T11:42:11.656350Z"
+  },
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Unseen 100% but fires on everyday reg query/add/delete of HKLM SYSTEM/SECURITY (checked by hand; not in the benign set).",
+    "decided_at": "2026-11-22T12:36:21.115760Z"
+  }
+]

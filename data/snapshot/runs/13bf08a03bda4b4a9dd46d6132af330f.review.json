@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Case-sensitive regexes miss /TN and /TR; misses /\"tn\" insertion (held-out 50%%); fires on a legitimate daily update task.",
+    "decided_at": "2026-11-17T22:39:13.791717Z"
+  }
+]

@@ -19,9 +19,9 @@ _BADGE = (
     "<div style='display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:-.2rem 0 .6rem 0'>"
     "<span style='background:{bg};color:#fff;border-radius:999px;padding:.3rem .8rem;font-weight:600;"
     "font-size:.88rem'>{route}</span>"
-    "<span style='background:#D6E2F5;color:#1E2B45;border-radius:999px;padding:.3rem .8rem;font-size:.85rem'>"
+    "<span style='background:#F6E4D8;color:#2A2622;border-radius:999px;padding:.3rem .8rem;font-size:.85rem'>"
     "{technique}</span>"
-    "<span style='color:#4B5B73;font-size:.8rem'>agent cost: {calls} model calls · {tokens} tokens</span></div>"
+    "<span style='color:#5B5348;font-size:.8rem'>agent cost: {calls} model calls · {tokens} tokens</span></div>"
 )
 
 
@@ -135,7 +135,7 @@ def check_chips(checks) -> str:
     chips = []
     for c in checks:
         if c.passed:
-            bg, fg, mark = "#DCFCE7", "#166534", "✓"
+            bg, fg, mark = "#DCFCE7", "#2F7D4F", "✓"
         elif c.blocking:
             bg, fg, mark = "#FEE2E2", "#991B1B", "✗"
         else:
@@ -146,7 +146,7 @@ def check_chips(checks) -> str:
             f"{mark} {html.escape(c.name.replace('_', ' '))}</span>"
         )
     legend = (
-        "<div style='color:#4B5B73;font-size:.78rem;margin-top:.35rem'>✓ passed · ✗ failed (blocks "
+        "<div style='color:#5B5348;font-size:.78rem;margin-top:.35rem'>✓ passed · ✗ failed (blocks "
         "approval by default) · ! warning, worth a look · hover a check for its detail</div>"
     )
     return f"<div style='display:flex;flex-wrap:wrap;gap:.35rem'>{''.join(chips)}</div>{legend}"
@@ -179,7 +179,7 @@ def variation_chart(heldout: HardeningReport) -> dict | None:
                 "field": "rule",
                 "type": "nominal",
                 "title": None,
-                "scale": {"domain": ["before", "after"], "range": ["#F59E0B", "#1F4FB8"]},
+                "scale": {"domain": ["before", "after"], "range": ["#E0A458", "#3D5A73"]},
                 "legend": {"orient": "top"},
             },
             "tooltip": [

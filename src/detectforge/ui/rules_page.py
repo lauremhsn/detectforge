@@ -15,6 +15,7 @@ from detectforge.review import list_runs, load_run
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
 from detectforge.ui import techniques as tx
+from detectforge.ui import workspace
 from detectforge.ui.agent_panel import agent_panel
 from detectforge.ui.bench import describe
 from detectforge.ui.components import export_view, md, pct, table
@@ -251,7 +252,7 @@ def validation_view(rule_yaml: str) -> None:
 
 def _existing_proposals(rule_yaml: str) -> None:
     """Say so when the agent already worked on this exact rule, instead of spending calls again."""
-    runs_dir = get_settings().runs_dir
+    runs_dir = workspace.runs_dir()
     target = " ".join(rule_yaml.split())
     found = [
         s

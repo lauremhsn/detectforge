@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Wmic /format with an .xsl file; no unseen variations to measure; same logic as the community rule.",
+    "decided_at": "2026-11-22T11:42:11.665226Z"
+  },
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Wmic /format with an .xsl file; no unseen variations to measure; same logic as the community rule.",
+    "decided_at": "2026-11-22T12:36:21.129816Z"
+  }
+]

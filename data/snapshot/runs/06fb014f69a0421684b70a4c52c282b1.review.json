@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Case-sensitive regex; catches 71% of unseen variations (checks failed).",
+    "decided_at": "2026-11-27T13:42:10.431218Z"
+  }
+]

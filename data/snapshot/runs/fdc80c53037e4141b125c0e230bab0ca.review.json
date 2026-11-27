@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "wmic.*delete is too broad: any wmic delete command would alert, not only shadow copies. No held-out mutations for this rule, so no evidence on unseen variants.",
+    "decided_at": "2026-11-17T13:18:18.947529Z"
+  }
+]

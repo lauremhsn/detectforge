@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Fires on an unseen legitimate service creation (T1543.003-na2).",
+    "decided_at": "2026-11-27T13:42:10.371444Z"
+  }
+]

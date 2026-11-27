@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Keys on reg.exe writing to a Run key (add, or /v with /d); no look-alike characters; held-out 0% -> 100%, no held-out false alarms. Fix author/date before deploying.",
+    "decided_at": "2026-11-17T22:25:43.997946Z"
+  }
+]

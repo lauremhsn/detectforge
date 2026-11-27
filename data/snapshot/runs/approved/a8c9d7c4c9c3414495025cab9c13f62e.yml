@@ -1,0 +1,25 @@
+title: Regsvr32 Remote Scriptlet Execution
+id: 88fdebdf-1ddc-5a17-bd57-0614eb8024d6
+status: experimental
+description: 'Detects regsvr32.exe being used to fetch and execute remote scriptlets (.sct files) via the /i: parameter with a URL, which is a known technique for bypassing application control (T1218.010).'
+references:
+  - https://attack.mitre.org/techniques/T1218/010/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    Image|endswith: \regsvr32.exe
+  selection_original:
+    OriginalFileName: regsvr32.exe
+  selection_i_url:
+    CommandLine|re: '(?i)(/|-|--)i:\s*https?://'
+  condition: (selection_image or selection_original) and selection_i_url
+falsepositives:
+  - Legitimate administrative use of regsvr32 to register remote scriptlets (rare)
+level: high
+tags:
+  - attack.defense_evasion
+  - attack.t1218.010

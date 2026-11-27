@@ -1,0 +1,173 @@
+{
+  "run": {
+    "trace_id": "586b5d3cc08a403691ff9bdb1c134b23",
+    "technique": "T1547.001",
+    "mode": "harden",
+    "prompt_version": "harden-v2",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "status": "passed",
+    "reasons": [],
+    "original_rule_yaml": "title: Direct Autorun Keys Modification\nid: 24357373-078f-44ed-9ac4-6d334a668a11\nstatus: test\ndescription: Detects direct modification of autostart extensibility point (ASEP) in registry using reg.exe.\nreferences:\n    - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md\n    - https://github.com/HackTricks-wiki/hacktricks/blob/e4c7b21b8f36c97c35b7c622732b38a189ce18f7/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-with-autorun-binaries.md\nauthor: Victor Sergeev, Daniil Yugoslavskiy, oscd.community, Swachchhanda Shrawan Poudel (Nextron Systems)\ndate: 2019-10-25\nmodified: 2026-01-05\ntags:\n    - attack.privilege-escalation\n    - attack.persistence\n    - attack.t1547.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection_img:\n        - Image|endswith: '\\reg.exe'\n        - OriginalFileName: 'reg.exe'\n    selection_cli_add:\n        CommandLine|contains: 'add'     # to avoid intersection with discovery tactic rules\n    selection_cli_keys:\n        CommandLine|contains:           # need to improve this list, there are plenty of ASEP reg keys\n            - '\\software\\Microsoft\\Windows\\CurrentVersion\\Run' # Also covers the strings \"RunOnce\", \"RunOnceEx\", \"RunServices\", \"RunServicesOnce\"\n            - '\\software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Userinit'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Shell'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Windows'\n            - '\\system\\CurrentControlSet\\Control\\SafeBoot\\AlternateShell'\n    condition: all of selection_*\nfalsepositives:\n    - Legitimate software automatically (mostly, during installation) sets up autorun keys for legitimate reasons.\n    - Legitimate administrator sets up autorun keys for legitimate reasons.\n    - Discord\nlevel: medium\n",
+    "final_rule_yaml": "title: Direct Autorun Keys Modification\nid: 24357373-078f-44ed-9ac4-6d334a668a11\nstatus: test\ndescription: Detects direct modification of autostart extensibility point (ASEP) in registry using reg.exe.\nreferences:\n    - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md\n    - https://github.com/HackTricks-wiki/hacktricks/blob/e4c7b21b8f36c97c35b7c622732b38a189ce18f7/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-with-autorun-binaries.md\nauthor: Victor Sergeev, Daniil Yugoslavskiy, oscd.community, Swachchhanda Shrawan Poudel (Nextron Systems)\ndate: 2019-10-25\nmodified: 2026-01-05\ntags:\n    - attack.privilege-escalation\n    - attack.persistence\n    - attack.t1547.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection_img:\n        - Image|endswith: '\\reg.exe'\n        - OriginalFileName: 'reg.exe'\n    selection_cli_keys:\n        CommandLine|contains:\n            - '\\software\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Userinit'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Shell'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Windows'\n            - '\\system\\CurrentControlSet\\Control\\SafeBoot\\AlternateShell'\n    selection_cli_add_contains:\n        CommandLine|contains: 'add'\n    selection_cli_add_regex:\n        CommandLine|re: '(?i)a.?d.?d'\n    selection_cli_add_params:\n        CommandLine|contains:\n            - '/v'\n            - '/d'\n    condition: selection_img and selection_cli_keys and (selection_cli_add_contains or selection_cli_add_regex or selection_cli_add_params)\nfalsepositives:\n    - Legitimate software automatically (mostly, during installation) sets up autorun keys for legitimate reasons.\n    - Legitimate administrator sets up autorun keys for legitimate reasons.\n    - Discord\nlevel: medium",
+    "final_source": "accepted",
+    "rationale": "The rule detects reg.exe adding values to known Windows autorun registry keys (ASEPs). The attack behavior is: reg.exe runs with \"add\" subcommand targeting keys under HKCU/HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run*, Winlogon, SafeBoot, etc., plus /v (value name) and /d (data) parameters.\n\nThe revision hardens the \"add\" detection against three evasion transforms seen in the tuning set:\n1. Insertion of zero-width chars (e.g., \"A\u00adDD\") - caught by regex a.?d.?d\n2. Unicode substitution (e.g., \"\u1d43\u1d48\u1d48\") - caught by regex a.?d.?d (wildcard absorbs non-ASCII)\n3. Argument reordering/omission of literal \"add\" - caught by presence of required /v and /d params together with an ASEP key path\n\nAll original fields, exclusions, and key-path strings are preserved. The condition broadens with OR alternatives (contains \"add\" OR tolerant regex OR param pair) so no attack the original caught is lost. False alarms remain at zero.",
+    "gate": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "valid",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "name": "deployable",
+          "passed": true,
+          "detail": "converts to lucene"
+        },
+        {
+          "name": "detects_unmutated_attacks",
+          "passed": true,
+          "detail": "2/2 unmutated attacks detected"
+        },
+        {
+          "name": "evasion_resistance",
+          "passed": true,
+          "detail": "100% (minimum 80%)"
+        },
+        {
+          "name": "no_lost_attacks",
+          "passed": true,
+          "detail": "0 attacks the original caught are now missed"
+        },
+        {
+          "name": "no_new_false_alarms",
+          "passed": true,
+          "detail": "0 new false alarms (0 before, 0 after)"
+        },
+        {
+          "name": "keeps_original_fields",
+          "passed": true,
+          "detail": "all original fields still used"
+        },
+        {
+          "name": "keeps_original_filters",
+          "passed": true,
+          "detail": "all original exclusions kept"
+        }
+      ]
+    },
+    "tuning_evasion_resistance_before": 0.6923076923076923,
+    "tuning_evasion_resistance_after": 1.0,
+    "tuning_false_alarms_before": 0,
+    "tuning_false_alarms_after": 0,
+    "tuning_runs_used": 3,
+    "model_calls": [
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 7436.9,
+        "prompt_tokens": 2080,
+        "completion_tokens": 750,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 27275.1,
+        "prompt_tokens": 3439,
+        "completion_tokens": 2120,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 5879.1,
+        "prompt_tokens": 4127,
+        "completion_tokens": 676,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 20929.0,
+        "prompt_tokens": 5294,
+        "completion_tokens": 1866,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 9874.0,
+        "prompt_tokens": 6011,
+        "completion_tokens": 708,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 17824.2,
+        "prompt_tokens": 6942,
+        "completion_tokens": 963,
+        "used_fallback": false,
+        "error": null
+      }
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 13.64,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 5.9,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 9.95,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 6.33,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 7.78,
+        "error": null
+      },
+      {
+        "tool": "submit",
+        "ok": true,
+        "latency_ms": 26.48,
+        "error": null
+      }
+    ],
+    "prompt_tokens": 27893,
+    "completion_tokens": 7083,
+    "duration_s": 89.31,
+    "record": {
+      "rule_yaml": "title: Direct Autorun Keys Modification\nid: 24357373-078f-44ed-9ac4-6d334a668a11\nstatus: test\ndescription: Detects direct modification of autostart extensibility point (ASEP) in registry using reg.exe.\nreferences:\n    - https://github.com/redcanaryco/atomic-red-team/blob/f339e7da7d05f6057fdfcdd3742bfcf365fee2a9/atomics/T1547.001/T1547.001.md\n    - https://github.com/HackTricks-wiki/hacktricks/blob/e4c7b21b8f36c97c35b7c622732b38a189ce18f7/src/windows-hardening/windows-local-privilege-escalation/privilege-escalation-with-autorun-binaries.md\nauthor: Victor Sergeev, Daniil Yugoslavskiy, oscd.community, Swachchhanda Shrawan Poudel (Nextron Systems)\ndate: 2019-10-25\nmodified: 2026-01-05\ntags:\n    - attack.privilege-escalation\n    - attack.persistence\n    - attack.t1547.001\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection_img:\n        - Image|endswith: '\\reg.exe'\n        - OriginalFileName: 'reg.exe'\n    selection_cli_keys:\n        CommandLine|contains:\n            - '\\software\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'\n            - '\\software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Userinit'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Shell'\n            - '\\software\\Microsoft\\Windows NT\\CurrentVersion\\Windows'\n            - '\\system\\CurrentControlSet\\Control\\SafeBoot\\AlternateShell'\n    selection_cli_add_contains:\n        CommandLine|contains: 'add'\n    selection_cli_add_regex:\n        CommandLine|re: '(?i)a.?d.?d'\n    selection_cli_add_params:\n        CommandLine|contains:\n            - '/v'\n            - '/d'\n    condition: selection_img and selection_cli_keys and (selection_cli_add_contains or selection_cli_add_regex or selection_cli_add_params)\nfalsepositives:\n    - Legitimate software automatically (mostly, during installation) sets up autorun keys for legitimate reasons.\n    - Legitimate administrator sets up autorun keys for legitimate reasons.\n    - Discord\nlevel: medium",
+      "source": "adapted",
+      "technique": "T1547.001",
+      "trace_id": "586b5d3cc08a403691ff9bdb1c134b23",
+      "version": 1,
+      "status": "proposed"
+    }
+  },
+  "heldout_evaluation": null,
+  "saved_to": "data\\runs\\586b5d3cc08a403691ff9bdb1c134b23.json",
+  "trace_url": "https://cloud.langfuse.com/project/cmwev3m5600gkad0kc5h1s6ij/traces/586b5d3cc08a403691ff9bdb1c134b23"
+}

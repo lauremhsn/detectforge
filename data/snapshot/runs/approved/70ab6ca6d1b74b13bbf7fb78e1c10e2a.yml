@@ -1,0 +1,26 @@
+title: Registry Save or Export of Sensitive System Hives (SAM, SYSTEM, SECURITY)
+id: 67a2696a-f33e-5d04-a271-e990daaf874f
+status: experimental
+description: Detects use of reg.exe to save or export SAM, SYSTEM, or SECURITY registry hives, which is a technique for credential dumping (T1003.002).
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    - Image|endswith: '\reg.exe'
+    - OriginalFileName: 'reg.exe'
+  selection_hklm:
+    CommandLine|contains: 'HKLM\'
+  selection_hives:
+    CommandLine|re: '(?i)\\(SAM|SYSTEM|SECURITY)(\s|$)'
+  condition: all of selection_*
+falsepositives:
+  - Legitimate backup of system hives by administrators (rare)
+level: high
+tags:
+  - attack.credential_access
+  - attack.t1003.002

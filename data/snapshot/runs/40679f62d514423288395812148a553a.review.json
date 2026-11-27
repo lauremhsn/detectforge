@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Exclusion ' query ' is a free bypass (appending ' query x' evades it); also fires on reg delete of a Run value (D29).",
+    "decided_at": "2026-11-21T17:17:28.192474Z"
+  }
+]

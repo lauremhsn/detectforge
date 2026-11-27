@@ -1,0 +1,28 @@
+title: Wbadmin Delete System State Backup
+id: ac34c03f-98b2-5d10-a8c9-5f7d74796ce8
+status: experimental
+description: Detects wbadmin.exe being used to delete system state backups, which inhibits system recovery (ATT&CK T1490).
+references:
+  - https://attack.mitre.org/techniques/T1490/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: '\wbadmin.exe'
+    - OriginalFileName: 'WBADMIN.EXE'
+  selection_delete:
+    CommandLine|contains|all:
+      - 'delete'
+      - 'systemstatebackup'
+  selection_keepversions:
+    CommandLine|contains: 'keepVersions'
+  condition: all of selection_*
+falsepositives:
+  - Legitimate backup cleanup by authorized administrators
+level: high
+tags:
+  - attack.t1490
+  - attack.inhibit-system-recovery

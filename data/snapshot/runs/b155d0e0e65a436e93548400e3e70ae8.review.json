@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Fires on an unseen reg query and on removing an autorun; copied characters; checks failed.",
+    "decided_at": "2026-11-27T13:42:10.431218Z"
+  }
+]

