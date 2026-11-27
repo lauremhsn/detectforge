@@ -125,6 +125,8 @@ def review_tab(runs_dir: Path) -> None:
     runs = [r for r in runs if r.prompt_version in latest]  # older prompt versions: history, in the Lab
     counts = {k: sum(_state(r) == k for r in runs) for k in FILTERS if k != "all"}
     counts["all"] = len(runs)
+    # Open on what's waiting; when nothing is, on every decision (an empty page tells a visitor nothing).
+    st.session_state.setdefault("review_show", "pending review" if counts["pending review"] else "all")
     show = st.radio(
         "Show",
         list(FILTERS),

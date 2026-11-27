@@ -63,12 +63,16 @@ From the verdict, **See the evidence →** (or from Posture, **Open rule →**).
 
 ## 5. Human approval (2 min): Review
 
-Open **Review**: 36 proposals grouped into one card per rule.
+Open **Review**. Every proposal has been decided, so it opens on all of them, grouped into one card
+per rule (filter **Rejected** to find the cases below quickly).
 
-- Open the first T1490 card: the badge says **written from scratch** (community rules hidden), and the
-  verdict says **Check before approving**. The rule catches 100% of unseen variations, but it fires
-  on `wmic service where name="OldSvc" delete`, an everyday command that isn't in the test data. The
-  automatic checks couldn't see it; the reviewer can.
+- Open a T1490 written rule that was rejected for firing on `wmic service where name="OldSvc" delete`
+  (e.g. run 474bd609): the badge says **written from scratch** (community rules hidden), and the
+  verdict says **Check before approving**. It catches 100% of unseen variations, but it fires on that
+  everyday command, which isn't in the test data. The automatic checks couldn't see it; the reviewer
+  did, and the decision history shows why it was rejected.
+- To show a live approval, ask the agent for a new proposal in step 4 first: it appears here as
+  waiting.
 - **1 · What it found → 2 · What it changed → 3 · What that did**, the agent's explanation as points
   (escaped: model text can't render links or pose as a banner), unseen variations as bars, the
   quality checks as chips.
