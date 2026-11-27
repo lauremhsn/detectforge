@@ -1,0 +1,765 @@
+[
+  {
+    "rule": "community: Suspicious Execution of Powershell with Base64",
+    "ours": 3,
+    "elastic": 2,
+    "only_ours": [
+      "T1059.001-b02-rec1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: PowerShell Download Pattern",
+    "ours": 7,
+    "elastic": 0,
+    "only_ours": [
+      "T1059.001-b02",
+      "T1059.001-b02-ins1",
+      "T1059.001-b02-omi1",
+      "T1059.001-b02-sub1",
+      "T1059.001-b02-sub2",
+      "T1059.001-b02-sub3",
+      "T1059.001-b02-sub4"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Read Contents From Stdin Via Cmd.EXE",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Process Creation Attempt via Wmic.EXE",
+    "ours": 9,
+    "elastic": 9,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: XSL Script Execution Via WMIC.EXE",
+    "ours": 3,
+    "elastic": 1,
+    "only_ours": [
+      "T1047-b04",
+      "T1047-b04-sub1",
+      "T1047-b04-sub2"
+    ],
+    "only_elastic": [
+      "T1047-na2"
+    ]
+  },
+  {
+    "rule": "community: Suspicious Curl.EXE Download",
+    "ours": 51,
+    "elastic": 33,
+    "only_ours": [
+      "T1105-b05",
+      "T1105-b05-ins1",
+      "T1105-b05-omi1",
+      "T1105-b05-sub1",
+      "T1105-b05-sub2",
+      "T1105-b05-sub3",
+      "T1105-b05-sub4",
+      "T1105-b06",
+      "T1105-b06-omi1",
+      "T1105-b07",
+      "T1105-b07-ins1",
+      "T1105-b07-omi1",
+      "T1105-b07-sub1",
+      "T1105-b07-sub2",
+      "T1105-b07-sub3",
+      "T1105-b07-sub4",
+      "T1105-b08",
+      "T1105-b08-omi1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: File Download Via Windows Defender MpCmpRun.EXE",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Suspicious Download Via Certutil.EXE",
+    "ours": 7,
+    "elastic": 7,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: File Download Via Bitsadmin",
+    "ours": 10,
+    "elastic": 10,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Potential Persistence Attempt Via Run Keys Using Reg.EXE",
+    "ours": 12,
+    "elastic": 0,
+    "only_ours": [
+      "T1547.001-b01",
+      "T1547.001-b01-ins1",
+      "T1547.001-b01-ins2",
+      "T1547.001-b01-omi1",
+      "T1547.001-b01-sub1",
+      "T1547.001-b01-sub2",
+      "T1547.001-b02",
+      "T1547.001-b02-ins1",
+      "T1547.001-b02-ins2",
+      "T1547.001-b02-sub1",
+      "T1547.001-b02-sub2",
+      "T1547.001-nb1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Direct Autorun Keys Modification",
+    "ours": 12,
+    "elastic": 0,
+    "only_ours": [
+      "T1547.001-b01",
+      "T1547.001-b01-ins1",
+      "T1547.001-b01-ins2",
+      "T1547.001-b01-omi1",
+      "T1547.001-b01-sub1",
+      "T1547.001-b01-sub2",
+      "T1547.001-b02",
+      "T1547.001-b02-ins1",
+      "T1547.001-b02-ins2",
+      "T1547.001-b02-sub1",
+      "T1547.001-b02-sub2",
+      "T1547.001-nb1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Suspicious Schtasks Schedule Types",
+    "ours": 17,
+    "elastic": 11,
+    "only_ours": [
+      "T1053.005-b01",
+      "T1053.005-b01-ins1",
+      "T1053.005-b01-ins2",
+      "T1053.005-b01-omi1",
+      "T1053.005-b01-reo1",
+      "T1053.005-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Schtasks Creation Or Modification With SYSTEM Privileges",
+    "ours": 4,
+    "elastic": 0,
+    "only_ours": [
+      "T1053.005-b04",
+      "T1053.005-b04-ins2",
+      "T1053.005-b04-omi1",
+      "T1053.005-b04-reo1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Suspicious New Service Creation",
+    "ours": 7,
+    "elastic": 3,
+    "only_ours": [
+      "T1543.003-b01",
+      "T1543.003-b01-omi1",
+      "T1543.003-b03",
+      "T1543.003-b03-omi1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Disable Windows Defender AV Security Monitoring",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Audit Policy Tampering Via Auditpol",
+    "ours": 23,
+    "elastic": 23,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Suspicious Eventlog Clearing or Configuration Change Activity",
+    "ours": 5,
+    "elastic": 5,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Potentially Suspicious Rundll32 Activity",
+    "ours": 24,
+    "elastic": 22,
+    "only_ours": [
+      "T1218.011-b06",
+      "T1218.011-b06-omi1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Potentially Suspicious Regsvr32 HTTP/FTP Pattern",
+    "ours": 6,
+    "elastic": 6,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Remotely Hosted HTA File Executed Via Mshta.EXE",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Suspicious Msiexec Quiet Install From Remote Location",
+    "ours": 4,
+    "elastic": 4,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Process Memory Dump Via Comsvcs.DLL",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Dumping of Sensitive Hives Via Reg.EXE",
+    "ours": 6,
+    "elastic": 0,
+    "only_ours": [
+      "T1003.002-b01",
+      "T1003.002-b02",
+      "T1003.002-b03",
+      "T1003.002-b04",
+      "T1003.002-b05",
+      "T1003.002-b06"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Potential Browser Data Stealing",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Boot Configuration Tampering Via Bcdedit.EXE",
+    "ours": 8,
+    "elastic": 8,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: All Backups Deleted Via Wbadmin.EXE",
+    "ours": 1,
+    "elastic": 1,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "community: Shadow Copies Deletion Using Operating Systems Utilities",
+    "ours": 7,
+    "elastic": 7,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 046859df",
+    "ours": 3,
+    "elastic": 0,
+    "only_ours": [
+      "T1105-b09",
+      "T1105-b09-omi1",
+      "T1105-b09-reo1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 1045b6d8",
+    "ours": 6,
+    "elastic": 0,
+    "only_ours": [
+      "T1053.005-b04",
+      "T1053.005-b04-ins1",
+      "T1053.005-b04-ins2",
+      "T1053.005-b04-omi1",
+      "T1053.005-b04-reo1",
+      "T1053.005-b04-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 16932637",
+    "ours": 1,
+    "elastic": 0,
+    "only_ours": [
+      "T1059.003-b01"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 18e48684",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 266ab3f5",
+    "ours": 8,
+    "elastic": 0,
+    "only_ours": [
+      "T1027-b01",
+      "T1027-b01-ins1",
+      "T1027-b01-ins2",
+      "T1027-b01-reo1",
+      "T1027-b01-sub1",
+      "T1027-b01-sub2",
+      "T1027-b01-sub3",
+      "T1027-b01-sub4"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 2b1e6412",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 38b37539",
+    "ours": 10,
+    "elastic": 9,
+    "only_ours": [
+      "T1047-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 4b540bf5",
+    "ours": 7,
+    "elastic": 0,
+    "only_ours": [
+      "T1059.001-b01",
+      "T1059.001-b01-omi1",
+      "T1059.001-b01-sub1",
+      "T1059.001-b01-sub2",
+      "T1059.001-b01-sub3",
+      "T1059.001-b01-sub4",
+      "T1059.001-b02-rec1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 4ebed38c",
+    "ours": 1,
+    "elastic": 0,
+    "only_ours": [
+      "T1059.003-b01"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 50cbd4a8",
+    "ours": 8,
+    "elastic": 0,
+    "only_ours": [
+      "T1027-b01",
+      "T1027-b01-ins1",
+      "T1027-b01-ins2",
+      "T1027-b01-reo1",
+      "T1027-b01-sub1",
+      "T1027-b01-sub2",
+      "T1027-b01-sub3",
+      "T1027-b01-sub4"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 55d03962",
+    "ours": 7,
+    "elastic": 6,
+    "only_ours": [
+      "T1059.001-b02-rec1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 5e0d2c45",
+    "ours": 5,
+    "elastic": 0,
+    "only_ours": [
+      "T1053.005-b04",
+      "T1053.005-b04-ins2",
+      "T1053.005-b04-omi1",
+      "T1053.005-b04-reo1",
+      "T1053.005-b04-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 5e24a6db",
+    "ours": 9,
+    "elastic": 0,
+    "only_ours": [
+      "T1047-b01",
+      "T1047-b01-omi1",
+      "T1047-b01-sub1",
+      "T1047-b02",
+      "T1047-b02-omi1",
+      "T1047-b02-sub1",
+      "T1047-b03",
+      "T1047-b03-omi1",
+      "T1047-b03-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 5f1c1978",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 660e4538",
+    "ours": 3,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.007-b01",
+      "T1218.007-b01-omi1",
+      "T1218.007-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 70ab6ca6",
+    "ours": 18,
+    "elastic": 0,
+    "only_ours": [
+      "T1003.002-b01",
+      "T1003.002-b01-ins1",
+      "T1003.002-b01-sub1",
+      "T1003.002-b02",
+      "T1003.002-b02-ins1",
+      "T1003.002-b02-sub1",
+      "T1003.002-b03",
+      "T1003.002-b03-ins1",
+      "T1003.002-b03-sub1",
+      "T1003.002-b04",
+      "T1003.002-b04-ins1",
+      "T1003.002-b04-sub1",
+      "T1003.002-b05",
+      "T1003.002-b05-ins1",
+      "T1003.002-b05-sub1",
+      "T1003.002-b06",
+      "T1003.002-b06-ins1",
+      "T1003.002-b06-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 776fdb3b",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 8e3abcbe",
+    "ours": 16,
+    "elastic": 0,
+    "only_ours": [
+      "T1547.001-b01",
+      "T1547.001-b01-ins1",
+      "T1547.001-b01-ins2",
+      "T1547.001-b01-ins3",
+      "T1547.001-b01-omi1",
+      "T1547.001-b01-sub1",
+      "T1547.001-b01-sub2",
+      "T1547.001-b01-sub3",
+      "T1547.001-b02",
+      "T1547.001-b02-ins1",
+      "T1547.001-b02-ins2",
+      "T1547.001-b02-ins3",
+      "T1547.001-b02-sub1",
+      "T1547.001-b02-sub2",
+      "T1547.001-b02-sub3",
+      "T1547.001-nb1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 9069a214",
+    "ours": 3,
+    "elastic": 0,
+    "only_ours": [
+      "T1003.001-b01",
+      "T1003.001-b01-omi1",
+      "T1003.001-nb1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 91d757f1",
+    "ours": 6,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.010-b01",
+      "T1218.010-b01-ins1",
+      "T1218.010-b01-ins2",
+      "T1218.010-b01-omi1",
+      "T1218.010-b01-reo1",
+      "T1218.010-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 979f5cc0",
+    "ours": 18,
+    "elastic": 0,
+    "only_ours": [
+      "T1003.002-b01",
+      "T1003.002-b01-ins1",
+      "T1003.002-b01-sub1",
+      "T1003.002-b02",
+      "T1003.002-b02-ins1",
+      "T1003.002-b02-sub1",
+      "T1003.002-b03",
+      "T1003.002-b03-ins1",
+      "T1003.002-b03-sub1",
+      "T1003.002-b04",
+      "T1003.002-b04-ins1",
+      "T1003.002-b04-sub1",
+      "T1003.002-b05",
+      "T1003.002-b05-ins1",
+      "T1003.002-b05-sub1",
+      "T1003.002-b06",
+      "T1003.002-b06-ins1",
+      "T1003.002-b06-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 9841ad89",
+    "ours": 6,
+    "elastic": 0,
+    "only_ours": [
+      "T1053.005-b04",
+      "T1053.005-b04-ins1",
+      "T1053.005-b04-ins2",
+      "T1053.005-b04-omi1",
+      "T1053.005-b04-reo1",
+      "T1053.005-b04-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 9ba8b68c",
+    "ours": 3,
+    "elastic": 0,
+    "only_ours": [
+      "T1047-b04",
+      "T1047-b04-sub1",
+      "T1047-b04-sub2"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: 9f338450",
+    "ours": 10,
+    "elastic": 9,
+    "only_ours": [
+      "T1047-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: a3c55e7e",
+    "ours": 10,
+    "elastic": 10,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: a8c9d7c4",
+    "ours": 6,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.010-b01",
+      "T1218.010-b01-ins1",
+      "T1218.010-b01-ins2",
+      "T1218.010-b01-omi1",
+      "T1218.010-b01-reo1",
+      "T1218.010-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: b70dab39",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: bbf37648",
+    "ours": 1,
+    "elastic": 0,
+    "only_ours": [
+      "T1059.003-b01"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: c770fee2",
+    "ours": 3,
+    "elastic": 3,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: ca669e6a",
+    "ours": 7,
+    "elastic": 6,
+    "only_ours": [
+      "T1059.001-b02-rec1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: cc4e51b7",
+    "ours": 3,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.007-b01",
+      "T1218.007-b01-omi1",
+      "T1218.007-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: ce280c21",
+    "ours": 12,
+    "elastic": 12,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: cf342eb4",
+    "ours": 6,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.010-b01",
+      "T1218.010-b01-ins1",
+      "T1218.010-b01-ins2",
+      "T1218.010-b01-omi1",
+      "T1218.010-b01-reo1",
+      "T1218.010-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: d63f855b",
+    "ours": 16,
+    "elastic": 0,
+    "only_ours": [
+      "T1547.001-b01",
+      "T1547.001-b01-ins1",
+      "T1547.001-b01-ins2",
+      "T1547.001-b01-ins3",
+      "T1547.001-b01-omi1",
+      "T1547.001-b01-sub1",
+      "T1547.001-b01-sub2",
+      "T1547.001-b01-sub3",
+      "T1547.001-b02",
+      "T1547.001-b02-ins1",
+      "T1547.001-b02-ins2",
+      "T1547.001-b02-ins3",
+      "T1547.001-b02-sub1",
+      "T1547.001-b02-sub2",
+      "T1547.001-b02-sub3",
+      "T1547.001-nb1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: ddcd7f49",
+    "ours": 12,
+    "elastic": 0,
+    "only_ours": [
+      "T1003.002-b01",
+      "T1003.002-b01-sub1",
+      "T1003.002-b02",
+      "T1003.002-b02-sub1",
+      "T1003.002-b03",
+      "T1003.002-b03-sub1",
+      "T1003.002-b04",
+      "T1003.002-b04-sub1",
+      "T1003.002-b05",
+      "T1003.002-b05-sub1",
+      "T1003.002-b06",
+      "T1003.002-b06-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: e027787e",
+    "ours": 2,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.005-b01",
+      "T1218.005-b01-omi1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: e5110bb7",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: eb90b8e2",
+    "ours": 2,
+    "elastic": 0,
+    "only_ours": [
+      "T1685-b01",
+      "T1685-b02"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: edfcd4fe",
+    "ours": 3,
+    "elastic": 0,
+    "only_ours": [
+      "T1218.007-b01",
+      "T1218.007-b01-omi1",
+      "T1218.007-b01-sub1"
+    ],
+    "only_elastic": []
+  },
+  {
+    "rule": "approved: fa48e01d",
+    "ours": 2,
+    "elastic": 2,
+    "only_ours": [],
+    "only_elastic": []
+  }
+]

@@ -83,7 +83,7 @@ flowchart LR
 | Runner / batch | `agent/runner.py`, `agent/batch.py` | Chooses the path, scopes data, scores held-out after the run, saves it with provenance | no |
 | Review | `review.py` | Decisions by authenticated reviewers; approved rules copied to `approved/` | no |
 | Evaluation | `eval/` | Arms and metrics; regression gate on committed results | no |
-| UI | `ui/` | Posture, Threats, Review, Rules, Lab | intake/agent only when enabled |
+| UI | `ui/` | Product page; Posture, Threats, Rules, Review, Reports, Lab, Settings | intake/agent only when enabled |
 | Tracing | `tracing.py` | Every model and tool call to Langfuse (optional); always saved in the run file | no |
 
 The model touches **two** places only (intake and the agent loop). Everything that produces a number

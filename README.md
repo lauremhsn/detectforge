@@ -89,16 +89,20 @@ uv run detectforge intake "detect scheduled-task persistence" --no-model
 uv run --group ui python -m streamlit run src/detectforge/ui/app.py --server.address localhost
 ```
 
-It opens at http://localhost:8501. A top bar holds four product areas, organised around what you
-came to do, plus a Lab for the research side:
+It opens at http://localhost:8501 on the **product page**: the problem, how DetectForge works, a real
+before/after case, what it has measured (computed live from your runs), who it's for, and its scope.
+"Open the platform" leads into the app, whose top bar holds the areas below. Every area has its own
+URL (`?page=review`), so a link can be shared. The theme is light and calm, readable on a projector.
 
 | Area | Question it answers |
 |---|---|
-| **Posture** (home) | Where are we weak, and can we prove it? One sentence on the state of coverage, then a card per technique that needs attention (weakest first), each opening its weakest rule; before/after chart; every rule as a table; downloadable coverage report |
-| **Threats** | A new threat came in: are we covered? Paste a request or threat report; get a verdict per technique (covered / evadable / not covered) and the next step |
-| **Review** | What's waiting for me, and is it safe to ship? An inbox of proposals; for the open one a plain-language verdict, the numbers that decide it (unseen variations caught, new false alarms, quality checks), the change, deeper evidence folded away; Approve / Reject with your reviewer key |
-| **Rules** | Pick a rule → test it against evasions → harden it (by hand or with the agent); export as Sigma YAML or an Elastic query |
-| **Lab** | How the agent behaves: runs, pass rate per prompt version, model calls, tokens, failures, today's quota; what's built. Which events rules are tested on is set in the sidebar |
+| **Posture** | Where are we weak, and can we prove it? A coverage map by attacker goal (plain technique names, coloured by what your rules catch today), **What to work on next** ranked by risk, cards per technique, the before/after chart and every rule |
+| **Threats** | A new threat came in: are we covered? One-click examples and threat-report templates (including an injected one); a verdict per technique and the next step |
+| **Rules** | Pick a rule (by technique name, SigmaHQ search, or **import your own Sigma files**) → test it: every attack and its disguises, **with the text the rule looks for highlighted**, so you see exactly why a variant slips past → harden it (the agent, with its cost shown first, or by hand) with a before/after grid on the same events; export as Sigma or an Elastic query |
+| **Review** | Is this safe to ship? One card per rule (attempts grouped); a badge for the path (hardened a community rule / written from scratch); a found → changed → result story; unseen variations as bars; checks as pass/fail chips; a check against everyday legitimate commands **outside the test data**; Approve / Reject with your reviewer key |
+| **Reports** | A report for a manager or an engineer: pick the sections, preview, download Markdown |
+| **Lab** | The research side, kept apart: the three evaluation arms with what each number means, agent metrics, the budget ablation, prompt versions, failures, every run, and the test-bench setting |
+| **Settings** | Who can approve (names only, never keys), how keys are issued and protected, what the workspace contains, the quality-check thresholds |
 
 Approved rules are written to `data/runs/approved/`. A guided demo is in [demo/README.md](demo/README.md).
 
@@ -184,6 +188,20 @@ uv run detectforge harden --rule-id <sigmahq-rule-id> --technique T1053.005 --ev
 `cover` lets the code choose the path: harden the best usable community rule, or write one if none
 exists.
 
+### Evaluation scripts (offline, no model calls)
+
+They live in `scripts/`, outside the package, so changing them never changes a run's setup key.
+
+```bash
+uv run python scripts/agent_metrics.py --split test        # the agent itself: tools, trajectory, groundedness, leaks
+uv run python scripts/label_agreement.py score data/eval/labelling/labels-a.txt --against-dataset   # A/B label agreement
+uv run python scripts/revalidate_latest.py                 # re-check the rules against SigmaHQ's latest release
+uv run python scripts/elastic_parity.py --url http://localhost:9200   # our matcher vs a real Elasticsearch
+```
+
+`data/eval/extra_lookalikes.yml` holds everyday legitimate commands that aren't in the dataset; the
+Review page checks every proposal against them.
+
 ## Reliability and security
 
 - **Never fails silently.** A run either passes the gate or ends as *needs human review* with its
@@ -202,7 +220,9 @@ uv run ruff check .      # lint
 uv run ruff format --check .
 ```
 
-GitHub Actions runs lint and every test on each push and pull request. The shared formats (events,
+GitHub Actions runs lint and every test on each push and pull request. A nightly workflow
+(`nightly.yml`) re-checks the rules against SigmaHQ's latest release (it fails, and so notifies you,
+when a rule's evasion resistance drops) and compares our matcher with a real Elasticsearch. The shared formats (events,
 scorecards, rule records) are pinned by a contract snapshot: an intended change is made with
 `UPDATE_CONTRACTS=1 uv run pytest tests/test_contracts.py`, and the snapshot is committed with it.
 
@@ -223,11 +243,12 @@ src/detectforge/
   llm.py          OpenAI-compatible client (OpenRouter free models by default)
   tracing.py      Langfuse tracing (off unless configured)
   provenance.py   which setup produced each run
-  ui/             Streamlit UI
+  ui/             Streamlit UI (product page, areas, test bench, review visuals)
   cli.py          the `detectforge` command
 data/fixtures/    synthetic events and rules for development (not for reported results)
 data/eval/        evaluation rule selection, events and results
-docs/             architecture, walkthrough, interfaces, failure matrix, threat model
+docs/             architecture, walkthrough, interfaces, failure matrix, threat model, report drafts
+scripts/          offline evaluation: agent metrics, label agreement, SigmaHQ re-check, Elastic parity
 analysis/         figures, generated from committed results
 tests/
 ```

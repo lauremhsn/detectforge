@@ -20,6 +20,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -48,6 +49,7 @@ MAPPING = {
     "mappings": {
         "properties": {
             "event_id": {"type": "keyword"},
+            "@timestamp": {"type": "date"},
             "process": {
                 "properties": {
                     "executable": _KEYWORD_CASELESS,
@@ -72,7 +74,8 @@ def doc_of(event: Event) -> dict:
     if event.parent_command_line:
         parent["command_line"] = event.parent_command_line
     process["parent"] = parent
-    return {"event_id": event.event_id, "process": process}
+    # EQL needs a timestamp; every event gets the same one (order doesn't matter for single events).
+    return {"event_id": event.event_id, "@timestamp": "2026-01-01T00:00:00Z", "process": process}
 
 
 def _call(url: str, method: str = "GET", body: dict | str | None = None) -> dict:
@@ -99,10 +102,29 @@ def wait_for(url: str, seconds: int = 120) -> None:
             time.sleep(3)
 
 
-def load_index(url: str, events: list[Event]) -> None:
+_FIELD = re.compile(r"([a-z_]+(?:\.[A-Za-z_]+)+)(?=\s*(?::|like~|==|!=|in~?\s*\())")
+
+
+def referenced_fields(queries: list[str]) -> set[str]:
+    """Every ECS field the exported queries mention (EQL refuses a query naming an unmapped field)."""
+    return {m.group(1).removesuffix(".caseless") for q in queries for m in _FIELD.finditer(q)}
+
+
+def _put_path(properties: dict, field: str) -> None:
+    parts = field.split(".")
+    node = properties
+    for part in parts[:-1]:
+        node = node.setdefault(part, {"properties": {}}).setdefault("properties", {})
+    node.setdefault(parts[-1], dict(_KEYWORD_CASELESS))
+
+
+def load_index(url: str, events: list[Event], extra_fields: set[str] = frozenset()) -> None:
     with contextlib.suppress(urllib.error.HTTPError):
         _call(f"{url}/{INDEX}", "DELETE")
-    _call(f"{url}/{INDEX}", "PUT", MAPPING)
+    mapping = json.loads(json.dumps(MAPPING))
+    for field in sorted(extra_fields):  # fields the rules use that our events don't carry: empty here
+        _put_path(mapping["mappings"]["properties"], field)
+    _call(f"{url}/{INDEX}", "PUT", mapping)
     lines = []
     for e in events:
         lines += [json.dumps({"index": {"_index": INDEX, "_id": e.event_id}}), json.dumps(doc_of(e))]
@@ -111,21 +133,28 @@ def load_index(url: str, events: list[Event]) -> None:
         raise SystemExit("bulk load reported errors")
 
 
-def elastic_hits(url: str, query: str) -> set[str]:
+def elastic_hits(url: str, query: str, target: str = "lucene") -> set[str]:
+    if target == "eql":
+        body = {"query": query, "size": 10000, "filter_path": "hits.events._source.event_id"}
+        result = _call(f"{url}/{INDEX}/_eql/search", "POST", {"query": query, "size": 10000})
+        return {h["_source"]["event_id"] for h in result.get("hits", {}).get("events", [])}
     body = {"query": {"query_string": {"query": query}}, "size": 10000, "_source": ["event_id"]}
     result = _call(f"{url}/{INDEX}/_search", "POST", body)
     return {h["_source"]["event_id"] for h in result["hits"]["hits"]}
 
 
-def compare(name: str, rule_yaml: str, events: list[Event], url: str) -> dict:
+def compare(name: str, rule_yaml: str, events: list[Event], url: str, target: str = "lucene") -> dict:
     ours = set(run(rule_yaml, events).matched_event_ids)
     try:
-        queries = convert_rule(rule_yaml, "lucene")
+        queries = convert_rule(rule_yaml, target)
     except RuleError as e:
         return {"rule": name, "error": str(e)}
     theirs: set[str] = set()
     for q in queries:
-        theirs |= elastic_hits(url, q)
+        try:
+            theirs |= elastic_hits(url, q, target)
+        except urllib.error.HTTPError as e:
+            return {"rule": name, "error": f"Elastic refused the {target} query ({e.code})"}
     return {
         "rule": name,
         "ours": len(ours),
@@ -159,12 +188,13 @@ def main() -> int:
     p.add_argument("--data-dir", type=Path, default=Path("data"))
     p.add_argument("--approved", type=Path, help="also compare the approved agent rules in this folder")
     p.add_argument("--json", type=Path, help="save the per-rule results here")
+    p.add_argument(
+        "--target", choices=["lucene", "eql"], default="lucene", help="which exported query to test"
+    )
     args = p.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
     events = [e for path in sorted((args.data_dir / "eval").glob("*.jsonl")) for e in load_events(path)]
-    wait_for(args.url)
-    load_index(args.url, events)
     selection = yaml.safe_load((args.data_dir / "eval" / "selection.yml").read_text(encoding="utf-8"))
     by_id = {r.id: r for r in ReferenceIndex.load(args.data_dir / "sigmahq").rules}
     rules = [
@@ -175,7 +205,13 @@ def main() -> int:
             (f"approved: {p.stem[:8]}", p.read_text(encoding="utf-8"))
             for p in sorted(args.approved.glob("*.yml"))
         ]
-    results = [compare(name, text, events, args.url) for name, text in rules]
+    fields: set[str] = set()
+    for _, rule_text in rules:
+        with contextlib.suppress(RuleError):
+            fields |= referenced_fields(convert_rule(rule_text, "eql") + convert_rule(rule_text, "lucene"))
+    wait_for(args.url)
+    load_index(args.url, events, fields)
+    results = [compare(name, text, events, args.url, args.target) for name, text in rules]
     text = summary(results, {e.event_id: e for e in events})
     print(text)
     if args.json:

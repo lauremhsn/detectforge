@@ -5,7 +5,7 @@ import re
 import streamlit as st
 import yaml
 
-from detectforge.rules.convert import TARGETS, convert_rule
+from detectforge.rules.convert import convert_rule
 from detectforge.rules.parse import RuleError
 
 
@@ -57,11 +57,13 @@ def export_view(rule_yaml: str, name: str) -> None:
     """Download the rule as Sigma YAML or as a ready-to-paste Elastic query."""
     with st.expander("Export (Sigma YAML or an Elastic query)"):
         st.download_button("Download Sigma YAML", rule_yaml, file_name=f"{name}.yml", key=f"dl_yaml_{name}")
-        target = st.radio("Elastic query language", sorted(TARGETS), horizontal=True, key=f"target_{name}")
+        target = st.radio("Elastic query language", ["eql", "lucene"], horizontal=True, key=f"target_{name}")
         st.caption(
-            "Sigma is the vendor-neutral format; a SIEM runs its own query language. **Lucene** is the "
-            "search syntax of Elastic's Discover and detection rules (field:value). **EQL** (Event Query "
-            "Language) is Elastic's language for event sequences. Paste either into Elastic Security."
+            "Sigma is the vendor-neutral format; a SIEM runs its own query language. **EQL** (Event Query "
+            "Language) is recommended: tested in a real Elasticsearch, it fires on exactly the same events "
+            "as DetectForge for every community rule. **Lucene** matches command lines case-sensitively, "
+            "so a different letter case (HKLM vs hklm) slips past it. A rule with regular expressions may "
+            "need adjusting: Elastic's regex dialect has no (?i) or word boundaries."
         )
         try:
             query = "\n".join(convert_rule(rule_yaml, target))
