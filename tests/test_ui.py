@@ -54,7 +54,7 @@ def app(data_dir):
     get_settings.cache_clear()
 
 
-SECTIONS = ["coverage", "request", "review", "rules", "operations"]
+SECTIONS = ["home", "coverage", "request", "rules", "review", "reports", "operations", "settings"]
 
 
 @pytest.mark.parametrize("page", SECTIONS)
@@ -62,9 +62,11 @@ def test_every_section_renders_and_says_what_it_is_for(data_dir, page):
     at = open_app(page)
     assert not at.exception
     menu = at.radio(key="page")  # the top bar, not the sidebar
-    assert [o.split("  (")[0] for o in menu.options] == ["Posture", "Threats", "Review", "Rules", "Lab"]
+    titles = ["Home", "Posture", "Threats", "Rules", "Review", "Reports", "Lab", "Settings"]
+    assert [o.split("  (")[0] for o in menu.options] == titles
     assert menu.value == page
-    assert at.title and at.caption  # each area opens with its name and purpose
+    assert at.query_params["page"] == page  # every area has its own shareable URL
+    assert (at.title or page == "home") and at.caption  # each area opens with its name and purpose
 
 
 def test_pipeline_status_shows_done_or_pending_only(data_dir):
@@ -81,7 +83,7 @@ def test_fixture_rule_flows_to_test_and_harden(data_dir):
     fixture.set_value(FIXTURES / "rules" / "schtasks_create_literal.yml").run()
     next(b for b in app.button if b.label == "Use fixture").click().run()
     assert app.radio(key="rules_step").value == "test"  # picking a rule moves on to testing it
-    app.sidebar.selectbox(key="technique_filter").set_value("T1053.005").run()
+    assert app.session_state["bench_technique"] == "T1053.005"  # tested on its own technique, no setting
     assert not app.exception
 
     metrics = [(m.label, m.value) for m in app.metric]
@@ -220,7 +222,7 @@ def test_review_shows_a_written_rule_as_new_not_as_a_change(data_dir, fixture_ev
     assert "were hidden from it" in page  # not "no community rule existed": in the write arm they're hidden
     shown = outcome.run.final_rule_yaml.strip()  # the written rule with its metadata stamped by code
     assert any(c.language == "yaml" and c.value.strip() == shown for c in at.code)
-    assert any("wrote a new rule" in c.value for c in at.caption)
+    assert any("Wrote a new rule" in c.value for c in at.caption)  # the found → changed → result story
     assert {m.label: m.value for m in at.metric}["Unseen variations"] == "100%"
 
 
@@ -325,3 +327,27 @@ def test_posture_shows_the_approved_version_not_the_newest_rejected_one():
     assert _in_use(newest_first).decision == "approved"
     assert _in_use([cell("rejected", 1.0), cell("pending review", 0.7)]).decision == "pending review"
     assert _in_use([cell("rejected", 1.0)]).decision == "rejected"  # labelled as rejected on the card
+
+
+def test_rationale_points_keep_structure_but_never_render_links():
+    from detectforge.ui.review_visuals import rationale_points
+
+    text = (
+        "The rule watches three tools:\n1.\n**vssadmin.exe** - deletes `delete shadows /all`.\n"
+        "2.\nSee [approved](https://evil.example) ![x](https://evil.example/a.png)"
+    )
+    points = rationale_points(text)
+    assert points[0].startswith("The rule watches three tools") and "vssadmin" in points[0]  # "1." gone
+    assert "**" not in points[0]  # bold stays literal (escaped): model text can't look like a banner
+    assert "`delete shadows /all`" in points[0]  # inline code shown as written
+    assert all("](" not in p for p in points)  # no link or image can render
+
+
+def test_testbench_highlights_what_the_rule_looks_for_and_escapes_everything():
+    from detectforge.ui.testbench import highlight, rule_patterns
+
+    rule = "detection:\n  sel:\n    CommandLine|contains: ' /create '\n  condition: sel\n"
+    shown = highlight('schtasks /CREATE /tn "<b>x</b>"', rule_patterns(rule))
+    assert "<mark> /CREATE </mark>" in shown  # case-insensitive, like Windows and Sigma
+    assert "<b>" not in shown and "&lt;b&gt;" in shown  # command lines are untrusted: escaped
+    assert highlight("schtasks /cre­ate", rule_patterns(rule)).count("<mark>") == 0  # the disguise breaks it

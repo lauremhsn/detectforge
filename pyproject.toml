@@ -56,4 +56,6 @@ known-local-folder = ["conftest"]
 
 [tool.ruff.lint.per-file-ignores]
 # The Streamlit entrypoint fixes sys.path before importing the package.
-"src/detectforge/ui/app.py" = ["E402"]
+"src/detectforge/ui/app.py" = ["E402", "E501"]
+# UI pages are mostly user-facing copy and table rows; wrapping every sentence hurts readability.
+"src/detectforge/ui/*.py" = ["E501"]

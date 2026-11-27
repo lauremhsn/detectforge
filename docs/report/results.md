@@ -22,7 +22,7 @@ left out of means.
 | | Value |
 |---|---|
 | Test rules with unseen variations | 15 of 18 |
-| Unseen variations caught, mean per rule | **89%** |
+| Unseen variations caught, mean per rule | **82%** |
 | All variations caught, mean (dev + test, 27 rules) | 82% |
 | By type (27 rules) | omission 100%, reordering 100%, substitution 77%, insertion 73%, recoding 0% |
 | Rules evaded by at least one type (27 rules) | 10 |

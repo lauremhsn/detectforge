@@ -5,6 +5,7 @@ in them), so it works without the tracing backend. Free models cost nothing in m
 matters is the provider's daily request limit, shown next to today's usage.
 """
 
+import json
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,23 +16,31 @@ from pydantic import ValidationError
 from detectforge.config import get_settings
 from detectforge.eval.arms import ArmResult
 from detectforge.review import calls_today, list_runs, load_run
+from detectforge.ui.bench import bench_settings
 from detectforge.ui.components import md, pct, table
 from detectforge.ui.navigation import header
+from detectforge.ui.results import headline
 
 
 def operations_page(runs_dir: Path, data_dir: Path | None = None) -> None:
     header(
         "operations",
-        "The research side: how rules are evaluated, what the agent costs, and where it fails. "
-        "Which events rules are tested on is set in the sidebar (the arrow at the top left).",
+        "The research side, kept apart from the product: how DetectForge itself is evaluated, what the "
+        "agent costs, where it fails, and which events rules are tested on.",
     )
     summaries = list_runs(runs_dir)
     runs = [load_run(runs_dir, s.trace_id).run for s in summaries]
-    overview, versions, failures, all_runs, evaluation = st.tabs(
-        ["Overview", "Prompt versions", "Failures", "All runs", "Evaluation"]
+    evaluation, overview, versions, failures, all_runs, bench = st.tabs(
+        ["Evaluation", "Agent activity", "Prompt versions", "Failures", "All runs", "Test bench"]
     )
+    with bench:
+        st.caption(
+            "Which events rules are replayed on, everywhere in the app. Product users never need to change "
+            "this: a rule is tested on every attack and look-alike of its own technique."
+        )
+        bench_settings()
     with evaluation:
-        _evaluation(data_dir or get_settings().data_dir)
+        _evaluation(data_dir or get_settings().data_dir, runs_dir)
     if not runs:
         overview.info("No agent runs yet.")
         return
@@ -132,30 +141,115 @@ def _failures(runs: list) -> None:
         )
 
 
-def _evaluation(data_dir: Path) -> None:
-    """Arm 1, the community rules as published: the "before" of the headline result."""
+def _evaluation(data_dir: Path, runs_dir: Path) -> None:
+    """The evaluation, as in the report: three arms on the test split, then the agent itself."""
+    st.markdown("#### The question")
+    st.caption(
+        "Do community rules hold up against disguised attacks, and does the agent make them harder to evade "
+        "without adding false alarms? The agent improves rules on some disguise types (tuning) and is judged "
+        "on the others, which it never sees (held-out). The test techniques were run once, after the agent's "
+        "prompts were frozen, so the numbers can't have been tuned to look good."
+    )
+    h = headline(data_dir, runs_dir)
+    c1, c2, c3 = st.columns(3)
+    with c1.container(border=True):
+        st.markdown("**Arm 1 · community rules as published**")
+        st.metric("Unseen variations caught", pct(h.community_unseen))
+        st.caption(
+            f"Mean over the {h.community_scored} of {h.community_rules} test rules that have unseen variations "
+            '(the others are n/a, not 0% or 100%). The "before" everything is compared with.'
+        )
+    with c2.container(border=True):
+        hd = h.hardened
+        st.markdown("**Arm 2 · the same rules, hardened by the agent**")
+        st.metric("Unseen variations caught", f"{pct(hd.before)} → {pct(hd.after)}")
+        st.caption(
+            f"{hd.runs} runs on {hd.rules} rules (3 each): only rules that miss something the agent can see "
+            f"get hardened. {hd.passed} passed the checks, {hd.approved} approved, "
+            f"{hd.new_false_alarm_runs} added a false alarm. The headline comparison with Arm 1."
+        )
+    with c3.container(border=True):
+        wr = h.written
+        st.markdown("**Arm 3 · rules the agent wrote itself**")
+        st.metric("Unseen variations caught", f"{pct(wr.before)} → {pct(wr.after)}")
+        st.caption(
+            f"{wr.runs} runs with the technique's community rules hidden: the fallback when none exists. "
+            f"{wr.passed} passed the checks, {wr.approved} approved, {wr.new_false_alarm_runs} runs raised a "
+            "false alarm on unseen legitimate commands."
+        )
+    st.caption(
+        "Arms 2 and 3 are on different rules, so they are not a ranking: hardening improves a rule that "
+        "exists, writing covers a technique from nothing. Full tables: docs/report/results.md."
+    )
+
+    metrics = _json(data_dir / "eval" / "results" / "agent_metrics_test.json")
+    if metrics:
+        st.markdown("#### The agent itself (not just its rules)")
+        st.caption(
+            "Computed from every recorded step of every test run (scripts/agent_metrics.py): what it did on "
+            "the way to a rule, not only the rule it produced."
+        )
+        rows = []
+        for key, meaning in [
+            ("success_passed_gate", "passed every automatic quality check"),
+            ("approved_by_reviewer", "approved by a person"),
+            ("recovered_after_rejection", "fixed its rule after the checks refused it"),
+            ("pass_at_k", "succeeded in at least 1 of 3 tries (pass@3)"),
+            ("pass_all_k", "succeeded in all 3 tries"),
+            ("unsupported_claims", "explanations that claimed more than its own test showed"),
+            ("runs_with_heldout_leak", "runs that ever saw held-out data (must be 0)"),
+            ("runs_approved_without_human", "rules approved without a person (must be 0)"),
+            ("tool_call_success", "tool calls that worked"),
+            ("redundant_scoring_calls", "tool calls that re-tested the exact same rule"),
+        ]:
+            row = {"what it measures": meaning}
+            for arm in ("hardened", "written"):
+                row[arm] = str((metrics.get(arm) or {}).get(key, "n/a"))
+            rows.append(row)
+        table(rows)
+
+    ablation = _json(data_dir / "eval" / "results" / "agent_metrics_dev_budget25.json")
+    dev = _json(data_dir / "eval" / "results" / "agent_metrics_dev.json")
+    if ablation and dev:
+        st.markdown("#### Ablation: does a bigger budget help? (dev techniques only)")
+        a, b = dev.get("written") or {}, ablation.get("written") or {}
+        table(
+            [
+                {"model calls per written rule": "15 (frozen)", "passed the checks": a.get("success_passed_gate"),
+                 "unseen variations caught": pct(a.get("heldout_after_mean"))},
+                {"model calls per written rule": "25", "passed the checks": b.get("success_passed_gate"),
+                 "unseen variations caught": pct(b.get("heldout_after_mean"))},
+            ]
+        )  # fmt: skip
+        st.caption(
+            "More calls let more rules pass the checks, but not catch more unseen variations: budget buys "
+            "persistence, not generalization. Run on dev only; the test result stays at the frozen budget."
+        )
+
     path = data_dir / "eval" / "results" / "arm1_community.json"
     try:
         arm = ArmResult.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValidationError):
-        st.info("No committed evaluation results yet: run `detectforge eval community`.")
         return
-    st.caption(
-        "Community rules as published (Arm 1), replayed on every attack variation. The agent-hardened and "
-        "agent-written arms are measured on the held-out variation types; see `detectforge export` and "
-        "`detectforge eval gate-thresholds`."
-    )
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Rules evaluated", f"{arm.valid_rules}/{arm.rule_count}")
-    c2.metric("Evasion resistance, all variations", pct(arm.overall_evasion_resistance))
-    c3.metric("Fully robust rules", arm.rules_fully_robust, help="Rules that catch every variation.")
-    table(
-        [{"variation type": t, "caught": pct(v)} for t, v in arm.resistance_by_transform.items()]
-        + [
-            {"variation type": f"{s} split", "caught": pct(v)}
-            for s, v in arm.resistance_by_mutation_split.items()
-        ]
-    )
+    with st.expander("Arm 1 by disguise type (all 27 rules)"):
+        st.caption(
+            "Which tricks beat community rules. Omission and reordering rarely work against them; inserted "
+            "characters and swapped flags often do. Recoding has a single example, too few to judge."
+        )
+        table(
+            [{"disguise type": t, "caught": pct(v)} for t, v in arm.resistance_by_transform.items()]
+            + [
+                {"disguise type": f"{s} split", "caught": pct(v)}
+                for s, v in arm.resistance_by_mutation_split.items()
+            ]
+        )
+
+
+def _json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def _compact(n: int) -> str:
