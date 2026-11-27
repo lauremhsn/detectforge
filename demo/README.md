@@ -26,10 +26,12 @@ Open http://localhost:8501 (the product page).
 
 - The headline problem: Uetz et al. found 129 of 292 popular Sigma rules beaten by five simple tricks;
   the strip shows what we measured on our own library (community rules miss 18% of disguised attacks).
-- **See it in action**, a real case from our runs, row by row: the community rule catches
-  `reg save HKLM\sam`, misses the same command with one invisible character, the agent's fix catches
-  it... and false-alarms on an admin's `reg query`. **The reviewer rejected it.** That's the product in
-  one picture: the agent finds fixes, the evidence shows their cost, a person decides.
+- The **replay console**, a real approved case: the community rule catches `schtasks /create … /ru system`
+  but misses `schtasks /"create" …` (the exact example from the paper) and `schtasks -create …`. The
+  agent's fix catches both, although it never saw the quoted trick, stays silent on a legitimate
+  company task, and a reviewer approved it. The product in one picture.
+- Keep the counter-example for step 5: a fix that also flagged routine admin work, which the reviewer
+  rejected.
 - Click **Open the platform →**.
 
 ## 2. Where are we weak? (1 min): Posture
