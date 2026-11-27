@@ -28,6 +28,7 @@ from detectforge.review import (
     parse_reviewer_keys,
 )
 from detectforge.ui.components import delta_pct, export_view, md, pct, rule_title, table
+from detectforge.ui.lookalikes import Lookalike, firing_lookalikes, load_lookalikes
 from detectforge.ui.navigation import header
 
 FILTERS = {"pending review": "Waiting", "approved": "Approved", "rejected": "Rejected", "all": "All"}
@@ -41,7 +42,10 @@ class Verdict(BaseModel):
     text: str
 
 
-def verdict(outcome: HardeningOutcome, decision: ReviewDecision | None) -> Verdict:
+def verdict(
+    outcome: HardeningOutcome, decision: ReviewDecision | None, extra_hits: list[Lookalike] | None = None
+) -> Verdict:
+    """extra_hits: everyday commands outside the dataset that the proposed rule fires on."""
     run, heldout = outcome.run, outcome.heldout_evaluation
     if decision is not None:
         when = f"{decision.decided_at.astimezone():%b %d %H:%M}"
@@ -70,6 +74,14 @@ def verdict(outcome: HardeningOutcome, decision: ReviewDecision | None) -> Verdi
             headline="Check before approving",
             text=f"It raises {len(new_alarms)} new false alarm(s) on legitimate commands the agent never "
             f"saw: {', '.join(new_alarms)}. Look at them below before approving.",
+        )
+    if extra_hits:
+        return Verdict(
+            kind="error",
+            headline="Check before approving",
+            text=f"It fires on {len(extra_hits)} everyday legitimate command(s) that aren't in the test "
+            "data, so the quality checks couldn't see them. Look at them below: approving means these "
+            "would raise alerts.",
         )
     failed = [c.name.replace("_", " ") for c in run.gate.checks if c.blocking and not c.passed]
     if failed:
@@ -181,8 +193,15 @@ def run_detail(outcome: HardeningOutcome, title: str, decision: ReviewDecision |
     st.markdown(f"### {md(title)}")
     st.caption(f"{run.technique} · the agent {path}")
 
-    v = verdict(outcome, decision)
+    extra_hits = firing_lookalikes(run.final_rule_yaml, load_lookalikes(get_settings().data_dir))
+    v = verdict(outcome, decision, extra_hits)
     getattr(st, v.kind)(f"**{v.headline}.** {v.text}")
+    if extra_hits:
+        with st.container(border=True):
+            st.markdown("**Fires on everyday commands outside the test data**")
+            for x in extra_hits:
+                st.code(x.cmd, language=None, wrap_lines=True)
+                st.caption(f"Legitimate: {md(x.why)}.")
 
     blocking = [c for c in run.gate.checks if c.blocking]
     new_alarms = heldout.new_false_alarm_event_ids if heldout else []
@@ -221,7 +240,11 @@ def run_detail(outcome: HardeningOutcome, title: str, decision: ReviewDecision |
             # Model output: shown literally, so an injected link or "approved" banner can't render.
             st.markdown(md(run.rationale))
     if run.mode == "write":
-        st.markdown("**New rule** (no usable community rule existed, so the agent wrote this from scratch)")
+        st.markdown(
+            "**Written by the agent.** Community rules for this technique were hidden from it (it may "
+            "only look at other techniques' rules for Sigma style), so the detection logic is its own. "
+            'This is the path when no usable community rule exists, and the evaluation\'s "written" arm.'
+        )
         if run.final_rule_yaml:
             st.code(run.final_rule_yaml, language="yaml")
         else:

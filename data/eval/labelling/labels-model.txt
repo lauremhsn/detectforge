@@ -1,0 +1,69 @@
+# Model rater (not a human): a fresh agent given only the rubric and the items from sheet.md, told
+# not to open any file, and it used no tools. Reported as "model rater vs dataset author", never as
+# human inter-rater agreement.
+
+T1003.001-n1  B  Same comsvcs MiniDump; target PID is unknowable from the command line alone
+T1003.002-n1  A  Read of a benign Run key, not a save of a sensitive hive
+T1003.002-n2  A  Export of a benign app key, not SAM/SECURITY/SYSTEM
+T1003.002-n3  A  Save of a benign app key, not a sensitive hive
+T1027-n1  A  Hashing a local file, no download
+T1027-n2  A  Dumping a local cert, no download
+T1027-n3  A  verifyctl on a local path, not a remote URL
+T1036.003-n1  A  Listing jobs, no transfer
+T1036.003-n2  B  Same /transfer from an HTTPS URL; only the domain's reputation differs
+T1036.003-n3  B  Same remote transfer over SMB; attackers can host payloads on shares too
+T1047-n1  A  Read-only process listing
+T1047-n2  A  Built-in htable format, no XSL script loaded
+T1047-n3  B  Same process call create; the legit binary path is the only difference
+T1053.005-n1  A  Query only, no task creation
+T1053.005-n2  A  Daily task in user context, no SYSTEM or suspicious schedule type
+T1053.005-n3  A  Weekly task, no SYSTEM or suspicious schedule type
+T1059.001-n1  A  Plain cmdlet pipeline, no base64 or download
+T1059.001-n2  A  Local script file, no encoding or download
+T1059.001-n3  B  Same iwr download with bypass; the intranet URL is the only difference
+T1059.003-n1  A  dir command, no stdin redirection
+T1059.003-n2  A  type command, no stdin redirection
+T1059.003-n3  B  Same cmd stdin redirection from a file
+T1105-n1  A  HEAD request, nothing written to disk
+T1105-n2  A  Signature update, no -DownloadFile
+T1105-n3  B  Same curl download to disk; only the domain's reputation differs
+T1105-n4  A  Localhost request, not a remote download
+T1218.005-n1  A  Local HTA file, not remotely hosted
+T1218.005-n2  A  Local HTA file, not remotely hosted
+T1218.007-n1  A  Local MSI, not a remote source
+T1218.007-n2  A  Uninstall by GUID, not a remote install
+T1218.007-n3  B  Quiet install from a remote UNC share, same as the remote pattern
+T1218.010-n1  A  Local DLL registration, no URL or scrobj
+T1218.010-n2  A  Unregistering a local DLL, no URL
+T1218.010-n3  A  /i: with a local path, no URL or scrobj.dll
+T1218.011-n1  A  Standard control panel applet invocation
+T1218.011-n2  A  Standard LockWorkStation export
+T1218.011-n3  A  Standard printer installation via printui
+T1490-n1  A  Listing shadows, no deletion
+T1490-n2  A  Enumerating boot config, no change
+T1490-n3  A  Listing backup versions, no deletion
+T1490-n4  B  Same delete-all-shadows command; only admin context differs
+T1490-n5  A  Description change, not recovery or boot-policy tampering
+T1543.003-n1  A  Service query, no creation
+T1543.003-n2  A  Service binary in Program Files, no suspicious binPath
+T1543.003-n3  A  Service binary in Program Files, no suspicious binPath
+T1547.001-n1  A  Read of a Run key, no write
+T1547.001-n2  B  Same Run-key add; a legit binary path is the only difference
+T1547.001-n3  A  Read of a Run key value, no write
+T1555.003-n1  A  Copies an app EDB, not a browser credential store
+T1555.003-n2  A  Header dump of a database, not a copy
+T1555.003-n3  A  Copies an app EDB, not a browser data file
+T1685-n1  A  Query only, Defender not touched
+T1685-n2  A  Disables the Fax service, not WinDefend
+T1685-n3  A  Stops Spooler, not WinDefend
+T1685.001-n1  A  Reads the audit policy, no change
+T1685.001-n2  A  Enables auditing rather than disabling it
+T1685.001-n3  B  Same log clearing; only the operator context differs
+T1685.001-n4  A  Enables auditing rather than disabling it
+pilot-1  A  Reads a benign SYSTEM value, no hive save or export
+pilot-2  A  Query of SECURITY, not a save or export of the hive
+pilot-3  A  Hardening value add, not a hive dump
+pilot-4  A  Deletes a service key, not a hive dump
+pilot-5  A  Deletes a Run entry, removal rather than persistence
+pilot-6  A  Service deletion, not creation
+pilot-7  A  Creates a backup rather than deleting one

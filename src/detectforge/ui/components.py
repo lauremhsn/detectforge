@@ -58,12 +58,17 @@ def export_view(rule_yaml: str, name: str) -> None:
     with st.expander("Export (Sigma YAML or an Elastic query)"):
         st.download_button("Download Sigma YAML", rule_yaml, file_name=f"{name}.yml", key=f"dl_yaml_{name}")
         target = st.radio("Elastic query language", sorted(TARGETS), horizontal=True, key=f"target_{name}")
+        st.caption(
+            "Sigma is the vendor-neutral format; a SIEM runs its own query language. **Lucene** is the "
+            "search syntax of Elastic's Discover and detection rules (field:value). **EQL** (Event Query "
+            "Language) is Elastic's language for event sequences. Paste either into Elastic Security."
+        )
         try:
             query = "\n".join(convert_rule(rule_yaml, target))
         except (RuleError, ValueError) as e:
             st.caption(f"Can't convert this rule: {md(e)}")
             return
-        st.code(query, language=None)
+        st.code(query, language=None, wrap_lines=True)
 
 
 # Fixed styling written here (never built from data), so it carries no injection risk.

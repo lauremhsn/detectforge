@@ -105,14 +105,30 @@ def _failures(runs: list) -> None:
     c1.metric("Failed model calls", sum(not c.ok for c in model_calls), help="After the SDK's own retries.")
     c2.metric("Answered by the fallback model", sum(c.used_fallback for c in model_calls))
     c3.metric("Answers cut off (output limit)", sum(c.finish_reason == "length" for c in model_calls))
-    reasons = Counter(_reason_kind(reason) for r in runs if r.status != "passed" for reason in r.reasons)
+    # One count per run and kind: a run that failed the same check twice counts once. Warnings never
+    # stop a rule, so they aren't a reason it needed review.
+    reasons = Counter(
+        kind
+        for r in runs
+        if r.status != "passed"
+        for kind in {_reason_kind(reason) for reason in r.reasons if not _is_warning(reason)}
+    )
     if reasons:
+        st.caption(
+            'Why runs ended as "needs human review" instead of passing: each failed quality check or '
+            "limit, counted once per run. A run can have several."
+        )
         table([{"why a run needed human review": k, "runs": n} for k, n in reasons.most_common()])
-    tool_errors = Counter(c.tool for r in runs for c in r.tool_calls if not c.ok)
+    tool_errors = Counter(
+        "tuning budget used up" if "budget" in (c.error or "") else c.tool
+        for r in runs
+        for c in r.tool_calls
+        if not c.ok
+    )
     if tool_errors:
         st.caption(
-            "Tool calls the agent got wrong (refused and fed back to it): "
-            + md(", ".join(f"{tool} (x{n})" for tool, n in tool_errors.most_common()))
+            "Tool calls the system refused and explained back to the agent: "
+            + md(", ".join(f"{what} (x{n})" for what, n in tool_errors.most_common()))
         )
 
 
@@ -149,8 +165,29 @@ def _compact(n: int) -> str:
     return f"{n / 1_000:.1f}k" if n >= 1_000 else str(n)
 
 
+_CHECK_KINDS = {
+    "evasion_resistance": "catches too few tuning variations (below 80%)",
+    "false_alarms": "fires on legitimate tuning commands",
+    "case_insensitive_regexes": "case-sensitive regex on case-insensitive Windows fields",
+    "no_unusual_characters": "copied unusual characters from the attacks",
+    "detects_unmutated_attacks": "misses some plain (unmutated) attacks",
+    "no_bypassable_exclusions": "an exclusion an attacker can add for free",
+    "no_lost_attacks": "stopped catching an attack the original caught",
+    "no_new_false_alarms": "new false alarms versus the original",
+    "valid": "never produced a rule that could be evaluated",
+    "deployable": "can't be converted for the SIEM",
+}
+
+
+def _is_warning(reason: str) -> bool:
+    return ": warning" in reason.lower()
+
+
 def _reason_kind(reason: str) -> str:
-    """Group free-text reasons into a few kinds a person can scan."""
+    """Group free-text reasons into a few kinds a person can scan (a check's name, not its numbers)."""
+    name = reason.split(":", 1)[0].strip()
+    if name in _CHECK_KINDS:
+        return f"quality check: {_CHECK_KINDS[name]}"
     text = reason.lower()
     for needle, kind in [
         ("llm unavailable", "model unavailable (after retries and fallback)"),

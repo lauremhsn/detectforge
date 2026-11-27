@@ -42,6 +42,19 @@ class CoverageRow(BaseModel):
     written: RunCell | None
 
 
+def _in_use(cells: list[RunCell]) -> RunCell:
+    """The run that stands for a rule on the posture view (cells are newest first).
+
+    The approved version is what a team would deploy, so it wins. Without one, the newest proposal
+    still waiting for a reviewer. Only if every proposal was rejected, the newest rejected one, which
+    the card then labels as rejected (the community rule stays in use).
+    """
+    for wanted in ("approved", "pending review"):
+        if found := next((c for c in cells if c.decision == wanted), None):
+            return found
+    return cells[0]
+
+
 def _normalized(text: str) -> str:
     return text.replace("\r\n", "\n").strip()
 
@@ -66,8 +79,10 @@ def coverage_rows(
         except ValidationError:
             arm1 = {}
 
-    hardened: dict[str, RunCell] = {}  # by normalized original rule text; newest run wins
-    written: dict[str, RunCell] = {}  # by technique
+    # Every run of each rule, then the one that represents it today (see _in_use): the approved version
+    # if there is one, never simply the newest run, which may be a rejected attempt.
+    hardened_runs: dict[str, list[RunCell]] = {}  # by normalized original rule text
+    written_runs: dict[str, list[RunCell]] = {}  # by technique
     for summary in list_runs(runs_dir):  # newest first
         cell = RunCell(
             status=summary.status,
@@ -77,10 +92,12 @@ def coverage_rows(
             decision=summary.decision.decision if summary.decision else "pending review",
         )
         if summary.mode == "write":
-            written.setdefault(summary.technique, cell)
+            written_runs.setdefault(summary.technique, []).append(cell)
         else:
             original = _normalized(load_run(runs_dir, summary.trace_id).run.original_rule_yaml)
-            hardened.setdefault(original, cell)
+            hardened_runs.setdefault(original, []).append(cell)
+    hardened = {k: _in_use(v) for k, v in hardened_runs.items()}
+    written = {k: _in_use(v) for k, v in written_runs.items()}
 
     rows = []
     for rule in (selection or {}).get("rules", []):
@@ -225,10 +242,11 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
         if chart := resistance_chart(by_technique):
             st.vega_lite_chart(chart, width="stretch")
             st.caption(
-                "The same rule before and after hardening, on variation types the agent never saw. Mean "
-                f"over the {summary.with_heldout} of {summary.hardened} hardened rules that have such "
-                f"variations: {pct(summary.before)} → {pct(summary.after)}; the others are n/a and not "
-                "averaged in."
+                "The same rule before and after hardening, on variation types the agent never saw. Each "
+                "rule shows the version in use today: the approved one, else the newest waiting for a "
+                f"reviewer. Mean over those {summary.with_heldout} rules: {pct(summary.before)} → "
+                f"{pct(summary.after)}. The report's evaluation is different on purpose: it averages all "
+                "3 runs of each test rule, accepted or not, so one lucky run can't flatter it."
             )
         else:
             st.caption("No hardened rule with unseen variations to compare yet.")
@@ -251,12 +269,21 @@ def _technique_card(technique: str, rows: list[CoverageRow], rule_texts: dict[st
             f"{len(rows)} rule{'s' if len(rows) != 1 else ''} · weakest: {md(weakest.title)}",
             help="The community rule that catches the fewest attacker variations, as published.",
         )
-        st.caption(
-            ("Evaded by " + ", ".join(evaded_by)) if evaded_by else "No variation slips past these rules."
-        )
+        if evaded_by:
+            st.caption("Evaded by " + ", ".join(evaded_by))
+        elif all(r.community is None for r in rows):
+            st.caption("No attacker variations exist for these rules yet, so their resistance is unknown.")
+        else:
+            st.caption("Every attacker variation we have is caught.")
         best = best_hardened(rows)
-        if best:
-            st.caption(f"After hardening: {_heldout_text(best)} of unseen variations · {best.decision}")
+        if best and best.decision == "rejected":
+            st.caption(
+                f"Hardening proposed ({_heldout_text(best)} of unseen variations) but rejected by a "
+                "reviewer: the community rule stays in use."
+            )
+        elif best:
+            state = "approved" if best.decision == "approved" else "waiting for a reviewer"
+            st.caption(f"After hardening: {_heldout_text(best)} of unseen variations · {state}")
         elif any(r.hardened for r in rows):
             st.caption("Hardened; no unseen variations to measure it on.")
         if weakest.rule_id in rule_texts:

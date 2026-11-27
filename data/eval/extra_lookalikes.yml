@@ -1,0 +1,23 @@
+# Everyday legitimate commands that are NOT in the dataset, found while reviewing agent rules.
+#
+# Kept out of the main event files on purpose: those files' hash is part of every run's setup key, and
+# the frozen results must not change. They are a reviewer's extra check (shown on the Review page) and
+# a post-hoc stress check (scripts/stress_check.py), reported apart from the evaluation.
+#
+# technique: the attack each command resembles. binary: the executable that runs it.
+
+lookalikes:
+  - {id: extra-1, technique: T1003.002, binary: reg.exe, why: "reads a SYSTEM value; dumps nothing",
+     cmd: 'reg query HKLM\SYSTEM\CurrentControlSet\Control\Session Manager /v PendingFileRenameOperations'}
+  - {id: extra-2, technique: T1003.002, binary: reg.exe, why: "reads the SECURITY key; saves no hive",
+     cmd: 'reg query HKLM\SECURITY\Policy'}
+  - {id: extra-3, technique: T1003.002, binary: reg.exe, why: "sets a hardening value; dumps nothing",
+     cmd: 'reg add HKLM\SYSTEM\CurrentControlSet\Control\Lsa /v LimitBlankPasswordUse /t REG_DWORD /d 1 /f'}
+  - {id: extra-4, technique: T1003.002, binary: reg.exe, why: "removes an old driver's service key",
+     cmd: 'reg delete HKLM\SYSTEM\CurrentControlSet\Services\OldDriver /f'}
+  - {id: extra-5, technique: T1547.001, binary: reg.exe, why: "removes an autorun entry; adds none",
+     cmd: 'reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OldApp /f'}
+  - {id: extra-6, technique: T1543.003, binary: wmic.exe, why: "deletes an old service; creates none",
+     cmd: 'wmic service where name="OldSvc" delete'}
+  - {id: extra-7, technique: T1490, binary: wbadmin.exe, why: "creates a backup; deletes none",
+     cmd: 'wbadmin start systemstatebackup -backupTarget:E: -quiet'}
