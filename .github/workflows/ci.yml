@@ -30,7 +30,7 @@ jobs:
           uv run --with coverage coverage report --skip-empty --sort=cover
           uv run --with coverage coverage xml -o coverage.xml
       - name: Upload coverage to Codecov (public repo, no token needed)
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: coverage.xml
           fail_ci_if_error: false
@@ -41,14 +41,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Install
         run: uv sync --locked --group dev
       - name: Cache the SigmaHQ index (pinned release)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: data/sigmahq
           key: sigmahq-${{ hashFiles('src/detectforge/reference/sigmahq.py', 'src/detectforge/reference/index.py') }}
@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: docker compose build
       - name: CLI runs in the container
