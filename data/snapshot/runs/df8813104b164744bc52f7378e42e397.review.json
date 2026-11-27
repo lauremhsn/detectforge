@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Recorded with the wrong code fingerprint (branch switch mid-batch); not counted.",
+    "decided_at": "2026-11-21T17:17:28.198052Z"
+  }
+]

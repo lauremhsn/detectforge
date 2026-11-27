@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Wbadmin delete systemstatebackup with keepVersions; nothing unseen to measure; tightly scoped.",
+    "decided_at": "2026-11-27T13:42:10.379940Z"
+  }
+]

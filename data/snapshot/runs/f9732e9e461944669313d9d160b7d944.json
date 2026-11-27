@@ -1,0 +1,418 @@
+{
+  "run": {
+    "trace_id": "f9732e9e461944669313d9d160b7d944",
+    "technique": "T1053.005",
+    "mode": "harden",
+    "prompt_version": "harden-v2",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "status": "needs_human_review",
+    "reasons": [
+      "model call budget exhausted (10 calls)",
+      "evasion_resistance: 50% (minimum 80%)"
+    ],
+    "original_rule_yaml": "title: Schtasks Creation Or Modification With SYSTEM Privileges\nid: 89ca78fd-b37c-4310-b3d3-81a023f83936\nstatus: test\ndescription: Detects the creation or update of a scheduled task to run with \"NT AUTHORITY\\SYSTEM\" privileges\nreferences:\n    - https://www.elastic.co/security-labs/exploring-the-qbot-attack-pattern\n    - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks\nauthor: Nasreddine Bencherchali (Nextron Systems)\ndate: 2022-07-28\nmodified: 2025-02-15\ntags:\n    - attack.privilege-escalation\n    - attack.execution\n    - attack.persistence\n    - attack.t1053.005\nlogsource:\n    product: windows\n    category: process_creation\ndetection:\n    selection_root:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains:\n            - ' /change '\n            - ' /create '\n    selection_run:\n        CommandLine|contains: '/ru '\n    selection_user:\n        CommandLine|contains:\n            - 'NT AUT' # This covers the usual NT AUTHORITY\\SYSTEM\n            - ' SYSTEM ' # SYSTEM is a valid value for schtasks hence it gets it's own value with space\n    filter_optional_teamviewer:\n        # FP from test set in SIGMA\n        # Cannot use ParentImage on all OSes for 4688 events\n        # ParentImage|contains|all:\n        #     - '\\AppData\\Local\\Temp\\'\n        #     - 'TeamViewer_.exe'\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains|all:\n            - '/TN TVInstallRestore'\n            - '\\TeamViewer_.exe'\n    filter_optional_office:\n        CommandLine|contains|all:\n            # https://answers.microsoft.com/en-us/msoffice/forum/all/office-15-subscription-heartbeat-task-created-on/43ab5e53-a9fb-47c6-8c14-44889974b9ff\n            - 'Subscription Heartbeat'\n            - '\\HeartbeatConfig.xml'\n            - '\\Microsoft Shared\\OFFICE'\n    filter_optional_avira:\n        CommandLine|contains:\n            - '/Create /F /RU System /SC WEEKLY /TN AviraSystemSpeedupVerify /TR '\n            - ':\\Program Files (x86)\\Avira\\System Speedup\\setup\\avira_speedup_setup.exe'\n            - '/VERIFY /VERYSILENT /NOSTART /NODOTNET /NORESTART\" /RL HIGHEST'\n    condition: all of selection_* and not 1 of filter_optional_*\nfalsepositives:\n    - Unknown\nlevel: high\n",
+    "final_rule_yaml": "title: Schtasks Creation Or Modification With SYSTEM Privileges\nid: 89ca78fd-b37c-4310-b3d3-81a023f83936\nstatus: test\ndescription: Detects the creation or update of a scheduled task to run with \"NT AUTHORITY\\SYSTEM\" privileges\nreferences:\n    - https://www.elastic.co/security-labs/exploring-the-qbot-attack-pattern\n    - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks\nauthor: Nasreddine Bencherchali (Nextron Systems)\ndate: 2022-07-28\nmodified: 2025-02-15\ntags:\n    - attack.privilege-escalation\n    - attack.execution\n    - attack.persistence\n    - attack.t1053.005\nlogsource:\n    product: windows\n    category: process_creation\ndetection:\n    selection_root:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains:\n            - ' /change '\n            - ' /create '\n    selection_run:\n        CommandLine|contains: '/ru '\n    selection_user:\n        CommandLine|contains:\n            - 'NT AUT'\n            - ' SYSTEM '\n    filter_optional_teamviewer:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains|all:\n            - '/TN TVInstallRestore'\n            - '\\TeamViewer_.exe'\n    filter_optional_office:\n        CommandLine|contains|all:\n            - 'Subscription Heartbeat'\n            - '\\HeartbeatConfig.xml'\n            - '\\Microsoft Shared\\OFFICE'\n    filter_optional_avira:\n        CommandLine|contains:\n            - '/Create /F /RU System /SC WEEKLY /TN AviraSystemSpeedupVerify /TR '\n            - ':\\Program Files (x86)\\Avira\\System Speedup\\setup\\avira_speedup_setup.exe'\n            - '/VERIFY /VERYSILENT /NOSTART /NODOTNET /NORESTART\" /RL HIGHEST'\n    condition: all of selection_* and not 1 of filter_optional_*\nfalsepositives:\n    - Unknown\nlevel: high",
+    "final_source": "best_attempt",
+    "rationale": null,
+    "gate": {
+      "passed": false,
+      "checks": [
+        {
+          "name": "valid",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "name": "deployable",
+          "passed": true,
+          "detail": "converts to lucene"
+        },
+        {
+          "name": "detects_unmutated_attacks",
+          "passed": true,
+          "detail": "1/1 unmutated attacks detected"
+        },
+        {
+          "name": "evasion_resistance",
+          "passed": false,
+          "detail": "50% (minimum 80%)"
+        },
+        {
+          "name": "no_lost_attacks",
+          "passed": true,
+          "detail": "0 attacks the original caught are now missed"
+        },
+        {
+          "name": "no_new_false_alarms",
+          "passed": true,
+          "detail": "0 new false alarms (0 before, 0 after)"
+        },
+        {
+          "name": "keeps_original_fields",
+          "passed": true,
+          "detail": "all original fields still used"
+        },
+        {
+          "name": "keeps_original_filters",
+          "passed": true,
+          "detail": "all original exclusions kept"
+        }
+      ]
+    },
+    "tuning_evasion_resistance_before": 0.5,
+    "tuning_evasion_resistance_after": 0.5,
+    "tuning_false_alarms_before": 0,
+    "tuning_false_alarms_after": 0,
+    "tuning_runs_used": 2,
+    "model_calls": [
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 8086.2,
+        "prompt_tokens": 2105,
+        "completion_tokens": 659,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 50010.9,
+        "prompt_tokens": 3088,
+        "completion_tokens": 2925,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 10858.0,
+        "prompt_tokens": 3785,
+        "completion_tokens": 597,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 6219.3,
+        "prompt_tokens": 4482,
+        "completion_tokens": 590,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 6058.5,
+        "prompt_tokens": 5191,
+        "completion_tokens": 567,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 7632.9,
+        "prompt_tokens": 5899,
+        "completion_tokens": 608,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 5796.5,
+        "prompt_tokens": 6607,
+        "completion_tokens": 596,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 13926.8,
+        "prompt_tokens": 7315,
+        "completion_tokens": 587,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 11870.0,
+        "prompt_tokens": 7883,
+        "completion_tokens": 551,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 6446.2,
+        "prompt_tokens": 9243,
+        "completion_tokens": 650,
+        "used_fallback": false,
+        "error": null
+      }
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 15.86,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 2.84,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 1.92,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 3.16,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 1.95,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 1.1,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 2.15,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 6.56,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 14.56,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 2.28,
+        "error": null
+      }
+    ],
+    "prompt_tokens": 55598,
+    "completion_tokens": 8330,
+    "duration_s": 127.02,
+    "record": {
+      "rule_yaml": "title: Schtasks Creation Or Modification With SYSTEM Privileges\nid: 89ca78fd-b37c-4310-b3d3-81a023f83936\nstatus: test\ndescription: Detects the creation or update of a scheduled task to run with \"NT AUTHORITY\\SYSTEM\" privileges\nreferences:\n    - https://www.elastic.co/security-labs/exploring-the-qbot-attack-pattern\n    - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks\nauthor: Nasreddine Bencherchali (Nextron Systems)\ndate: 2022-07-28\nmodified: 2025-02-15\ntags:\n    - attack.privilege-escalation\n    - attack.execution\n    - attack.persistence\n    - attack.t1053.005\nlogsource:\n    product: windows\n    category: process_creation\ndetection:\n    selection_root:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains:\n            - ' /change '\n            - ' /create '\n    selection_run:\n        CommandLine|contains: '/ru '\n    selection_user:\n        CommandLine|contains:\n            - 'NT AUT'\n            - ' SYSTEM '\n    filter_optional_teamviewer:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains|all:\n            - '/TN TVInstallRestore'\n            - '\\TeamViewer_.exe'\n    filter_optional_office:\n        CommandLine|contains|all:\n            - 'Subscription Heartbeat'\n            - '\\HeartbeatConfig.xml'\n            - '\\Microsoft Shared\\OFFICE'\n    filter_optional_avira:\n        CommandLine|contains:\n            - '/Create /F /RU System /SC WEEKLY /TN AviraSystemSpeedupVerify /TR '\n            - ':\\Program Files (x86)\\Avira\\System Speedup\\setup\\avira_speedup_setup.exe'\n            - '/VERIFY /VERYSILENT /NOSTART /NODOTNET /NORESTART\" /RL HIGHEST'\n    condition: all of selection_* and not 1 of filter_optional_*\nfalsepositives:\n    - Unknown\nlevel: high",
+      "source": "adapted",
+      "technique": "T1053.005",
+      "trace_id": "f9732e9e461944669313d9d160b7d944",
+      "version": 1,
+      "status": "proposed"
+    }
+  },
+  "heldout_evaluation": {
+    "valid": true,
+    "before": {
+      "valid": true,
+      "error": null,
+      "hits": 1,
+      "misses": 0,
+      "false_alarms": 0,
+      "matched_event_ids": [
+        "T1053.005-b04-reo1"
+      ],
+      "per_transform": {
+        "none": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "insertion": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "substitution": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "omission": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "reordering": {
+          "attacks": 1,
+          "hits": 1,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "recoding": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        }
+      }
+    },
+    "after": {
+      "valid": true,
+      "error": null,
+      "hits": 1,
+      "misses": 0,
+      "false_alarms": 0,
+      "matched_event_ids": [
+        "T1053.005-b04-reo1"
+      ],
+      "per_transform": {
+        "none": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "insertion": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "substitution": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "omission": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "reordering": {
+          "attacks": 1,
+          "hits": 1,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "recoding": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        }
+      }
+    },
+    "mutated_attacks": 1,
+    "evasion_resistance_before": 1.0,
+    "evasion_resistance_after": 1.0,
+    "evasion_resistance_delta": 0.0,
+    "false_alarms_before": 0,
+    "false_alarms_after": 0,
+    "per_transform": {
+      "none": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "insertion": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "substitution": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "omission": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "reordering": {
+        "attacks": 1,
+        "hits_before": 1,
+        "hits_after": 1,
+        "resistance_before": 1.0,
+        "resistance_after": 1.0,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "recoding": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      }
+    },
+    "newly_detected_event_ids": [],
+    "lost_event_ids": [],
+    "new_false_alarm_event_ids": [],
+    "removed_false_alarm_event_ids": []
+  },
+  "saved_to": "data\\runs\\f9732e9e461944669313d9d160b7d944.json",
+  "trace_url": "https://cloud.langfuse.com/project/cmwev3m5600gkad0kc5h1s6ij/traces/f9732e9e461944669313d9d160b7d944"
+}

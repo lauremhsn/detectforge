@@ -154,7 +154,7 @@ def test_home_guides_people_to_each_job(evaluated, with_index):
     at = open_app("coverage")
     assert not at.exception
     assert any("1 proposal waiting" in c.value for c in at.caption)
-    assert at.radio(key="page").options[2].endswith("(1)")  # pending count on the top bar
+    assert at.radio(key="page").options[3].endswith("(1)")  # pending count on the top bar
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Rules evaded as published"] == "1/1" and metrics["Hardened by the agent"] == "1"
 
@@ -168,7 +168,7 @@ def test_agent_operations_summarises_runs(evaluated):
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Agent runs"] == "1" and metrics["Passed the gate"] == "1/1"
     assert metrics["Model calls"] == "2"
-    assert metrics["Rules evaluated"] == "1/1"  # the Evaluation tab: Arm 1, community rules as published
+    assert "Unseen variations caught" in metrics  # the Evaluation tab: the three arms
 
 
 def test_coverage_chart_compares_the_same_rule_before_and_after_on_held_out(evaded_rows):

@@ -1,0 +1,309 @@
+{
+  "run": {
+    "trace_id": "dc8125dfdbec46378e37a5eb326aa8d6",
+    "technique": "T1053.005",
+    "mode": "harden",
+    "prompt_version": "harden-v1",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "status": "passed",
+    "reasons": [],
+    "original_rule_yaml": "title: Scheduled Task Creation via Schtasks (fixture, literal)\nid: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c01\nstatus: experimental\ndescription: >\n  Fixture rule written in the style of community rules. Matches the literal \" /create \"\n  argument, so it misses several command-line transforms. For harness tests only.\nauthor: DetectForge fixtures\ndate: 2026-10-23\ntags:\n  - attack.persistence\n  - attack.t1053.005\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection_img:\n    - Image|endswith: '\\schtasks.exe'\n    - OriginalFileName: 'schtasks.exe'\n  selection_cli:\n    CommandLine|contains: ' /create '\n  condition: all of selection_*\nfalsepositives:\n  - Software installers that register update tasks\nlevel: medium\n",
+    "final_rule_yaml": "title: Scheduled Task Creation via Schtasks (hardened)\nid: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c01\nstatus: experimental\ndescription: >\n  Detects schtasks.exe creating scheduled tasks. Matches /create, -create, and quoted variants.\nauthor: DetectForge fixtures\ndate: 2026-10-23\ntags:\n  - attack.persistence\n  - attack.t1053.005\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection_img:\n    - Image|endswith: '\\schtasks.exe'\n    - OriginalFileName: 'schtasks.exe'\n  selection_cli:\n    CommandLine|re: \"(^|\\\\s)[/\\\\-][\\\"']?create[\\\"']?(\\\\s|$)\"\n  condition: all of selection_*\nfalsepositives:\n  - Software installers that register update tasks\nlevel: medium",
+    "final_source": "accepted",
+    "rationale": "The attack behavior is schtasks.exe creating a scheduled task via the /create (or -create) argument. The hardened rule uses a regex on CommandLine that matches the create token with tolerant option prefixes (slash or dash) and optional surrounding quotes, covering insertion, substitution, and omission mutations. The executable is still identified by Image path or OriginalFileName. The single false alarm is a documented legitimate installer creating an update task, which is already listed in falsepositives.",
+    "gate": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "valid",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "name": "detects_unmutated_attacks",
+          "passed": true,
+          "detail": "1/1 unmutated attacks detected"
+        },
+        {
+          "name": "evasion_resistance",
+          "passed": true,
+          "detail": "100% (minimum 80%)"
+        },
+        {
+          "name": "no_lost_attacks",
+          "passed": true,
+          "detail": "0 attacks the original caught are now missed"
+        },
+        {
+          "name": "no_new_false_alarms",
+          "passed": true,
+          "detail": "0 new false alarms (1 before, 1 after)"
+        }
+      ]
+    },
+    "tuning_evasion_resistance_before": 0.3333333333333333,
+    "tuning_evasion_resistance_after": 1.0,
+    "tuning_false_alarms_before": 1,
+    "tuning_false_alarms_after": 1,
+    "tuning_runs_used": 3,
+    "model_calls": [
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 9310.6,
+        "prompt_tokens": 1624,
+        "completion_tokens": 278,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 47387.8,
+        "prompt_tokens": 2487,
+        "completion_tokens": 1389,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 12084.6,
+        "prompt_tokens": 2978,
+        "completion_tokens": 293,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 13910.1,
+        "prompt_tokens": 3612,
+        "completion_tokens": 484,
+        "used_fallback": false,
+        "error": null
+      }
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 6.89,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 2.14,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 8.56,
+        "error": null
+      },
+      {
+        "tool": "submit",
+        "ok": true,
+        "latency_ms": 12.08,
+        "error": null
+      }
+    ],
+    "prompt_tokens": 10701,
+    "completion_tokens": 2444,
+    "duration_s": 82.73,
+    "record": {
+      "rule_yaml": "title: Scheduled Task Creation via Schtasks (hardened)\nid: 6c1c2b9e-3f4a-4d6e-9b1a-0f6a5e2d7c01\nstatus: experimental\ndescription: >\n  Detects schtasks.exe creating scheduled tasks. Matches /create, -create, and quoted variants.\nauthor: DetectForge fixtures\ndate: 2026-10-23\ntags:\n  - attack.persistence\n  - attack.t1053.005\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection_img:\n    - Image|endswith: '\\schtasks.exe'\n    - OriginalFileName: 'schtasks.exe'\n  selection_cli:\n    CommandLine|re: \"(^|\\\\s)[/\\\\-][\\\"']?create[\\\"']?(\\\\s|$)\"\n  condition: all of selection_*\nfalsepositives:\n  - Software installers that register update tasks\nlevel: medium",
+      "source": "adapted",
+      "technique": "T1053.005",
+      "trace_id": "dc8125dfdbec46378e37a5eb326aa8d6",
+      "version": 1,
+      "status": "proposed"
+    }
+  },
+  "heldout_evaluation": {
+    "valid": true,
+    "before": {
+      "valid": true,
+      "error": null,
+      "hits": 0,
+      "misses": 1,
+      "false_alarms": 0,
+      "matched_event_ids": [],
+      "per_transform": {
+        "none": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 1,
+          "false_alarms": 0
+        },
+        "insertion": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "substitution": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "omission": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "reordering": {
+          "attacks": 1,
+          "hits": 0,
+          "misses": 1,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "recoding": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        }
+      }
+    },
+    "after": {
+      "valid": true,
+      "error": null,
+      "hits": 1,
+      "misses": 0,
+      "false_alarms": 0,
+      "matched_event_ids": [
+        "st-005"
+      ],
+      "per_transform": {
+        "none": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 1,
+          "false_alarms": 0
+        },
+        "insertion": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "substitution": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "omission": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "reordering": {
+          "attacks": 1,
+          "hits": 1,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "recoding": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        }
+      }
+    },
+    "mutated_attacks": 1,
+    "evasion_resistance_before": 0.0,
+    "evasion_resistance_after": 1.0,
+    "evasion_resistance_delta": 1.0,
+    "false_alarms_before": 0,
+    "false_alarms_after": 0,
+    "per_transform": {
+      "none": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 1,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "insertion": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "substitution": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "omission": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "reordering": {
+        "attacks": 1,
+        "hits_before": 0,
+        "hits_after": 1,
+        "resistance_before": 0.0,
+        "resistance_after": 1.0,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "recoding": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      }
+    },
+    "newly_detected_event_ids": [
+      "st-005"
+    ],
+    "lost_event_ids": [],
+    "new_false_alarm_event_ids": [],
+    "removed_false_alarm_event_ids": []
+  },
+  "saved_to": "C:\\Users\\marwa\\AppData\\Local\\Temp\\claude\\f262f26adfb51e2d\\6ed51bd0-e208-4db8-825f-5e1c4c770a70\\scratchpad\\runs\\dc8125dfdbec46378e37a5eb326aa8d6.json"
+}

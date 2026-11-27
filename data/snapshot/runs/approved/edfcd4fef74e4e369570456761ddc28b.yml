@@ -1,0 +1,25 @@
+title: "Suspicious MsiExec Install from Remote URL"
+description: "Detects msiexec.exe installing an MSI package from a remote HTTP/HTTPS URL, which is a technique used for defense evasion and payload delivery (T1218.007). Legitimate installations typically use local MSI files."
+status: experimental
+id: 96e1fab2-f7d5-558d-b4b0-09637508b1ed
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+level: high
+detection:
+  selection_msiexec:
+    - Image|endswith: '\msiexec.exe'
+    - OriginalFileName: 'msiexec.exe'
+  selection_install_flag:
+    CommandLine|re: '(?i)[/\\-]i\s'
+  selection_remote_url:
+    CommandLine|re: '(?i)https?://'
+  condition: selection_msiexec and selection_install_flag and selection_remote_url
+falsepositives:
+  - "Legitimate software deployment tools that install MSI packages directly from HTTP/HTTPS URLs (rare)"
+  - "Administrator testing or debugging with remote MSI packages"
+tags:
+  - attack.defense_evasion
+  - attack.t1218.007

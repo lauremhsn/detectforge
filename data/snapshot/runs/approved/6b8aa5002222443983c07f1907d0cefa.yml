@@ -1,0 +1,27 @@
+title: Wbadmin Delete System State Backup - Inhibit System Recovery
+id: ef2ae238-bc14-59d7-af84-49cc87f2b8ff
+status: experimental
+description: Detects use of wbadmin.exe to delete system state backups with -keepVersions:0, which removes all backup versions and inhibits system recovery (ATT&CK T1490).
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    Image|endswith: '\wbadmin.exe'
+  selection_original:
+    OriginalFileName: 'wbadmin.exe'
+  selection_delete:
+    CommandLine|contains: 'delete'
+  selection_systemstate:
+    CommandLine|contains: 'systemstatebackup'
+  selection_keepversions:
+    CommandLine|contains: 'keepVersions:0'
+  condition: (selection_image or selection_original) and selection_delete and selection_systemstate and selection_keepversions
+falsepositives:
+  - Legitimate backup cleanup by administrators
+level: high
+tags:
+  - attack.t1490
+  - attack.inhibit-system-recovery

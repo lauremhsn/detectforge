@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Zero-shot sc stopping or disabling WinDefend; no unseen variations to measure; tightly scoped.",
+    "decided_at": "2026-11-22T11:42:11.678022Z"
+  },
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Zero-shot sc stopping or disabling WinDefend; no unseen variations to measure; tightly scoped.",
+    "decided_at": "2026-11-22T12:36:21.129816Z"
+  }
+]

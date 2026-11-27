@@ -13,6 +13,12 @@ from detectforge.reference.index import ReferenceIndex
 from detectforge.ui.components import md
 
 
+def run_example(text: str) -> None:
+    """One click: put the example in the box and run it (no second click on "Check coverage")."""
+    st.session_state["intake_request"] = text
+    st.session_state["intake_run"] = True
+
+
 def intake_panel(index: ReferenceIndex) -> IntakeResult | None:
     """The request box. Returns the interpreted request (techniques, or a clarifying question)."""
     request = st.text_area(
@@ -21,9 +27,12 @@ def intake_panel(index: ReferenceIndex) -> IntakeResult | None:
         key="intake_request",
         height=110,
     )
-    if st.button("Check coverage", type="primary", disabled=not request.strip()):
-        with st.spinner("Interpreting the request…"):
-            st.session_state["intake_result"] = interpret_request(request, index, _client()).model_dump()
+    clicked = st.button("Check coverage", type="primary", disabled=not request.strip())
+    if (clicked or st.session_state.pop("intake_run", False)) and request.strip():
+        client = _client()
+        wait = "Asking the model to read it (about 20 seconds on the free tier)…" if client else "Reading it…"
+        with st.spinner(wait):
+            st.session_state["intake_result"] = interpret_request(request, index, client).model_dump()
 
     if data := st.session_state.get("intake_result"):
         result = IntakeResult.model_validate(data)

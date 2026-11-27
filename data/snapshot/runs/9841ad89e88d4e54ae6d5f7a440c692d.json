@@ -1,0 +1,360 @@
+{
+  "run": {
+    "trace_id": "9841ad89e88d4e54ae6d5f7a440c692d",
+    "technique": "T1053.005",
+    "mode": "harden",
+    "prompt_version": "harden-v3",
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "status": "passed",
+    "reasons": [],
+    "original_rule_yaml": "title: Schtasks Creation Or Modification With SYSTEM Privileges\nid: 89ca78fd-b37c-4310-b3d3-81a023f83936\nstatus: test\ndescription: Detects the creation or update of a scheduled task to run with \"NT AUTHORITY\\SYSTEM\" privileges\nreferences:\n    - https://www.elastic.co/security-labs/exploring-the-qbot-attack-pattern\n    - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks\nauthor: Nasreddine Bencherchali (Nextron Systems)\ndate: 2022-07-28\nmodified: 2025-02-15\ntags:\n    - attack.privilege-escalation\n    - attack.execution\n    - attack.persistence\n    - attack.t1053.005\nlogsource:\n    product: windows\n    category: process_creation\ndetection:\n    selection_root:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains:\n            - ' /change '\n            - ' /create '\n    selection_run:\n        CommandLine|contains: '/ru '\n    selection_user:\n        CommandLine|contains:\n            - 'NT AUT' # This covers the usual NT AUTHORITY\\SYSTEM\n            - ' SYSTEM ' # SYSTEM is a valid value for schtasks hence it gets it's own value with space\n    filter_optional_teamviewer:\n        # FP from test set in SIGMA\n        # Cannot use ParentImage on all OSes for 4688 events\n        # ParentImage|contains|all:\n        #     - '\\AppData\\Local\\Temp\\'\n        #     - 'TeamViewer_.exe'\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains|all:\n            - '/TN TVInstallRestore'\n            - '\\TeamViewer_.exe'\n    filter_optional_office:\n        CommandLine|contains|all:\n            # https://answers.microsoft.com/en-us/msoffice/forum/all/office-15-subscription-heartbeat-task-created-on/43ab5e53-a9fb-47c6-8c14-44889974b9ff\n            - 'Subscription Heartbeat'\n            - '\\HeartbeatConfig.xml'\n            - '\\Microsoft Shared\\OFFICE'\n    filter_optional_avira:\n        CommandLine|contains:\n            - '/Create /F /RU System /SC WEEKLY /TN AviraSystemSpeedupVerify /TR '\n            - ':\\Program Files (x86)\\Avira\\System Speedup\\setup\\avira_speedup_setup.exe'\n            - '/VERIFY /VERYSILENT /NOSTART /NODOTNET /NORESTART\" /RL HIGHEST'\n    condition: all of selection_* and not 1 of filter_optional_*\nfalsepositives:\n    - Unknown\nlevel: high\n",
+    "final_rule_yaml": "title: Schtasks Creation Or Modification With SYSTEM Privileges\nid: 89ca78fd-b37c-4310-b3d3-81a023f83936\nstatus: test\ndescription: Detects the creation or update of a scheduled task to run with \"NT AUTHORITY\\SYSTEM\" privileges\nreferences:\n    - https://www.elastic.co/security-labs/exploring-the-qbot-attack-pattern\n    - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks\nauthor: Nasreddine Bencherchali (Nextron Systems)\ndate: 2022-07-28\nmodified: 2025-02-15\ntags:\n    - attack.privilege-escalation\n    - attack.execution\n    - attack.persistence\n    - attack.t1053.005\nlogsource:\n    product: windows\n    category: process_creation\ndetection:\n    selection_root:\n        Image|endswith: '\\schtasks.exe'\n        OriginalFileName: 'schtasks.exe'\n    selection_action:\n        CommandLine|contains|windash:\n            - 'create'\n            - 'change'\n    selection_ru:\n        CommandLine|contains|windash: 'ru '\n    selection_user:\n        CommandLine|contains:\n            - 'NT AUTHORITY\\\\SYSTEM'\n            - 'NT AUT'\n            - 'SYSTEM'\n    filter_optional_teamviewer:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains|all:\n            - '/TN TVInstallRestore'\n            - '\\TeamViewer_.exe'\n    filter_optional_office:\n        CommandLine|contains|all:\n            - 'Subscription Heartbeat'\n            - '\\HeartbeatConfig.xml'\n            - '\\Microsoft Shared\\OFFICE'\n    filter_optional_avira:\n        CommandLine|contains:\n            - '/Create /F /RU System /SC WEEKLY /TN AviraSystemSpeedupVerify /TR '\n            - ':\\Program Files (x86)\\Avira\\System Speedup\\setup\\avira_speedup_setup.exe'\n            - '/VERIFY /VERYSILENT /NOSTART /NODOTNET /NORESTART\" /RL HIGHEST'\n    condition: all of selection_* and not 1 of filter_optional_*\nfalsepositives:\n    - Unknown\nlevel: high",
+    "final_source": "accepted",
+    "rationale": "The attack behavior is: an attacker runs schtasks.exe (or a renamed copy) with the /create or /change action, specifies /ru (run-as user), and sets the user to SYSTEM or NT AUTHORITY\\SYSTEM to run a scheduled task with SYSTEM privileges.\n\nThe original rule missed all mutations because:\n1. `CommandLine|contains: ' /create '` requires literal spaces around the keyword, so it fails when quotes are inserted (/\\\"create\\\"), when dashes are swapped (-create), or when .exe is omitted (schtasks /create).\n2. `CommandLine|contains: '/ru '` has the same space issue.\n3. `CommandLine|contains: ' SYSTEM '` requires surrounding spaces, missing \"SYSTEM\" at end of line or with quotes.\n\nHardening changes:\n- Replaced exact-spaced literals with `|contains|windash` on short tokens (`create`, `change`, `ru `) to tolerate dash/underscore/quote variants and argument reordering.\n- Added `OriginalFileName: schtasks.exe` to catch renamed copies.\n- Expanded `selection_user` to include the full string `NT AUTHORITY\\\\SYSTEM`, the abbreviated `NT AUT` (original), and bare `SYSTEM` (no surrounding spaces required) to catch all quoting/placement variants.\n- Kept all original filters (TeamViewer, Office, Avira) unchanged to preserve false-positive suppression.\n\nResult: 4/4 attacks detected (100% evasion resistance) with 0 false alarms.",
+    "gate": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "valid",
+          "passed": true,
+          "detail": "ok",
+          "blocking": true
+        },
+        {
+          "name": "deployable",
+          "passed": true,
+          "detail": "converts to lucene",
+          "blocking": true
+        },
+        {
+          "name": "no_unusual_characters",
+          "passed": true,
+          "detail": "none added",
+          "blocking": true
+        },
+        {
+          "name": "no_copied_test_strings",
+          "passed": true,
+          "detail": "none",
+          "blocking": false
+        },
+        {
+          "name": "detects_unmutated_attacks",
+          "passed": true,
+          "detail": "1/1 unmutated attacks detected",
+          "blocking": true
+        },
+        {
+          "name": "evasion_resistance",
+          "passed": true,
+          "detail": "100% (minimum 80%)",
+          "blocking": true
+        },
+        {
+          "name": "no_lost_attacks",
+          "passed": true,
+          "detail": "0 attacks the original caught are now missed",
+          "blocking": true
+        },
+        {
+          "name": "no_new_false_alarms",
+          "passed": true,
+          "detail": "0 new false alarms (0 before, 0 after)",
+          "blocking": true
+        },
+        {
+          "name": "keeps_original_fields",
+          "passed": true,
+          "detail": "all original fields still used",
+          "blocking": true
+        },
+        {
+          "name": "keeps_original_filters",
+          "passed": true,
+          "detail": "all original exclusions kept",
+          "blocking": true
+        }
+      ]
+    },
+    "tuning_evasion_resistance_before": 0.0,
+    "tuning_evasion_resistance_after": 1.0,
+    "tuning_false_alarms_before": 0,
+    "tuning_false_alarms_after": 0,
+    "tuning_runs_used": 2,
+    "model_calls": [
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 15895.4,
+        "prompt_tokens": 2153,
+        "completion_tokens": 798,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 10364.8,
+        "prompt_tokens": 3501,
+        "completion_tokens": 744,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 44936.7,
+        "prompt_tokens": 4984,
+        "completion_tokens": 3611,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 5971.4,
+        "prompt_tokens": 5579,
+        "completion_tokens": 574,
+        "used_fallback": false,
+        "error": null
+      },
+      {
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "ok": true,
+        "latency_ms": 8247.4,
+        "prompt_tokens": 6371,
+        "completion_tokens": 915,
+        "used_fallback": false,
+        "error": null
+      }
+    ],
+    "tool_calls": [
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 18.23,
+        "error": null
+      },
+      {
+        "tool": "search_reference_rules",
+        "ok": true,
+        "latency_ms": 2.51,
+        "error": null
+      },
+      {
+        "tool": "validate_rule",
+        "ok": true,
+        "latency_ms": 6.08,
+        "error": null
+      },
+      {
+        "tool": "run_tuning_set",
+        "ok": true,
+        "latency_ms": 21.32,
+        "error": null
+      },
+      {
+        "tool": "submit",
+        "ok": true,
+        "latency_ms": 63.2,
+        "error": null
+      }
+    ],
+    "prompt_tokens": 22588,
+    "completion_tokens": 6642,
+    "duration_s": 85.55,
+    "record": {
+      "rule_yaml": "title: Schtasks Creation Or Modification With SYSTEM Privileges\nid: 89ca78fd-b37c-4310-b3d3-81a023f83936\nstatus: test\ndescription: Detects the creation or update of a scheduled task to run with \"NT AUTHORITY\\SYSTEM\" privileges\nreferences:\n    - https://www.elastic.co/security-labs/exploring-the-qbot-attack-pattern\n    - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks\nauthor: Nasreddine Bencherchali (Nextron Systems)\ndate: 2022-07-28\nmodified: 2025-02-15\ntags:\n    - attack.privilege-escalation\n    - attack.execution\n    - attack.persistence\n    - attack.t1053.005\nlogsource:\n    product: windows\n    category: process_creation\ndetection:\n    selection_root:\n        Image|endswith: '\\schtasks.exe'\n        OriginalFileName: 'schtasks.exe'\n    selection_action:\n        CommandLine|contains|windash:\n            - 'create'\n            - 'change'\n    selection_ru:\n        CommandLine|contains|windash: 'ru '\n    selection_user:\n        CommandLine|contains:\n            - 'NT AUTHORITY\\\\SYSTEM'\n            - 'NT AUT'\n            - 'SYSTEM'\n    filter_optional_teamviewer:\n        Image|endswith: '\\schtasks.exe'\n        CommandLine|contains|all:\n            - '/TN TVInstallRestore'\n            - '\\TeamViewer_.exe'\n    filter_optional_office:\n        CommandLine|contains|all:\n            - 'Subscription Heartbeat'\n            - '\\HeartbeatConfig.xml'\n            - '\\Microsoft Shared\\OFFICE'\n    filter_optional_avira:\n        CommandLine|contains:\n            - '/Create /F /RU System /SC WEEKLY /TN AviraSystemSpeedupVerify /TR '\n            - ':\\Program Files (x86)\\Avira\\System Speedup\\setup\\avira_speedup_setup.exe'\n            - '/VERIFY /VERYSILENT /NOSTART /NODOTNET /NORESTART\" /RL HIGHEST'\n    condition: all of selection_* and not 1 of filter_optional_*\nfalsepositives:\n    - Unknown\nlevel: high",
+      "source": "adapted",
+      "technique": "T1053.005",
+      "trace_id": "9841ad89e88d4e54ae6d5f7a440c692d",
+      "version": 1,
+      "status": "proposed"
+    }
+  },
+  "heldout_evaluation": {
+    "valid": true,
+    "before": {
+      "valid": true,
+      "error": null,
+      "hits": 0,
+      "misses": 1,
+      "false_alarms": 0,
+      "matched_event_ids": [],
+      "per_transform": {
+        "none": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 1,
+          "false_alarms": 0
+        },
+        "insertion": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "substitution": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "omission": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "reordering": {
+          "attacks": 1,
+          "hits": 0,
+          "misses": 1,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "recoding": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        }
+      }
+    },
+    "after": {
+      "valid": true,
+      "error": null,
+      "hits": 1,
+      "misses": 0,
+      "false_alarms": 0,
+      "matched_event_ids": [
+        "st-005"
+      ],
+      "per_transform": {
+        "none": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 1,
+          "false_alarms": 0
+        },
+        "insertion": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "substitution": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "omission": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "reordering": {
+          "attacks": 1,
+          "hits": 1,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        },
+        "recoding": {
+          "attacks": 0,
+          "hits": 0,
+          "misses": 0,
+          "benign": 0,
+          "false_alarms": 0
+        }
+      }
+    },
+    "mutated_attacks": 1,
+    "evasion_resistance_before": 0.0,
+    "evasion_resistance_after": 1.0,
+    "evasion_resistance_delta": 1.0,
+    "false_alarms_before": 0,
+    "false_alarms_after": 0,
+    "per_transform": {
+      "none": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 1,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "insertion": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "substitution": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "omission": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "reordering": {
+        "attacks": 1,
+        "hits_before": 0,
+        "hits_after": 1,
+        "resistance_before": 0.0,
+        "resistance_after": 1.0,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      },
+      "recoding": {
+        "attacks": 0,
+        "hits_before": 0,
+        "hits_after": 0,
+        "resistance_before": null,
+        "resistance_after": null,
+        "benign": 0,
+        "false_alarms_before": 0,
+        "false_alarms_after": 0
+      }
+    },
+    "newly_detected_event_ids": [
+      "st-005"
+    ],
+    "lost_event_ids": [],
+    "new_false_alarm_event_ids": [],
+    "removed_false_alarm_event_ids": []
+  },
+  "saved_to": "data\\runs\\9841ad89e88d4e54ae6d5f7a440c692d.json",
+  "trace_url": "https://cloud.langfuse.com/project/cmwev3m5600gkad0kc5h1s6ij/traces/9841ad89e88d4e54ae6d5f7a440c692d"
+}

@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Fires on every service installation, including a legitimate agent in Program Files. Needs a suspicious-location condition.",
+    "decided_at": "2026-11-17T22:39:18.648512Z"
+  }
+]

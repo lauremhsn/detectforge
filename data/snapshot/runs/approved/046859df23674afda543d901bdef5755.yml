@@ -1,0 +1,27 @@
+title: Suspicious File Download via MpCmdRun
+description: Detects use of MpCmdRun.exe (Microsoft Malware Protection Command Line Utility) to download files from the internet using the -DownloadFile parameter. This is a living-off-the-land technique for Ingress Tool Transfer (T1105).
+id: 3269dcb4-50c2-5c06-ba1e-c2477082c3af
+status: experimental
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    - Image|endswith: \mpcmdrun.exe
+    - OriginalFileName: mpcmdrun.exe
+  selection_download:
+    CommandLine|re: '(?i)[-/]downloadfile\b'
+  selection_url:
+    CommandLine|re: '(?i)[-/]url\b'
+  selection_path:
+    CommandLine|re: '(?i)[-/]path\b'
+  condition: all of selection_*
+falsepositives:
+  - Legitimate use of MpCmdRun for signature updates (typically runs as SYSTEM without user interaction)
+  - Automated security tools that use MpCmdRun for file retrieval
+level: medium
+tags:
+  - attack.t1105
+  - attack.ingress_tool_transfer

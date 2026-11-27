@@ -19,9 +19,14 @@ from detectforge.ui.navigation import go_button
 def agent_panel(before_yaml: str, events: list[Event], index: ReferenceIndex | None) -> None:
     """Must run before the "after" editor is created, because it may fill that editor."""
     settings = get_settings()
-    technique = st.session_state.get("technique_filter", "(all)")
+    technique = st.session_state.get("bench_technique", "(all)")
     blocked = _blocked_reason(settings, technique, events)
     label = "Ask the agent to harden this rule"
+    st.caption(
+        f"Costs up to {settings.max_model_calls} model calls (usually about 8) of the provider's "
+        f"{settings.daily_request_limit} a day, and takes 2 to 6 minutes on the free tier. It only sees the "
+        "tuning variations; the result waits for a reviewer."
+    )
     if blocked:
         st.button(label, disabled=True, help=blocked)
         st.caption(f"⏳ Agent runs here: {blocked}")
@@ -59,6 +64,10 @@ def write_panel(technique: str, events: list[Event], index: ReferenceIndex | Non
     settings = get_settings()
     blocked = _blocked_reason(settings, technique, events)
     label = f"Ask the agent to write a rule for {technique}"
+    st.caption(
+        f"Costs up to {settings.write_max_model_calls} model calls of the provider's "
+        f"{settings.daily_request_limit} a day, about 2 minutes; the rule waits for a reviewer."
+    )
     if blocked:
         st.button(label, disabled=True, help=blocked, key=f"write_{technique}")
         st.caption(
@@ -95,7 +104,7 @@ def _blocked_reason(settings, technique: str, events: list[Event]) -> str | None
     if key is None or not key.get_secret_value().strip():
         return "no LLM key (set OPENROUTER_API_KEY in .env)"
     if technique == "(all)":
-        return "pick one technique in the sidebar first"
+        return "open a rule first, so its technique is known (or pick one in Lab → Test bench)"
     if not any(e.technique == technique and e.split == "tune" and e.label == "attack" for e in events):
         return f"no tuning attack events for {technique} in this events file"
     return None

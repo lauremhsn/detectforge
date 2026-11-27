@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Zero-shot; fires on a legitimate command never seen in tuning (T1685-na2).",
+    "decided_at": "2026-11-22T11:42:11.697405Z"
+  },
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Zero-shot; fires on a legitimate command never seen in tuning (T1685-na2).",
+    "decided_at": "2026-11-22T12:36:21.149174Z"
+  }
+]

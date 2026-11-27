@@ -1,0 +1,39 @@
+title: Esentutl Copying Browser Credential Databases
+id: 78abbf87-3afa-5955-b4c8-1819576e8abc
+status: experimental
+description: Detects esentutl.exe being used to copy browser credential databases (e.g., Chrome Login Data, Web Data, Cookies) which is indicative of credential theft from web browsers (T1555.003).
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: \esentutl.exe
+    - OriginalFileName: esentutl.exe
+  selection_y_flag:
+    CommandLine|contains|windash: ' /y '
+  selection_browser_db:
+    CommandLine|contains:
+      - \Login Data
+      - \Web Data
+      - \Cookies
+      - \History
+      - \Favicons
+      - \Shortcuts
+      - \Top Sites
+  selection_suspicious_dest:
+    CommandLine|contains:
+      - \Temp\
+      - \temp\
+      - \Tmp\
+      - \tmp\
+      - \AppData\Local\Temp
+  condition: all of selection_img and selection_y_flag and selection_browser_db and selection_suspicious_dest
+falsepositives:
+  - Legitimate database maintenance or backup operations by administrators
+  - Forensic analysis activity
+level: high
+tags:
+  - attack.credential_access
+  - attack.t1555.003

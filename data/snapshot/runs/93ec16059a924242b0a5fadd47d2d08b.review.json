@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Fires on any esentutl copy (/y ... /d), including a legitimate cache copy. Must target browser credential or cookie files.",
+    "decided_at": "2026-11-17T22:39:24.322677Z"
+  }
+]

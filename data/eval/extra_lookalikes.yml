@@ -1,0 +1,70 @@
+# Everyday legitimate commands that are NOT in the dataset, found while reviewing agent rules.
+#
+# Kept out of the main event files on purpose: those files' hash is part of every run's setup key, and
+# the frozen results must not change. They are a reviewer's extra check (shown on the Review page) and
+# a post-hoc stress check (scripts/stress_check.py), reported apart from the evaluation.
+#
+# technique: the attack each command resembles. binary: the executable that runs it.
+
+lookalikes:
+  - {id: extra-1, technique: T1003.002, binary: reg.exe, why: "reads a SYSTEM value; dumps nothing",
+     cmd: 'reg query HKLM\SYSTEM\CurrentControlSet\Control\Session Manager /v PendingFileRenameOperations'}
+  - {id: extra-2, technique: T1003.002, binary: reg.exe, why: "reads the SECURITY key; saves no hive",
+     cmd: 'reg query HKLM\SECURITY\Policy'}
+  - {id: extra-3, technique: T1003.002, binary: reg.exe, why: "sets a hardening value; dumps nothing",
+     cmd: 'reg add HKLM\SYSTEM\CurrentControlSet\Control\Lsa /v LimitBlankPasswordUse /t REG_DWORD /d 1 /f'}
+  - {id: extra-4, technique: T1003.002, binary: reg.exe, why: "removes an old driver's service key",
+     cmd: 'reg delete HKLM\SYSTEM\CurrentControlSet\Services\OldDriver /f'}
+  - {id: extra-5, technique: T1547.001, binary: reg.exe, why: "removes an autorun entry; adds none",
+     cmd: 'reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OldApp /f'}
+  - {id: extra-6, technique: T1543.003, binary: wmic.exe, why: "deletes an old service; creates none",
+     cmd: 'wmic service where name="OldSvc" delete'}
+  - {id: extra-7, technique: T1490, binary: wbadmin.exe, why: "creates a backup; deletes none",
+     cmd: 'wbadmin start systemstatebackup -backupTarget:E: -quiet'}
+  # Added from SigmaHQ's own false-positive notes ("legitimate administration", "backup software",
+  # "software installers", "monitoring") turned into concrete everyday commands. Only clear class A
+  # (a different action or target than the attack); ambiguous look-alikes are left out on purpose.
+  - {id: extra-8, technique: T1053.005, binary: schtasks.exe, why: "reads one task's settings",
+     cmd: 'schtasks /query /tn "\Microsoft\Windows\Defrag\ScheduledDefrag" /v'}
+  - {id: extra-9, technique: T1053.005, binary: schtasks.exe, why: "disables an existing company task",
+     cmd: 'schtasks /change /tn "CompanyBackup" /disable'}
+  - {id: extra-10, technique: T1053.005, binary: schtasks.exe, why: "runs an existing task now; creates none",
+     cmd: 'schtasks /run /tn "CompanyUpdate"'}
+  - {id: extra-11, technique: T1543.003, binary: sc.exe, why: "changes a built-in service's start type",
+     cmd: 'sc config wuauserv start= demand'}
+  - {id: extra-12, technique: T1543.003, binary: sc.exe, why: "starts the print spooler",
+     cmd: 'sc start Spooler'}
+  - {id: extra-13, technique: T1490, binary: vssadmin.exe, why: "lists shadow storage; deletes nothing",
+     cmd: 'vssadmin list shadowstorage'}
+  - {id: extra-14, technique: T1490, binary: wbadmin.exe, why: "checks the backup job's status",
+     cmd: 'wbadmin get status'}
+  - {id: extra-15, technique: T1490, binary: bcdedit.exe, why: "sets the boot menu timeout",
+     cmd: 'bcdedit /timeout 10'}
+  - {id: extra-16, technique: T1490, binary: wmic.exe, why: "lists shadow copies; deletes none",
+     cmd: 'wmic shadowcopy list brief'}
+  - {id: extra-17, technique: T1105, binary: curl.exe, why: "prints curl's version",
+     cmd: 'curl --version'}
+  - {id: extra-18, technique: T1036.003, binary: bitsadmin.exe, why: "inspects an existing transfer job",
+     cmd: 'bitsadmin /info UpdateJob /verbose'}
+  - {id: extra-19, technique: T1047, binary: wmic.exe, why: "reads the OS version",
+     cmd: 'wmic os get caption,version'}
+  - {id: extra-20, technique: T1047, binary: wmic.exe, why: "reads free disk space",
+     cmd: 'wmic logicaldisk get name,freespace'}
+  - {id: extra-21, technique: T1218.011, binary: rundll32.exe, why: "opens the Windows credential manager",
+     cmd: 'rundll32.exe keymgr.dll,KRShowKeyMgr'}
+  - {id: extra-22, technique: T1218.010, binary: regsvr32.exe, why: "re-registers a Windows DLL from System32",
+     cmd: 'regsvr32 /s "C:\Windows\System32\vbscript.dll"'}
+  - {id: extra-23, technique: T1685, binary: sc.exe, why: "lists every service and its state",
+     cmd: 'sc query type= service state= all'}
+  - {id: extra-24, technique: T1685, binary: sc.exe, why: "sets the spooler to start automatically",
+     cmd: 'sc config Spooler start= auto'}
+  - {id: extra-25, technique: T1685.001, binary: wevtutil.exe, why: "reads the last 5 security events",
+     cmd: 'wevtutil qe Security /c:5 /f:text'}
+  - {id: extra-26, technique: T1685.001, binary: wevtutil.exe, why: "lists the event logs",
+     cmd: 'wevtutil el'}
+  - {id: extra-27, technique: T1685.001, binary: auditpol.exe, why: "lists per-user audit settings",
+     cmd: 'auditpol /list /user'}
+  - {id: extra-28, technique: T1555.003, binary: esentutl.exe, why: "checks a database's integrity",
+     cmd: 'esentutl /g "C:\ProgramData\App\store.edb"'}
+  - {id: extra-29, technique: T1027, binary: certutil.exe, why: "verifies a local certificate",
+     cmd: 'certutil -verify C:\Users\analyst\Downloads\setup.cer'}

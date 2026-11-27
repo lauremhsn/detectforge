@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Fires on reg delete and reg query of the Run key: the pattern for d matches any word starting with d (delete, Defender).",
+    "decided_at": "2026-11-21T17:17:28.185548Z"
+  }
+]

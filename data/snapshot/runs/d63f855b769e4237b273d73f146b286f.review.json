@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Catches quote insertion; silent on reg delete and reg query probes; unseen 71% -> 100%, no new false alarms.",
+    "decided_at": "2026-11-21T17:17:28.169436Z"
+  }
+]

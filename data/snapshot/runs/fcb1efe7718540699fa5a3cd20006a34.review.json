@@ -1,0 +1,14 @@
+[
+  {
+    "decision": "approved",
+    "reviewer": "marwa",
+    "comment": "Unseen 0% -> 100%, no false alarms.",
+    "decided_at": "2026-11-22T11:42:11.622821Z"
+  },
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Unseen 0% -> 100% but matches any reg verb on HKLM SAM/SYSTEM/SECURITY: fires on everyday reg query/add/delete (checked by hand; not in the benign set).",
+    "decided_at": "2026-11-22T12:36:21.061925Z"
+  }
+]

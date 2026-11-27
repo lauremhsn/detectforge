@@ -1,0 +1,27 @@
+title: WMIC Process Call Create - Remote Process Creation
+id: 0f46fbca-b2b9-567e-ba23-457c8bcd03c1
+status: experimental
+description: Detects WMIC being used to create remote processes via 'process call create', a technique used for lateral movement and remote code execution (ATT&CK T1047).
+references:
+  - https://attack.mitre.org/techniques/T1047/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    Image|endswith: \wmic.exe
+  selection_original:
+    OriginalFileName: wmic.exe
+  selection_cli:
+    CommandLine|re: '(?i)call\s+create'
+  selection_remote_params:
+    CommandLine|re: '(?i)(/node|/user|/password)'
+  selection_benign_deployment:
+    CommandLine|re: '(?i)call\s+create\s+"[^"]*Program Files[^"]*\.exe"'
+  condition: (selection_image or selection_original) and selection_cli and (selection_remote_params or not selection_benign_deployment)
+falsepositives:
+  - Legitimate administrative use of WMIC for remote process management
+  - Software deployment tools using WMIC
+level: medium

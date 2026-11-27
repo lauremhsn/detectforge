@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Copied a look-alike hyphen (U+FE63) and uses case-sensitive regexes; budget exhausted.",
+    "decided_at": "2026-11-21T17:17:28.192474Z"
+  }
+]

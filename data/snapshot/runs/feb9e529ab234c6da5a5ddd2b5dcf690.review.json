@@ -1,0 +1,8 @@
+[
+  {
+    "decision": "rejected",
+    "reviewer": "marwa",
+    "comment": "Zero-shot: OR list fires on any wbadmin command with delete or systemstatebackup, including a legitimate system-state backup.",
+    "decided_at": "2026-11-21T17:17:28.202025Z"
+  }
+]

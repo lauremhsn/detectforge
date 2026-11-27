@@ -1,0 +1,24 @@
+title: Suspicious MSHTA JavaScript Execution
+id: b2cd43d7-fc62-52c1-9751-13aa1e323e56
+status: experimental
+description: "Detects mshta.exe being used to execute JavaScript code via the javascript: protocol handler, which is a common technique for executing remote scripts (ATT&CK T1218.005)."
+references:
+  - https://attack.mitre.org/techniques/T1218/005/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_mshta:
+    - Image|endswith: '\mshta.exe'
+    - OriginalFileName: 'MSHTA.EXE'
+  selection_javascript:
+    CommandLine|re: '(?i)javascript:'
+  condition: selection_mshta and selection_javascript
+falsepositives:
+  - Legitimate HTA applications launched via mshta (rare)
+level: high
+tags:
+  - attack.defense_evasion
+  - attack.t1218.005

@@ -1,0 +1,24 @@
+title: Suspicious Cmd Input Redirection from File
+id: 8750d488-3a7e-57d9-9099-d367781ca774
+status: experimental
+description: Detects cmd.exe using input redirection (<) to read commands from a file, which is an uncommon technique used to execute batch scripts or commands from external files.
+references:
+  - https://attack.mitre.org/techniques/T1059/003/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: \cmd.exe
+    - OriginalFileName: Cmd.Exe
+  selection_redir:
+    CommandLine|re: '(?i)cmd\s*<\s*"?[A-Za-z]:\\'
+  condition: selection_img and selection_redir
+falsepositives:
+  - Legitimate administrative scripts that use cmd input redirection from files (rare)
+level: medium
+tags:
+  - attack.execution
+  - attack.t1059.003

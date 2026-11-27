@@ -1,0 +1,29 @@
+title: Windows Defender Service Stopped or Disabled via sc.exe
+id: eba8843a-1cbe-530f-aef9-1b0cb866f09c
+status: experimental
+description: Detects attempts to stop or disable the Windows Defender service (WinDefend) using sc.exe, which is a common defense evasion technique.
+references:
+    - https://attack.mitre.org/techniques/T1685/
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_sc_image:
+        Image|endswith: '\sc.exe'
+    selection_sc_original:
+        OriginalFileName: 'sc.exe'
+    selection_service:
+        CommandLine|re: '(?i)WinDefend'
+    selection_stop:
+        CommandLine|re: '(?i)\bstop\b'
+    selection_config:
+        CommandLine|re: '(?i)\bconfig\b.*\bstart\s*=\s*disabled\b'
+    condition: ((selection_sc_image or selection_sc_original) and selection_service and (selection_stop or selection_config))
+falsepositives:
+    - Legitimate administrative activity stopping or disabling Windows Defender service
+level: high
+tags:
+    - attack.defense_evasion
+    - attack.t1685

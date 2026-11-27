@@ -1,0 +1,40 @@
+title: Suspicious BITSAdmin Download Activity
+description: 'Detects bitsadmin.exe being used to download files from external HTTP/HTTPS sources to suspicious local paths, which is indicative of Masquerading: Rename System Utilities (T1036.003) where attackers use legitimate Windows utilities to download payloads.'
+id: 62e847f0-6fe9-522c-a6c1-036f6c2e6845
+status: experimental
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_bitsadmin:
+    - Image|endswith: \bitsadmin.exe
+    - OriginalFileName: bitsadmin.exe
+  selection_download:
+    CommandLine|contains:
+      - 'http://'
+      - 'https://'
+  selection_suspicious_dest:
+    CommandLine|contains:
+      - '\AppData\Local\Temp\'
+      - '\AppData\Roaming\'
+      - '\Users\Public\'
+      - '\Windows\Temp\'
+      - '\Temp\'
+      - '\Desktop\'
+      - '\Downloads\'
+  selection_transfer_addfile:
+    CommandLine|contains|windash:
+      - 'transfer'
+      - 'addfile'
+      - 'download'
+      - 'priority'
+  condition: selection_bitsadmin and selection_download and (selection_suspicious_dest or selection_transfer_addfile)
+falsepositives:
+  - Legitimate software updates using BITS
+  - Administrative scripts downloading patches
+level: medium
+tags:
+  - attack.defense_evasion
+  - attack.t1036.003

@@ -1,0 +1,28 @@
+title: "Mshta Execution With JavaScript Protocol and Script Moniker"
+id: a1a6278b-4ffe-5224-a306-87dd1018d3cd
+status: experimental
+description: "Detects mshta.exe executing code via the javascript: protocol handler with GetObject('script:...') to fetch and execute remote scriptlet content, a technique used in T1218.005."
+references:
+  - "https://attack.mitre.org/techniques/T1218/005/"
+  - "https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.005/T1218.005.md"
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_mshta:
+    - Image|endswith: \mshta.exe
+    - OriginalFileName: MSHTA.EXE
+  selection_javascript:
+    CommandLine|contains: 'javascript:'
+  selection_script_moniker:
+    CommandLine|contains: "GetObject('script:"
+  condition: all of selection_*
+falsepositives:
+  - "Legitimate HTA applications using javascript: protocol (rare)"
+  - "Administrative scripts using mshta for remote scriptlet execution (uncommon)"
+level: high
+tags:
+  - attack.defense_evasion
+  - attack.t1218.005

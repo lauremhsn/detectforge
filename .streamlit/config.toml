@@ -10,28 +10,29 @@ gatherUsageStats = false
 # No "Deploy" button or developer menu: this is a product, not a notebook.
 toolbarMode = "minimal"
 
-# A calm "security console" look: dark navy, one blue accent, readable type.
-# Fonts come from Google Fonts; without a connection the browser falls back to its sans-serif.
+# "Forge": a warm, light look that reads well on a projector or LCD and isn't another blue dashboard.
+# Warm stone background (no glare), charcoal ink, ember-orange accent (the forge), steel blue as the
+# second colour, signal green for "caught". Fonts from Google Fonts, falling back to the system sans.
 [theme]
-base = "dark"
-primaryColor = "#3B82F6"
-backgroundColor = "#0B1220"
-secondaryBackgroundColor = "#131D33"
-textColor = "#E5ECF6"
-borderColor = "#22304D"
-linkColor = "#7DB3FF"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+base = "light"
+primaryColor = "#C2551F"
+backgroundColor = "#F3F0EB"
+secondaryBackgroundColor = "#EAE5DD"
+textColor = "#1F2328"
+borderColor = "#D8D1C6"
+linkColor = "#A8461A"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap, sans-serif"
 codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap, monospace"
-headingFontWeights = [700, 650, 600, 600, 600, 600]
-baseRadius = "0.6rem"
-buttonRadius = "0.5rem"
+headingFontWeights = [800, 700, 650, 600, 600, 600]
+baseRadius = "0.7rem"
+buttonRadius = "0.55rem"
 showWidgetBorder = true
-greenColor = "#22C55E"
-orangeColor = "#F59E0B"
-redColor = "#EF4444"
-blueColor = "#3B82F6"
+greenColor = "#2F7D4F"
+orangeColor = "#B45309"
+redColor = "#B42318"
+blueColor = "#3D5A73"
 
 [theme.sidebar]
-backgroundColor = "#0E1729"
-secondaryBackgroundColor = "#16223A"
-borderColor = "#1C2942"
+backgroundColor = "#EAE5DD"
+secondaryBackgroundColor = "#E0D9CE"
+borderColor = "#D8D1C6"

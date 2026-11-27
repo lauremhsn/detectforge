@@ -1,0 +1,22 @@
+title: Windows Command Shell Execution via Input Redirection
+id: 28cbb651-4ddc-5d99-a712-90b03f954d04
+description: Detects cmd.exe executing batch scripts via input redirection (< operator), a technique used to execute commands from a file.
+status: experimental
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-21'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: \cmd.exe
+    - OriginalFileName: Cmd.Exe
+  selection_cli:
+    CommandLine|re: '(?i)[/-][rc]\b.*<.*\.(cmd|bat)(\s|["'']?$)'
+  condition: all of selection_*
+level: medium
+falsepositives:
+  - Legitimate batch script execution via input redirection
+  - Administrative scripts using cmd /c or /r with file input
+tags:
+  - attack.t1059.003

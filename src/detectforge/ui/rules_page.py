@@ -11,11 +11,16 @@ from detectforge.config import get_settings
 from detectforge.harness import run
 from detectforge.harness.compare import compare, evasion_resistance
 from detectforge.reference.index import ReferenceIndex, techniques_from_tags
+from detectforge.review import list_runs, load_run
 from detectforge.rules.validate import validate_rule
 from detectforge.schemas import TRANSFORMS, Event, Scorecard
+from detectforge.ui import techniques as tx
+from detectforge.ui import workspace
 from detectforge.ui.agent_panel import agent_panel
+from detectforge.ui.bench import describe
 from detectforge.ui.components import export_view, md, pct, table
-from detectforge.ui.navigation import header, open_rule
+from detectforge.ui.navigation import go, header, open_rule
+from detectforge.ui.testbench import grid
 
 STEPS = {
     "pick": "① Pick a rule",
@@ -37,9 +42,7 @@ def rules_page(events: list[Event], all_events: list[Event], index: ReferenceInd
             label_visibility="collapsed",
         )
     if label := st.session_state.get("rule_label"):
-        technique = st.session_state.get("technique_filter", "(all)")
-        scope = "all techniques" if technique == "(all)" else technique
-        st.info(f"**Rule under test:** {md(label)} · tested on {scope} (test data: sidebar)")
+        st.info(f"**Rule under test:** {md(label)} · tested on {describe()}")
     if step == "pick":
         pick_step(index)
     elif step == "test":
@@ -60,8 +63,12 @@ def pick_step(index: ReferenceIndex | str) -> None:
         )
         st.session_state.setdefault("find_technique", "T1053.005")
         c1, c2, c3 = st.columns([1, 2, 1])
-        technique = c1.text_input("ATT&CK technique", key="find_technique")
-        query = c2.text_input("Keywords (optional)", "schtasks create")
+        options = list(tx.TECHNIQUES)
+        technique = c1.selectbox(
+            "Attacker technique", options, format_func=tx.label, key="find_technique",
+            help="What the attacker does. The ATT&CK id is in brackets for experts.",
+        )  # fmt: skip
+        query = c2.text_input("Keywords (optional)", "", placeholder="e.g. schtasks create")
         limit = c3.slider("Max results", 1, 20, 8)
         exclude = st.checkbox(
             "Hide this technique's rules (as the agent sees it when writing a new rule)",
@@ -112,6 +119,28 @@ def pick_step(index: ReferenceIndex | str) -> None:
                 args=(rule.rule_yaml, f"SigmaHQ: {rule.title}", rule.techniques),
             )
 
+    with st.expander("Import your own rules (Sigma YAML)"):
+        st.caption(
+            "Already have rules in your SIEM? Export them as Sigma (most SIEM vendors and sigma-cli can) "
+            "and drop the files here: each is validated and can be tested like a community rule. Rules in "
+            "a SIEM's own query language (SPL, KQL) aren't supported."
+        )
+        uploads = st.file_uploader("Sigma rule files", type=["yml", "yaml"], accept_multiple_files=True)
+        for i, upload in enumerate(uploads or []):
+            text = upload.getvalue().decode("utf-8", errors="replace")
+            check = validate_rule(text)
+            try:
+                tags = (yaml.safe_load(text) or {}).get("tags", []) or []
+            except yaml.YAMLError:
+                tags = []
+            c1, c2 = st.columns([3, 1], vertical_alignment="center")
+            state = "valid" if check.valid else f"not valid: {'; '.join(check.errors)[:160]}"
+            c1.markdown(f"**{md(upload.name)}** · {md(state)}")
+            c2.button(
+                "Test it →", key=f"import_{i}_{upload.name}", disabled=not check.valid,
+                on_click=open_rule, args=(text, f"imported: {upload.name}", techniques_from_tags(tags)),
+            )  # fmt: skip
+
     with st.expander("Or start from a sample rule (works without the SigmaHQ index)"):
         fixtures = sorted((get_settings().data_dir / "fixtures" / "rules").glob("*.yml"))
         if fixtures:
@@ -143,7 +172,7 @@ def test_step(events: list[Event]) -> None:
     )
     validation_view(rule_yaml)
     card = run(rule_yaml, events)
-    scorecard_view(card, events)
+    scorecard_view(card, events, rule_yaml)
     if card.valid and card.misses:
         st.button(
             "Harden it →", type="primary", on_click=st.session_state.update, kwargs={"rules_step": "harden"}
@@ -166,7 +195,7 @@ def summary_line(card: Scorecard) -> str:
     return " ".join(parts)
 
 
-def scorecard_view(card: Scorecard, events: list[Event]) -> None:
+def scorecard_view(card: Scorecard, events: list[Event], rule_yaml: str = "") -> None:
     if not card.valid:
         st.error(f"Rule could not be evaluated: {md(card.error)}")
         return
@@ -194,35 +223,18 @@ def scorecard_view(card: Scorecard, events: list[Event]) -> None:
     )
     matched = set(card.matched_event_ids)
     problems = [e for e in events if (e.event_id in matched) == (e.label == "benign")]
-    with st.expander(f"Every event ({len(problems)} missed or false alarm, of {len(events)})"):
-        if st.toggle("Only missed attacks and false alarms", value=True, key="only_problems"):
-            events = problems
-            if not events:
-                st.success("Nothing missed and no false alarms on these events.")
-        _events_table(events, matched)
-
-
-def _events_table(events: list[Event], matched: set[str]) -> None:
-    table(
-        [
-            {
-                "event": e.event_id,
-                "label": e.label,
-                "transform": e.transform,
-                "split": e.split,
-                "fired": e.event_id in matched,
-                "outcome": outcome(e, e.event_id in matched),
-                "command_line": e.command_line,
-            }
-            for e in events
-        ],
+    missed = sum(e.label == "attack" for e in problems)
+    st.markdown(f"**What slipped past: {missed} missed attack(s), {len(problems) - missed} false alarm(s)**")
+    st.caption(
+        "Highlighted: the text this rule looks for in the command line. A disguised attack slips past when "
+        "the disguise breaks exactly that text (an inserted character, a swapped flag, a shortened name)."
     )
-
-
-def outcome(event: Event, fired: bool) -> str:
-    if event.label == "attack":
-        return "detected" if fired else "MISSED"
-    return "FALSE ALARM" if fired else "ok"
+    if problems:
+        st.html(grid(problems, {"this rule": (rule_yaml, matched)}))
+    else:
+        st.success("Nothing missed and no false alarms on these events.")
+    with st.expander(f"Every event, grouped by attack ({len(events)})"):
+        st.html(grid(events, {"this rule": (rule_yaml, matched)}))
 
 
 def validation_view(rule_yaml: str) -> None:
@@ -238,11 +250,34 @@ def validation_view(rule_yaml: str) -> None:
 # ---- ③ harden ---------------------------------------------------------------------------------
 
 
+def _existing_proposals(rule_yaml: str) -> None:
+    """Say so when the agent already worked on this exact rule, instead of spending calls again."""
+    runs_dir = workspace.runs_dir()
+    target = " ".join(rule_yaml.split())
+    found = [
+        s
+        for s in list_runs(runs_dir)
+        if s.mode == "harden"
+        and " ".join(load_run(runs_dir, s.trace_id).run.original_rule_yaml.split()) == target
+    ]
+    if not found:
+        return
+    approved = sum(s.decision is not None and s.decision.decision == "approved" for s in found)
+    waiting = sum(s.decision is None for s in found)
+    left, right = st.columns([4, 1], vertical_alignment="center")
+    left.info(
+        f"The agent already hardened this rule {len(found)} time(s): {approved} approved, {waiting} waiting "
+        "for a reviewer. Look at those first; asking again spends model calls."
+    )
+    right.button("Open Review →", key="existing_review", on_click=go, args=("review",))
+
+
 def harden_step(events: list[Event], all_events: list[Event], index: ReferenceIndex | None) -> None:
     before = st.session_state.get("before_yaml")
     if not before:
         st.info("Pick a rule first (step ①).")
         return
+    _existing_proposals(before)
     with st.container(border=True):
         st.markdown("**Let the agent harden it**")
         st.caption(
@@ -291,6 +326,18 @@ def harden_step(events: list[Event], all_events: list[Event], index: ReferenceIn
             for t, d in report.per_transform.items()
             if t in TRANSFORMS and (d.attacks or d.benign)
         ],
+    )
+    st.markdown("**Side by side on the same events**")
+    changed = st.toggle("Only events where the two versions differ", value=True, key="compare_changed")
+    st.html(
+        grid(
+            events,
+            {
+                "before": (before, set(report.before.matched_event_ids)),
+                "after": (after, set(report.after.matched_event_ids)),
+            },
+            changed_only=changed,
+        )
     )
     by_id = {e.event_id: e for e in events}
     for title, ids, kind in [

@@ -27,8 +27,11 @@ from detectforge.review import (
     load_run,
     parse_reviewer_keys,
 )
+from detectforge.ui import techniques as tx
 from detectforge.ui.components import delta_pct, export_view, md, pct, rule_title, table
+from detectforge.ui.lookalikes import Lookalike, firing_lookalikes, load_lookalikes
 from detectforge.ui.navigation import header
+from detectforge.ui.review_visuals import check_chips, route_badge, story, variation_chart
 
 FILTERS = {"pending review": "Waiting", "approved": "Approved", "rejected": "Rejected", "all": "All"}
 
@@ -41,7 +44,10 @@ class Verdict(BaseModel):
     text: str
 
 
-def verdict(outcome: HardeningOutcome, decision: ReviewDecision | None) -> Verdict:
+def verdict(
+    outcome: HardeningOutcome, decision: ReviewDecision | None, extra_hits: list[Lookalike] | None = None
+) -> Verdict:
+    """extra_hits: everyday commands outside the dataset that the proposed rule fires on."""
     run, heldout = outcome.run, outcome.heldout_evaluation
     if decision is not None:
         when = f"{decision.decided_at.astimezone():%b %d %H:%M}"
@@ -70,6 +76,14 @@ def verdict(outcome: HardeningOutcome, decision: ReviewDecision | None) -> Verdi
             headline="Check before approving",
             text=f"It raises {len(new_alarms)} new false alarm(s) on legitimate commands the agent never "
             f"saw: {', '.join(new_alarms)}. Look at them below before approving.",
+        )
+    if extra_hits:
+        return Verdict(
+            kind="error",
+            headline="Check before approving",
+            text=f"It fires on {len(extra_hits)} everyday legitimate command(s) that aren't in the test "
+            "data, so the quality checks couldn't see them. Look at them below: approving means these "
+            "would raise alerts.",
         )
     failed = [c.name.replace("_", " ") for c in run.gate.checks if c.blocking and not c.passed]
     if failed:
@@ -108,18 +122,10 @@ def review_tab(runs_dir: Path) -> None:
         return
 
     latest = latest_prompt_versions(runs)
-    left, right = st.columns([3, 1], vertical_alignment="bottom")
-    only_latest = right.toggle(
-        "Current prompts only",
-        value=True,
-        key="review_latest",
-        help=f"Runs from older prompt versions are kept as history (see the Lab) but hidden here. "
-        f"Current: {', '.join(sorted(latest))}.",
-    )
-    runs = [r for r in runs if not only_latest or r.prompt_version in latest]
+    runs = [r for r in runs if r.prompt_version in latest]  # older prompt versions: history, in the Lab
     counts = {k: sum(_state(r) == k for r in runs) for k in FILTERS if k != "all"}
     counts["all"] = len(runs)
-    show = left.radio(
+    show = st.radio(
         "Show",
         list(FILTERS),
         format_func=lambda k: f"{FILTERS[k]} ({counts[k]})",
@@ -132,23 +138,44 @@ def review_tab(runs_dir: Path) -> None:
         st.info("Nothing is waiting for a decision." if show == "pending review" else "No runs here.")
         return
 
-    ids = [r.trace_id for r in runs]
-    if st.session_state.get("review_pick") not in ids:
-        st.session_state["review_pick"] = ids[0]
-    by_id = {r.trace_id: r for r in runs}
-    titles = {r.trace_id: _title(runs_dir, r) for r in runs}
+    outcomes = {r.trace_id: load_run(runs_dir, r.trace_id) for r in runs}
+    groups: dict[str, list[RunSummary]] = {}
+    for r in runs:  # newest first, so each group's first run is its newest attempt
+        groups.setdefault(_rule_key(r, outcomes[r.trace_id]), []).append(r)
+    firsts = [g[0].trace_id for g in groups.values()]
+    group_of = {g[0].trace_id: g for g in groups.values()}
+    titles = {r.trace_id: _title_of(r, outcomes[r.trace_id]) for r in runs}
+    if st.session_state.get("review_pick") not in firsts:
+        st.session_state["review_pick"] = firsts[0]
+    st.caption(
+        f"{len(runs)} proposals for {len(groups)} rules. Repeated attempts at the same rule are grouped; "
+        "open a rule to see each attempt."
+    )
     inbox, detail = st.columns([1, 2.6], gap="large")
     with inbox, st.container(key="inbox"):
-        chosen = st.radio(
+        chosen_group = st.radio(
             "Proposals",
-            ids,
+            firsts,
             format_func=lambda i: md(titles[i]),
-            captions=[_line(by_id[i]) for i in ids],
+            captions=[_line(group_of[i][0], len(group_of[i])) for i in firsts],
             key="review_pick",
             label_visibility="collapsed",
         )
     with detail:
-        outcome = load_run(runs_dir, chosen)
+        attempts = group_of[chosen_group]
+        chosen = chosen_group
+        if len(attempts) > 1:
+            chosen = (
+                st.pills(
+                    "Attempts at this rule",
+                    [a.trace_id for a in attempts],
+                    format_func=lambda i: _attempt_label(i, attempts),
+                    default=chosen_group,
+                    key=f"attempt_{chosen_group}",
+                )
+                or chosen_group
+            )
+        outcome = outcomes[chosen]
         history = decisions(runs_dir, chosen)
         run_detail(outcome, titles[chosen], history[-1] if history else None)
         decision_form(runs_dir, outcome, history)
@@ -156,33 +183,56 @@ def review_tab(runs_dir: Path) -> None:
             export_view(outcome.run.final_rule_yaml, f"proposal-{outcome.run.trace_id[:8]}")
 
 
+def _rule_key(r: RunSummary, outcome: HardeningOutcome) -> str:
+    """Attempts at the same rule: same path, technique and starting rule (writes: same technique)."""
+    start = " ".join(outcome.run.original_rule_yaml.split()) if r.mode == "harden" else ""
+    budget = outcome.provenance.budgets.get("model_calls") if outcome.provenance else None
+    return f"{r.mode}|{r.technique}|{budget}|{start}"
+
+
+def _title_of(r: RunSummary, outcome: HardeningOutcome) -> str:
+    run = outcome.run
+    return rule_title(run.final_rule_yaml or run.original_rule_yaml, f"New rule for {r.technique}")
+
+
+def _attempt_label(trace_id: str, attempts: list[RunSummary]) -> str:
+    i, r = next((n, a) for n, a in enumerate(attempts, 1) if a.trace_id == trace_id)
+    state = {"approved": "✓", "rejected": "✗"}.get(_state(r), "⏳")
+    unseen = pct(r.heldout_after) if r.heldout_mutations else "n/a"
+    return f"#{len(attempts) - i + 1} {state} unseen {unseen}"
+
+
 def _state(r: RunSummary) -> str:
     return r.decision.decision if r.decision else "pending review"
 
 
-def _title(runs_dir: Path, r: RunSummary) -> str:
-    run = load_run(runs_dir, r.trace_id).run
-    return rule_title(run.final_rule_yaml or run.original_rule_yaml, f"New rule for {r.technique}")
-
-
-def _line(r: RunSummary) -> str:
+def _line(r: RunSummary, attempts: int = 1) -> str:
     """The inbox row's second line: technique, path, unseen variations before → after, state."""
-    path = "new rule" if r.mode == "write" else "hardened"
+    path = "written" if r.mode == "write" else "hardened"
     unseen = (
         f"unseen {pct(r.heldout_before)} → {pct(r.heldout_after)}" if r.heldout_mutations else "unseen n/a"
     )
     state = {"approved": "✓ approved", "rejected": "✗ rejected"}.get(_state(r), "waiting")
-    return f"{r.technique} · {path} · {unseen} · {state}"
+    more = f" · {attempts} attempts" if attempts > 1 else ""
+    return f"{tx.label(r.technique, with_id=False)} · {path} · {unseen} · {state}{more}"
 
 
 def run_detail(outcome: HardeningOutcome, title: str, decision: ReviewDecision | None) -> None:
     run, heldout = outcome.run, outcome.heldout_evaluation
-    path = "wrote a new rule" if run.mode == "write" else "hardened a community rule"
     st.markdown(f"### {md(title)}")
-    st.caption(f"{run.technique} · the agent {path}")
+    st.html(
+        route_badge(run.mode, run.technique, len(run.model_calls), run.prompt_tokens + run.completion_tokens)
+    )
 
-    v = verdict(outcome, decision)
+    extra_hits = firing_lookalikes(run.final_rule_yaml, load_lookalikes(get_settings().data_dir))
+    v = verdict(outcome, decision, extra_hits)
     getattr(st, v.kind)(f"**{v.headline}.** {v.text}")
+    if extra_hits:
+        with st.container(border=True):
+            st.markdown("**Fires on everyday commands outside the test data**")
+            for x in extra_hits:
+                st.code(x.cmd, language=None, wrap_lines=True)
+                st.caption(f"Legitimate: {md(x.why)}.")
 
     blocking = [c for c in run.gate.checks if c.blocking]
     new_alarms = heldout.new_false_alarm_event_ids if heldout else []
@@ -216,12 +266,13 @@ def run_detail(outcome: HardeningOutcome, title: str, decision: ReviewDecision |
         "no lost attacks, no new false alarms on the tuning set).",
     )
 
-    if run.rationale:
-        with st.expander("Why the agent changed it"):
-            # Model output: shown literally, so an injected link or "approved" banner can't render.
-            st.markdown(md(run.rationale))
+    story(outcome)
     if run.mode == "write":
-        st.markdown("**New rule** (no usable community rule existed, so the agent wrote this from scratch)")
+        st.markdown(
+            "**Written by the agent.** Community rules for this technique were hidden from it (it may "
+            "only look at other techniques' rules for Sigma style), so the detection logic is its own. "
+            'This is the path when no usable community rule exists, and the evaluation\'s "written" arm.'
+        )
         if run.final_rule_yaml:
             st.code(run.final_rule_yaml, language="yaml")
         else:
@@ -229,6 +280,9 @@ def run_detail(outcome: HardeningOutcome, title: str, decision: ReviewDecision |
     else:
         _hardening_diff(run)
 
+    if heldout and (chart := variation_chart(heldout)):
+        st.markdown("**Unseen variations, by disguise type**")
+        st.vega_lite_chart(chart, width="stretch")
     if heldout:
         with st.expander("Every variation, by type"):
             st.caption(
@@ -248,7 +302,9 @@ def run_detail(outcome: HardeningOutcome, title: str, decision: ReviewDecision |
             )
             if new_alarms:
                 st.markdown("New false alarms: " + md(", ".join(new_alarms)))
-    with st.expander(f"Quality checks ({sum(c.passed for c in blocking)}/{len(blocking)} passed)"):
+    st.markdown("**Quality checks**")
+    st.html(check_chips(run.gate.checks))
+    with st.expander(f"Quality checks in detail ({sum(c.passed for c in blocking)}/{len(blocking)} passed)"):
         table(
             [
                 {
@@ -403,7 +459,8 @@ def decision_form(runs_dir: Path, outcome: HardeningOutcome, history: list[Revie
         k, c = st.columns([1, 2])
         reviewer_key = k.text_input(
             "Reviewer key", key="reviewer_key", type="password", disabled=bool(off),
-            help="Your personal key. The decision is recorded under the name it belongs to.",
+            help="Your personal approver key, issued by your admin (see Settings → Team & access). The "
+            "decision is recorded under the name the key belongs to, so nobody can approve as someone else.",
         )  # fmt: skip
         comment = c.text_input(
             "Comment", key=f"comment_{trace_id}", disabled=bool(off), placeholder="Why approve or reject"
@@ -424,6 +481,11 @@ def decision_form(runs_dir: Path, outcome: HardeningOutcome, history: list[Revie
             )
 
 
+def record_reviewer(record, keys: dict[str, str], reviewer_key: str) -> str:
+    """Who decided, for the confirmation message (never the key itself)."""
+    return md(keys.get(reviewer_key, "you"))
+
+
 def _decide(
     runs_dir: Path, trace_id: str, decision: str, reviewer_key: str, keys: dict[str, str], comment: str
 ) -> None:
@@ -437,5 +499,8 @@ def _decide(
         return
     finally:
         st.session_state["reviewer_key"] = ""  # never keep a key in the session after use
-    where = f" Saved to {runs_dir / 'approved' / (trace_id + '.yml')}." if decision == "approved" else ""
-    st.session_state["review_message"] = f"Rule {record.status}.{where}"
+    where = " It's saved with the approved rules, ready to deploy." if decision == "approved" else ""
+    nxt = " The next proposal is open." if st.session_state.get("review_show") == "pending review" else ""
+    st.session_state["review_message"] = (
+        f"Rule {record.status} by {record_reviewer(record, keys, reviewer_key)}.{where}{nxt}"
+    )

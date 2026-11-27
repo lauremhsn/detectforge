@@ -1,0 +1,68 @@
+# Continuous validation: every night, re-check the selected rules against SigmaHQ's latest release.
+# Fails (so GitHub notifies the maintainers) when a rule was removed upstream or its evasion resistance
+# dropped; the report is in the run's summary. It changes nothing: moving to a new release is a person's call.
+name: nightly-revalidation
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  revalidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Cache the pinned SigmaHQ index
+        uses: actions/cache@v4
+        with:
+          path: data/sigmahq
+          key: sigmahq-${{ hashFiles('src/detectforge/reference/sigmahq.py', 'src/detectforge/reference/index.py') }}
+      - name: Fetch the pinned SigmaHQ release (checksum-verified)
+        run: test -f data/sigmahq/index.jsonl || uv run detectforge sigmahq fetch
+      - name: Re-check the rules against the latest SigmaHQ release
+        run: uv run python scripts/revalidate_latest.py
+
+  # SIEM parity: the same rules, exported as Elastic Lucene queries, run in a real Elasticsearch
+  # on the same events; the summary lists every rule where Elastic and our matcher disagree.
+  elastic-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Cache the pinned SigmaHQ index
+        uses: actions/cache@v4
+        with:
+          path: data/sigmahq
+          key: sigmahq-${{ hashFiles('src/detectforge/reference/sigmahq.py', 'src/detectforge/reference/index.py') }}
+      - name: Fetch the pinned SigmaHQ release (checksum-verified)
+        run: test -f data/sigmahq/index.jsonl || uv run detectforge sigmahq fetch
+      - name: Compare our matcher with Elasticsearch
+        run: uv run python scripts/elastic_parity.py --url http://localhost:9200 --json elastic-parity.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elastic-parity
+          path: elastic-parity.json

@@ -16,8 +16,9 @@ from pydantic import BaseModel, ValidationError
 
 from detectforge.eval.arms import ArmResult
 from detectforge.review import list_runs, load_run
+from detectforge.ui import techniques as tx
 from detectforge.ui.components import md, pct, table
-from detectforge.ui.navigation import go_button, header, open_rule
+from detectforge.ui.navigation import go, go_button, header, open_rule
 
 _TACTIC = re.compile(r"^attack\.([a-z][a-z_-]+)$")  # attack.persistence, not attack.t1053 / attack.g0016
 
@@ -40,6 +41,19 @@ class CoverageRow(BaseModel):
     evaded_by: list[str]
     hardened: RunCell | None
     written: RunCell | None
+
+
+def _in_use(cells: list[RunCell]) -> RunCell:
+    """The run that stands for a rule on the posture view (cells are newest first).
+
+    The approved version is what a team would deploy, so it wins. Without one, the newest proposal
+    still waiting for a reviewer. Only if every proposal was rejected, the newest rejected one, which
+    the card then labels as rejected (the community rule stays in use).
+    """
+    for wanted in ("approved", "pending review"):
+        if found := next((c for c in cells if c.decision == wanted), None):
+            return found
+    return cells[0]
 
 
 def _normalized(text: str) -> str:
@@ -66,8 +80,10 @@ def coverage_rows(
         except ValidationError:
             arm1 = {}
 
-    hardened: dict[str, RunCell] = {}  # by normalized original rule text; newest run wins
-    written: dict[str, RunCell] = {}  # by technique
+    # Every run of each rule, then the one that represents it today (see _in_use): the approved version
+    # if there is one, never simply the newest run, which may be a rejected attempt.
+    hardened_runs: dict[str, list[RunCell]] = {}  # by normalized original rule text
+    written_runs: dict[str, list[RunCell]] = {}  # by technique
     for summary in list_runs(runs_dir):  # newest first
         cell = RunCell(
             status=summary.status,
@@ -77,10 +93,12 @@ def coverage_rows(
             decision=summary.decision.decision if summary.decision else "pending review",
         )
         if summary.mode == "write":
-            written.setdefault(summary.technique, cell)
+            written_runs.setdefault(summary.technique, []).append(cell)
         else:
             original = _normalized(load_run(runs_dir, summary.trace_id).run.original_rule_yaml)
-            hardened.setdefault(original, cell)
+            hardened_runs.setdefault(original, []).append(cell)
+    hardened = {k: _in_use(v) for k, v in hardened_runs.items()}
+    written = {k: _in_use(v) for k, v in written_runs.items()}
 
     rows = []
     for rule in (selection or {}).get("rules", []):
@@ -196,13 +214,34 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
     )
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Techniques", len(by_technique))
+    c1.caption("Attacker behaviours your rules are meant to catch.")
     c2.metric(
         "Rules evaded as published",
         f"{len(evaded)}/{len(scored)}",
         help="At least one attacker variation slips past the community rule as published.",
     )
+    c2.caption(
+        f"Measured rules an attacker can disguise their way past ({len(rows) - len(scored)} not measured)."
+    )
     c3.metric("Hardened by the agent", sum(1 for r in rows if r.hardened))
+    c3.caption("Rules the agent proposed a stronger version of.")
     c4.metric("Approved changes", approved)
+    c4.caption("Improvements a person signed off, ready to deploy.")
+
+    st.subheader("Your coverage, by what the attacker is trying to do")
+    st.caption(
+        "Each tile is an attacker technique, grouped by goal. Colour = how much of the disguised versions "
+        "your rules catch today (with an approved fix counted). Green: all · amber: some slip past · red: "
+        "most slip past · grey: no variations to test yet."
+    )
+    st.html(goal_map(by_technique))
+
+    st.subheader("What to work on next")
+    st.caption(
+        "Ranked automatically by risk: how much slips past, times how severe the rule says the behaviour is, "
+        "lower when an approved fix exists. You don't have to choose; start at the top."
+    )
+    _priority_queue(rows, rule_texts)
 
     head, choice = st.columns([3, 1], vertical_alignment="bottom")
     head.subheader("Techniques")
@@ -225,16 +264,121 @@ def coverage_page(data_dir: Path, runs_dir: Path, rule_texts: dict[str, str], pe
         if chart := resistance_chart(by_technique):
             st.vega_lite_chart(chart, width="stretch")
             st.caption(
-                "The same rule before and after hardening, on variation types the agent never saw. Mean "
-                f"over the {summary.with_heldout} of {summary.hardened} hardened rules that have such "
-                f"variations: {pct(summary.before)} → {pct(summary.after)}; the others are n/a and not "
-                "averaged in."
+                "The same rule before and after hardening, on variation types the agent never saw. Each "
+                "rule shows the version in use today: the approved one, else the newest waiting for a "
+                f"reviewer. Mean over those {summary.with_heldout} rules: {pct(summary.before)} → "
+                f"{pct(summary.after)}. The report's evaluation is different on purpose: it averages all "
+                "3 runs of each test rule, accepted or not, so one lucky run can't flatter it."
             )
         else:
             st.caption("No hardened rule with unseen variations to compare yet.")
 
     with st.expander("Every rule (table, report download)"):
         _rules_table(rows, rule_texts)
+
+
+LEVEL_WEIGHT = {"critical": 4, "high": 3, "medium": 2, "low": 1, "informational": 0.5}
+
+
+def _level(rule_yaml: str | None) -> str:
+    try:
+        return str((yaml.safe_load(rule_yaml or "") or {}).get("level") or "medium")
+    except yaml.YAMLError:
+        return "medium"
+
+
+def effective(rows: list[CoverageRow]) -> float | None:
+    """A technique's coverage today: its weakest rule, counting an approved fix's unseen score."""
+    scores = []
+    for r in rows:
+        if r.community is None:
+            continue
+        fixed = next(
+            (c for c in (r.hardened, r.written) if c and c.decision == "approved" and c.heldout_mutations),
+            None,
+        )
+        scores.append(max(r.community, fixed.heldout_after or 0.0) if fixed else r.community)
+    return min(scores) if scores else None
+
+
+def _tile_color(score: float | None) -> str:
+    if score is None:
+        return "#8A8178"
+    if score >= 1:
+        return "#2F7D4F"
+    return "#B45309" if score >= 0.5 else "#B42318"
+
+
+def goal_map(by_technique: dict[str, list[CoverageRow]]) -> str:
+    """Tiles per attacker goal. Built only from our own technique names and numbers (no rule text)."""
+    groups: dict[str, list[str]] = {}
+    for tid in by_technique:
+        groups.setdefault(tx.goal(tid).label, []).append(tid)
+    parts = [
+        "<style>.gm{display:flex;flex-direction:column;gap:.55rem}.gr{display:flex;gap:.5rem;align-items:"
+        "stretch;flex-wrap:wrap}.gl{flex:0 0 190px;color:#2A2622;font-weight:600;font-size:.9rem;padding-top"
+        ":.45rem}.tl{flex:0 1 170px;border-radius:.55rem;padding:.45rem .6rem;color:#fff;font-size:.8rem;"
+        "line-height:1.25}.tl b{display:block;font-size:.95rem}.tl small{opacity:.8}</style><div class='gm'>"
+    ]
+    for label, tids in sorted(groups.items()):
+        icon = tx.goal(tids[0]).icon
+        tiles = []
+        for tid in sorted(tids, key=lambda t: effective(by_technique[t]) or 2):
+            score = effective(by_technique[tid])
+            shown = "not tested" if score is None else f"{score:.0%} caught"
+            tiles.append(
+                f"<div class='tl' style='background:{_tile_color(score)}'><b>{shown}</b>"
+                f"{tx.technique(tid).name}<br><small>{tid}</small></div>"
+            )
+        parts.append(f"<div class='gr'><div class='gl'>{icon} {label}</div>{''.join(tiles)}</div>")
+    return "".join(parts) + "</div>"
+
+
+def _priority_queue(rows: list[CoverageRow], rule_texts: dict[str, str], top: int = 5) -> None:
+    ranked = []
+    for r in rows:
+        if r.community is None or r.community >= 1:
+            continue
+        level = _level(rule_texts.get(r.rule_id))
+        fix = next((c for c in (r.hardened, r.written) if c and c.decision == "approved"), None)
+        waiting = any(c and c.decision == "pending review" for c in (r.hardened, r.written))
+        today = effective([r]) or 0.0  # with an approved fix counted at what it really catches
+        if today >= 1:
+            continue
+        risk = (1 - today) * LEVEL_WEIGHT.get(level, 2)
+        ranked.append((risk, r, level, fix, waiting))
+    if not ranked:
+        st.success("Every measured rule catches every variation we have. Nothing to do.")
+        return
+    for i, (_risk, r, level, fix, waiting) in enumerate(sorted(ranked, key=lambda x: -x[0])[:top], 1):
+        with st.container(border=True):
+            left, right = st.columns([4, 1], vertical_alignment="center")
+            left.markdown(f"**{i}. {tx.label(r.technique)}** · {level} severity")
+            approved = fix is not None
+            if fix and fix.heldout_mutations and (fix.heldout_after or 0) <= (fix.heldout_before or 0):
+                why = (
+                    f"an approved fix exists but still catches only {pct(fix.heldout_after)} of unseen "
+                    "variations: harden it again or write a new rule"
+                )
+            elif fix:
+                why = f"an approved fix catches {_heldout_text(fix)} of unseen variations; deploy it"
+            elif waiting:
+                why = "a fix is waiting for a reviewer"
+            else:
+                why = "no fix yet: test it and let the agent harden it"
+            left.caption(
+                f"{md(r.title)}: catches {pct(r.community)} of disguised attacks as published "
+                f"(beaten by {', '.join(r.evaded_by)}) · {why}."
+            )
+            if waiting and not approved:
+                right.button("Review it →", key=f"pq_review_{r.rule_id}", on_click=go, args=("review",))
+            elif r.rule_id in rule_texts:
+                right.button(
+                    "Open rule →",
+                    key=f"pq_{r.rule_id}",
+                    on_click=open_rule,
+                    args=(rule_texts[r.rule_id], f"SigmaHQ: {r.title}", [r.technique]),
+                )
 
 
 def _needs_attention(rows: list[CoverageRow]) -> bool:
@@ -245,18 +389,27 @@ def _technique_card(technique: str, rows: list[CoverageRow], rule_texts: dict[st
     weakest = min(rows, key=lambda r: r.community if r.community is not None else 2.0)
     evaded_by = sorted({x for r in rows for x in r.evaded_by})
     with st.container(border=True):
-        st.markdown(f"**{technique}** &nbsp; {badge(weakest.community)}")
+        st.markdown(f"**{tx.label(technique)}** &nbsp; {badge(weakest.community)}")
         st.caption(", ".join(sorted({x for r in rows for x in r.tactics})) or "no tactic tag")
         st.markdown(
             f"{len(rows)} rule{'s' if len(rows) != 1 else ''} · weakest: {md(weakest.title)}",
             help="The community rule that catches the fewest attacker variations, as published.",
         )
-        st.caption(
-            ("Evaded by " + ", ".join(evaded_by)) if evaded_by else "No variation slips past these rules."
-        )
+        if evaded_by:
+            st.caption("Evaded by " + ", ".join(evaded_by))
+        elif all(r.community is None for r in rows):
+            st.caption("No attacker variations exist for these rules yet, so their resistance is unknown.")
+        else:
+            st.caption("Every attacker variation we have is caught.")
         best = best_hardened(rows)
-        if best:
-            st.caption(f"After hardening: {_heldout_text(best)} of unseen variations · {best.decision}")
+        if best and best.decision == "rejected":
+            st.caption(
+                f"Hardening proposed ({_heldout_text(best)} of unseen variations) but rejected by a "
+                "reviewer: the community rule stays in use."
+            )
+        elif best:
+            state = "approved" if best.decision == "approved" else "waiting for a reviewer"
+            st.caption(f"After hardening: {_heldout_text(best)} of unseen variations · {state}")
         elif any(r.hardened for r in rows):
             st.caption("Hardened; no unseen variations to measure it on.")
         if weakest.rule_id in rule_texts:
@@ -413,7 +566,7 @@ def resistance_chart(by_technique: dict[str, list[CoverageRow]]) -> dict | None:
                 "field": "series",
                 "type": "nominal",
                 "title": None,
-                "scale": {"domain": [BEFORE, AFTER], "range": ["#F59E0B", "#3B82F6"]},
+                "scale": {"domain": [BEFORE, AFTER], "range": ["#E0A458", "#3D5A73"]},
                 "legend": {"orient": "top"},
             },
             "tooltip": [

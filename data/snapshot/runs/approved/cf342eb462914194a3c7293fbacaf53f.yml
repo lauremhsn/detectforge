@@ -1,0 +1,22 @@
+title: Regsvr32 Remote Scriptlet Execution
+id: 17f940f0-4848-51a4-bdef-2b6ec309dc61
+status: experimental
+description: "Detects regsvr32.exe being used to load a remote scriptlet (.sct) file via the /i: argument, which is a technique used for defense evasion and code execution (ATT&CK T1218.010)."
+author: DetectForge (agent-written, human-reviewed before deployment)
+date: '2026-11-22'
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_image:
+    - Image|endswith: \regsvr32.exe
+    - OriginalFileName: REGSVR32.EXE
+  selection_i_url:
+    CommandLine|re: '(?i)[/\\-]i:\s*https?://'
+  condition: selection_image and selection_i_url
+falsepositives:
+  - Legitimate software installation or testing that registers remote scriptlets (rare)
+level: high
+tags:
+  - attack.defense_evasion
+  - attack.t1218.010
