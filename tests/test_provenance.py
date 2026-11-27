@@ -52,12 +52,15 @@ def test_fingerprints_are_stable(fixture_events, tmp_path):
 def test_reporting_files_are_left_out_by_path_not_folder(tmp_path):
     pkg = tmp_path / "pkg"
     (pkg / "eval").mkdir(parents=True)
-    (pkg / "eval" / "arms.py").write_text("scores = 1\n")
+    (pkg / "harness").mkdir()
+    (pkg / "harness" / "compare.py").write_text("scores = 1\n")
     first = code_fingerprint(pkg)
-    (pkg / "eval" / "export.py").write_text("report only")  # reporting: no effect on a result
-    (pkg / "eval" / "thresholds.py").write_text("report only")
+    for name in ("arms", "metrics", "regression", "export", "thresholds"):
+        (pkg / "eval" / f"{name}.py").write_text("scores saved runs after the fact")
+    assert code_fingerprint(pkg) == first  # rescoring a corpus never orphans it
+    (pkg / "eval" / "arms.py").write_text("scores = 2\n")
     assert code_fingerprint(pkg) == first
-    (pkg / "eval" / "arms.py").write_text("scores = 2\n")  # same folder, but it scores: counts
+    (pkg / "harness" / "compare.py").write_text("scores = 2\n")  # what the agent sees and a run saves
     second = code_fingerprint(pkg)
     assert second != first
     (pkg / "export.py").write_text("x")  # the name alone isn't enough: only eval/export.py is out
