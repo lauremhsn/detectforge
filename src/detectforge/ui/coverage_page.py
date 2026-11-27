@@ -303,7 +303,7 @@ def effective(rows: list[CoverageRow]) -> float | None:
 
 def _tile_color(score: float | None) -> str:
     if score is None:
-        return "#334155"
+        return "#64748B"
     if score >= 1:
         return "#166534"
     return "#B45309" if score >= 0.5 else "#B91C1C"
@@ -316,7 +316,7 @@ def goal_map(by_technique: dict[str, list[CoverageRow]]) -> str:
         groups.setdefault(tx.goal(tid).label, []).append(tid)
     parts = [
         "<style>.gm{display:flex;flex-direction:column;gap:.55rem}.gr{display:flex;gap:.5rem;align-items:"
-        "stretch;flex-wrap:wrap}.gl{flex:0 0 190px;color:#C7D3E6;font-weight:600;font-size:.9rem;padding-top"
+        "stretch;flex-wrap:wrap}.gl{flex:0 0 190px;color:#1E2B45;font-weight:600;font-size:.9rem;padding-top"
         ":.45rem}.tl{flex:0 1 170px;border-radius:.55rem;padding:.45rem .6rem;color:#fff;font-size:.8rem;"
         "line-height:1.25}.tl b{display:block;font-size:.95rem}.tl small{opacity:.8}</style><div class='gm'>"
     ]
@@ -566,7 +566,7 @@ def resistance_chart(by_technique: dict[str, list[CoverageRow]]) -> dict | None:
                 "field": "series",
                 "type": "nominal",
                 "title": None,
-                "scale": {"domain": [BEFORE, AFTER], "range": ["#F59E0B", "#3B82F6"]},
+                "scale": {"domain": [BEFORE, AFTER], "range": ["#F59E0B", "#1F4FB8"]},
                 "legend": {"orient": "top"},
             },
             "tooltip": [

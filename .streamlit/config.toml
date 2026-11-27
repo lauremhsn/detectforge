@@ -10,28 +10,29 @@ gatherUsageStats = false
 # No "Deploy" button or developer menu: this is a product, not a notebook.
 toolbarMode = "minimal"
 
-# A calm "security console" look: dark navy, one blue accent, readable type.
+# A calm, light "security console" look that reads well on a projector or LCD: soft blue-grey
+# background (not white, so no glare), off-white cards, deep navy text, steel-blue accent, teal second.
 # Fonts come from Google Fonts; without a connection the browser falls back to its sans-serif.
 [theme]
-base = "dark"
-primaryColor = "#3B82F6"
-backgroundColor = "#0B1220"
-secondaryBackgroundColor = "#131D33"
-textColor = "#E5ECF6"
-borderColor = "#22304D"
-linkColor = "#7DB3FF"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, sans-serif"
+base = "light"
+primaryColor = "#1F4FB8"
+backgroundColor = "#E9EEF4"
+secondaryBackgroundColor = "#DCE4EE"
+textColor = "#13203A"
+borderColor = "#C9D4E2"
+linkColor = "#1F4FB8"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap, sans-serif"
 codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap, monospace"
-headingFontWeights = [700, 650, 600, 600, 600, 600]
-baseRadius = "0.6rem"
-buttonRadius = "0.5rem"
+headingFontWeights = [800, 700, 650, 600, 600, 600]
+baseRadius = "0.7rem"
+buttonRadius = "0.55rem"
 showWidgetBorder = true
-greenColor = "#22C55E"
-orangeColor = "#F59E0B"
-redColor = "#EF4444"
-blueColor = "#3B82F6"
+greenColor = "#15803D"
+orangeColor = "#B45309"
+redColor = "#B91C1C"
+blueColor = "#1F4FB8"
 
 [theme.sidebar]
-backgroundColor = "#0E1729"
-secondaryBackgroundColor = "#16223A"
-borderColor = "#1C2942"
+backgroundColor = "#DCE4EE"
+secondaryBackgroundColor = "#CFD9E6"
+borderColor = "#C9D4E2"

@@ -138,8 +138,25 @@ addition to the held-out benign set, re-scored on the saved rules without re-run
 ## Cost and time
 
 - **Cost: $0.** Free models only (L16). The binding constraint is the provider's daily request limit, 1,000 calls.
-- **Model calls per run:** 8.0 hardened, 11.0 written. **[pending: tokens per approved rule from `detectforge export`]**
+- **Model calls per run:** 8.0 hardened, 11.0 written.
 - **Time per run, dominated by free-tier response time:** about 5 minutes hardened, 2 minutes written.
+- **Tokens (measured, test split):**
+
+  | | Input / run | Output / run | Approved rules | Tokens per approved rule (in + out) |
+  |---|---|---|---|---|
+  | Hardened | 53.6k | 13.7k | 7 of 9 | 69k + 18k |
+  | Written | 63.7k | 5.7k | 27 of 54 | 127k + 11k |
+
+- **What it would cost on a paid model (L16).** These are illustrative tiers, not vendor quotes: a small model at $0.25 / $1.25 per million input / output tokens, and a large one at $3 / $15. Replace them with a provider's current prices.
+
+  | | Small model | Large model |
+  |---|---|---|
+  | One hardening run | $0.03 | $0.37 |
+  | One approved hardened rule (all runs ÷ approved) | $0.04 | $0.47 |
+  | One written run | $0.02 | $0.28 |
+  | One approved written rule | $0.05 | $0.55 |
+
+  Even on a large model, an approved rule costs well under a dollar. Against an engineer's time to write and test dozens of variations by hand, model cost isn't the constraint; reviewer time is.
 
 ## Dev ablation: model-call budget for writing
 

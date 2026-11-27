@@ -76,6 +76,10 @@ def menu(pending: int) -> str:
     if PAGE not in st.session_state:
         wanted = st.query_params.get(PAGE)
         st.session_state[PAGE] = wanted if wanted in BY_KEY else "home"
+    if st.session_state[PAGE] == "home":  # the landing page stands on its own, without the app's tabs
+        if st.query_params.get(PAGE) != "home":
+            st.query_params[PAGE] = "home"
+        return "home"
 
     def label(key: str) -> str:
         badge = f"  ({pending})" if key == "review" and pending else ""
@@ -83,10 +87,13 @@ def menu(pending: int) -> str:
 
     with st.container(key="topbar"):
         brand, nav = st.columns([1, 5], vertical_alignment="center")
-        brand.button("🛡️ DetectForge", key="brand", on_click=go, args=("home",), type="tertiary")
+        brand.button(
+            "🛡️ DetectForge", key="brand", on_click=go, args=("home",), type="tertiary",
+            help="Back to the product page",
+        )  # fmt: skip
         page = nav.radio(
             "Areas",
-            [s.key for s in SECTIONS],
+            [s.key for s in SECTIONS if s.key != "home"],
             format_func=label,
             key=PAGE,
             horizontal=True,

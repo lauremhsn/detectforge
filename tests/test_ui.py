@@ -61,8 +61,12 @@ SECTIONS = ["home", "coverage", "request", "rules", "review", "reports", "operat
 def test_every_section_renders_and_says_what_it_is_for(data_dir, page):
     at = open_app(page)
     assert not at.exception
+    if page == "home":  # the landing page stands alone: no app tabs, links into the platform
+        assert not [r for r in at.radio if r.key == "page"]
+        assert at.query_params["page"] == "home"
+        return
     menu = at.radio(key="page")  # the top bar, not the sidebar
-    titles = ["Home", "Posture", "Threats", "Rules", "Review", "Reports", "Lab", "Settings"]
+    titles = ["Posture", "Threats", "Rules", "Review", "Reports", "Lab", "Settings"]
     assert [o.split("  (")[0] for o in menu.options] == titles
     assert menu.value == page
     assert at.query_params["page"] == page  # every area has its own shareable URL

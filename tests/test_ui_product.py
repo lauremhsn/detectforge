@@ -154,7 +154,7 @@ def test_home_guides_people_to_each_job(evaluated, with_index):
     at = open_app("coverage")
     assert not at.exception
     assert any("1 proposal waiting" in c.value for c in at.caption)
-    assert at.radio(key="page").options[4].endswith("(1)")  # pending count on the top bar
+    assert at.radio(key="page").options[3].endswith("(1)")  # pending count on the top bar
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Rules evaded as published"] == "1/1" and metrics["Hardened by the agent"] == "1"
 

@@ -19,9 +19,9 @@ _BADGE = (
     "<div style='display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:-.2rem 0 .6rem 0'>"
     "<span style='background:{bg};color:#fff;border-radius:999px;padding:.3rem .8rem;font-weight:600;"
     "font-size:.88rem'>{route}</span>"
-    "<span style='background:#1A2847;color:#C7D3E6;border-radius:999px;padding:.3rem .8rem;font-size:.85rem'>"
+    "<span style='background:#D6E2F5;color:#1E2B45;border-radius:999px;padding:.3rem .8rem;font-size:.85rem'>"
     "{technique}</span>"
-    "<span style='color:#7C8BA6;font-size:.8rem'>agent cost: {calls} model calls · {tokens} tokens</span></div>"
+    "<span style='color:#4B5B73;font-size:.8rem'>agent cost: {calls} model calls · {tokens} tokens</span></div>"
 )
 
 
@@ -135,18 +135,18 @@ def check_chips(checks) -> str:
     chips = []
     for c in checks:
         if c.passed:
-            bg, mark = "#14532D", "✓"
+            bg, fg, mark = "#DCFCE7", "#166534", "✓"
         elif c.blocking:
-            bg, mark = "#7F1D1D", "✗"
+            bg, fg, mark = "#FEE2E2", "#991B1B", "✗"
         else:
-            bg, mark = "#78350F", "!"
+            bg, fg, mark = "#FEF3C7", "#92400E", "!"
         chips.append(
-            f"<span title='{html.escape(c.detail, quote=True)}' style='background:{bg};color:#fff;"
+            f"<span title='{html.escape(c.detail, quote=True)}' style='background:{bg};color:{fg};"
             "border-radius:999px;padding:.22rem .65rem;font-size:.8rem;white-space:nowrap'>"
             f"{mark} {html.escape(c.name.replace('_', ' '))}</span>"
         )
     legend = (
-        "<div style='color:#7C8BA6;font-size:.78rem;margin-top:.35rem'>✓ passed · ✗ failed (blocks "
+        "<div style='color:#4B5B73;font-size:.78rem;margin-top:.35rem'>✓ passed · ✗ failed (blocks "
         "approval by default) · ! warning, worth a look · hover a check for its detail</div>"
     )
     return f"<div style='display:flex;flex-wrap:wrap;gap:.35rem'>{''.join(chips)}</div>{legend}"
@@ -179,7 +179,7 @@ def variation_chart(heldout: HardeningReport) -> dict | None:
                 "field": "rule",
                 "type": "nominal",
                 "title": None,
-                "scale": {"domain": ["before", "after"], "range": ["#F59E0B", "#3B82F6"]},
+                "scale": {"domain": ["before", "after"], "range": ["#F59E0B", "#1F4FB8"]},
                 "legend": {"orient": "top"},
             },
             "tooltip": [
