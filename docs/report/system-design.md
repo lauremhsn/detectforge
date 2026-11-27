@@ -1,8 +1,7 @@
 # Report draft: Users, Agentic justification, System design
 
-Draft text for the final report. Numbers marked **[re-run]** come from the dev runs on the
-rebalanced split and are filled in once those runs are done; the current values are from the
-earlier dev runs (`detectforge export`). Sources: `docs/architecture.md`, `docs/code-walkthrough.md`,
+Draft text for the final report. Numbers are from the test split, run once after the prompts were
+frozen (`detectforge export`, `scripts/agent_metrics.py`). Sources: `docs/architecture.md`, `docs/code-walkthrough.md`,
 the code.
 
 ---
@@ -103,15 +102,16 @@ case-insensitive regexes).
 - **Provenance:** each run records the prompt version, model, budgets and fingerprints of the code, the
   starting rule and the events, so results from different setups are never mixed, and finished runs
   with the same setup are reused instead of re-run.
-- **Regression gates:** 26+ failures found on real runs each have a regression test; CI recomputes the
-  community-rule baseline on every change and fails on any difference.
+- **Regression gates:** every failure found on real runs (29 in the failure matrix) has a regression test;
+  CI recomputes the community-rule baseline on every change and fails on any difference. A nightly job
+  re-checks the rules against SigmaHQ's latest release and compares our matcher with a real Elasticsearch.
 
 ## Real-world constraints
 
 | Constraint | How it is handled |
 |---|---|
-| **Cost** | Free models only (an OpenRouter free model with a free fallback); the constraint is requests per day, shown against today's usage. Mean model calls per run: about 8 for hardening and writing; per approved rule: 32 (hardening) and 65 (writing). **[re-run]** |
-| **Latency** | About 4 minutes per hardening run and 3 per written rule on free-tier models, dominated by model response time. **[re-run]** |
+| **Cost** | Free models only (an OpenRouter free model with a free fallback); the constraint is requests per day, shown against today's usage. Measured on the test split: 8.0 model calls per hardening run and 11.0 per written rule; per approved rule, 10.3 (hardening) and 22.0 (writing). At illustrative paid prices this is about $0.04 to $0.55 per approved rule (results.md, Cost). |
+| **Latency** | Measured on the test split: about 5.4 minutes per hardening run and 2.0 per written rule on free-tier models, dominated by model response time (queueing). |
 | **Privacy** | Only public (SigmaHQ, Atomic Red Team, LOLBAS) and synthetic data. Runs locally; the API key and reviewer keys stay in the environment file and never reach saved runs, traces or logs. |
 | **Human approval** | The agent can only propose. Approving needs a personal reviewer key, and the decision is recorded under its owner. |
 | **Security** | The agent is treated as untrusted: least-privilege tools, untrusted text quoted as data and escaped in the UI, no path to held-out data (see the Security section). |

@@ -103,6 +103,7 @@ How each failure kind is handled:
 | Time per run (free tier, mostly queueing) | 5.4 min | 2.0 min |
 | Model calls per approved rule | 10.3 | 22.0 |
 | Cost | $0 (free models; the limit is 1,000 requests a day) | $0 |
+| Estimated on a paid model (illustrative tiers: small $0.25/$1.25, large $3/$15 per million tokens in/out) | $0.04 / $0.47 per approved rule | $0.05 / $0.55 per approved rule |
 
 **Budget ablation, dev only (written rules):** 25 calls instead of 15 raises the pass rate from 10/18 to 17/18 at the same total cost, but the unseen score doesn't rise (71% vs 77%). See `results.md`.
 
@@ -139,7 +140,9 @@ How each failure kind is handled:
   - **Main set (58 items):** an independent labeller against the dataset author's labels.
   - **Pilot (7 new look-alikes):** both team members label blind.
 
-  With 2 labellers, a few dozen items and far more A than B, kappa is unstable and can be near 0 even at high agreement. A labeller marking everything A scores 90% raw agreement and kappa 0.00. So raw agreement is reported next to Cohen's kappa, and every disagreement is discussed as a gap in the rubric. **[pending: the labels]**
+  With 2 labellers, a few dozen items and far more A than B, kappa is unstable and can be near 0 even at high agreement. A labeller marking everything A scores 90% raw agreement and kappa 0.00. So raw agreement is reported next to Cohen's kappa, and every disagreement is discussed as a gap in the rubric.
+
+  **First result: a model rater against the dataset author.** A fresh model, given only the sheet and the rubric (no file access, no tools), labelled all 58 items: **53/58 (91%) raw agreement, Cohen's kappa 0.66** (substantial). All 5 disagreements go the same way: the model says B where the author says A, each for a command that does the *same action* as the attack on a *friendlier target* (an intranet URL, a UNC share, a signed company binary, `cmd < file`). That is a real ambiguity in the rubric: whether a different target makes a near-miss (A) or only context can tell (B). It is reported as model-vs-author, not as human agreement. **[pending: the human labels]**
 - **LLM-as-judge: deliberately not used.** Everything we need to judge can be checked deterministically. A judge model would add cost, its own biases, and memorization risk: it may know the SigmaHQ rules.
 
 ## Benchmarks versus the real world
@@ -150,7 +153,8 @@ A fixed benchmark can be overfitted, and the professor's point stands: a few ben
 |---|---|---|
 | The agent memorizes the variations it tunes on | Held-out **variation types** (omission, insertion, recoding); the agent never sees them | done |
 | Prompts tuned until the numbers look good | Held-out **techniques**: dev for iterating, test run once after the freeze | done |
-| "0 false alarms" only because the look-alike set is small | Stress check: 7 new look-alikes, outside the dataset, re-scored on every saved rule (below) | done; **[pending: pilot labels]** |
+| "0 false alarms" only because the look-alike set is small | Stress check: 29 everyday look-alikes outside the dataset, re-scored on every saved rule (below) | done |
+| The numbers hold only in our own matcher, not in a real SIEM | SIEM parity: every rule's exported query run in a real Elasticsearch on the same events (below) | done |
 | The model recalls SigmaHQ rules instead of reasoning | Memorization probe: report memorized vs clean techniques separately | **[pending]** |
 | A mutation no longer works as an attack | VM check: run a sample in Windows with Sysmon | **[pending]** |
 | A result depends on one lucky run | 3 runs per setup, reported with spread and pass@k | done |
@@ -158,11 +162,9 @@ A fixed benchmark can be overfitted, and the professor's point stands: a few ben
 
 ### Stress check: look-alikes the dataset doesn't have
 
-`scripts/stress_check.py` replays every saved rule, in all three arms, against 7 legitimate commands found while reviewing the test split, with no model calls:
-- reg query / add / delete on `HKLM\SYSTEM` and `HKLM\SECURITY`;
-- deleting a Run-key value;
-- `wmic service … delete`;
-- a system-state backup.
+`scripts/stress_check.py` replays every saved rule, in all three arms, against 29 legitimate commands outside the dataset (`data/eval/extra_lookalikes.yml`), with no model calls:
+- the 7 found while reviewing the test split: reg query / add / delete on `HKLM\SYSTEM` and `HKLM\SECURITY`, deleting a Run-key value, `wmic service … delete`, a system-state backup;
+- 22 more everyday admin commands drawn from SigmaHQ's own false-positive notes (querying or disabling tasks, service configuration, listing shadow copies, reading event logs, checking backups), only clear near-misses (class A).
 
 They're kept out of the main event files, whose hash is part of every run's setup key, and reported apart from the frozen results.
 
@@ -179,7 +181,20 @@ They're kept out of the main event files, whose hash is part of every run's setu
 - **On the test split, human review rejected every rule that fires on a look-alike.** On dev, the firing rules are rejected or not yet reviewed.
 - **The gate alone isn't enough here, which is the case for a human approval step.**
 
-All count as false alarms until the pilot labels decide which look-alikes are A (a precise rule must stay silent) and which are B (inherently ambiguous). `--labels` applies them.
+The 22 extra commands barely change the picture: only one of them (`bcdedit /timeout`) trips a single dev rule. The over-breadth is concentrated in a few verbs (`reg query/add/delete`, `wmic … delete`), not spread across the agent's rules. The model rater labels all 7 pilot items A, so they count as false alarms; `--labels` applies human labels once they exist.
+
+### SIEM parity: the same rules in a real Elasticsearch
+
+`scripts/elastic_parity.py` loads the 300 events into Elasticsearch 8.15 with an ECS mapping like Elastic's own, runs each rule's exported query, and compares event by event with DetectForge's matcher. It also runs nightly in CI against an Elasticsearch container.
+
+| Rules | Lucene export: identical | EQL export: identical |
+|---|---|---|
+| 27 community rules | 16 | **27** |
+| 40 approved agent rules | 10 | 14 (21 refused by Elastic) |
+
+- **EQL export matches our matcher exactly on all 27 community rules.** The scores measured here hold in a real SIEM, and the UI now exports EQL by default.
+- **Lucene export is case-sensitive on command lines** (pySigma's output against ECS's `wildcard` field): the rule says `hklm`, the attack `HKLM`, and Elastic misses it (251 event matches lost).
+- **Agent rules that use regular expressions don't port cleanly.** 26 of the 40 approved agent rules use regexes; Elastic's EQL rejects 21 (`\/` escapes, `(?i)`, `\b`). The gate's `deployable` check only tests that a rule converts, which is too weak: it should check the dialect Elastic accepts (future work, a core change).
 
 ## The evaluation set: what it covers and what it doesn't (slide 31)
 

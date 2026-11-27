@@ -1,7 +1,7 @@
 # Report draft: Security, Failure analysis, Limitations
 
-Draft text for the final report. Numbers marked **[re-run]** come from the dev runs on the
-rebalanced split and will be filled in once those runs are done. Sources: `docs/threat-model.md`,
+Draft text for the final report. Numbers are from the test split, run once after the prompts were
+frozen; **[pending]** marks what isn't measured yet. Sources: `docs/threat-model.md`,
 `docs/failure-matrix.md`, `docs/limitations.md` (each claim there has its test or data).
 
 ---
@@ -85,7 +85,10 @@ benign set, such as `reg query …\Run`. In the dev write runs, 4 of 7 written r
 root cause was the data, not the agent: the tuning split contained no benign events, so the gate's
 "no new false alarms" check measured nothing. The gate now warns when that is the case, the
 reviewer sees held-out false alarms in red, and the benign set has been split into tuning and
-held-out near-misses. **[re-run]**: false alarms after the split.
+held-out near-misses. After the split (test, run once): 0 of 9 hardening runs and 0 of 36 written
+runs with tuning variations add a false alarm on unseen legitimate commands; the 4 that do (of 18) are
+zero-shot rules, which had no tuning look-alikes to learn from. A further 29 everyday commands outside
+the dataset found over-broad rules the data couldn't (3 on test); human review rejected all of them.
 
 **4. Sigma semantics the model gets wrong.** Two subtle mistakes produced rules that look right but
 match nothing or too little: regex escapes written twice (`\\b` searches for a literal backslash,
@@ -138,7 +141,7 @@ mutations are checked for preserved behavior on a sample in a Windows VM, not ex
 **One model, few runs.** All results use one free model (with a fallback) and three runs per
 configuration; other models may behave differently, and free-tier latency inflates time per rule.
 The model may have seen SigmaHQ rules during training; the memorization probe reports memorized and
-clean techniques separately. **[re-run]**
+clean techniques separately. **[pending: memorization probe]**
 
 **Gate thresholds are set by hand** (80% tuning resistance, no new false alarms). Recomputing the
 dev runs at 60–100% gives the same pass rate, because every proposed rule reached 100% on tuning: the

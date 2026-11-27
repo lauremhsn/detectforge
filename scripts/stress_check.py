@@ -25,35 +25,23 @@ from pathlib import Path
 
 import yaml
 from agent_metrics import CURRENT_PROMPTS, SPLIT_SINCE, split_of
-from label_agreement import PILOT, parse_labels
+from label_agreement import parse_labels
 
 from detectforge.eval.export import zero_shot
 from detectforge.harness import run
 from detectforge.reference.index import ReferenceIndex
 from detectforge.review import list_runs, load_run
 from detectforge.schemas import Event
+from detectforge.ui.lookalikes import load_lookalikes
 
 
-def lookalike_events() -> list[Event]:
-    """The pilot look-alikes as process-creation events (System32 binary, started from cmd.exe)."""
-    events = []
-    for k, (technique, cmd) in enumerate(PILOT, 1):
-        binary = cmd.split()[0].lower().removesuffix(".exe") + ".exe"
-        events.append(
-            Event(
-                event_id=f"pilot-{k}",
-                image=f"C:\\Windows\\System32\\{binary}",
-                command_line=cmd,
-                parent_image="C:\\Windows\\System32\\cmd.exe",
-                original_file_name=binary,
-                label="benign",
-                technique=technique,
-                transform="none",
-                base_id=f"pilot-{k}",
-                split="heldout",
-            )
-        )
-    return events
+def lookalike_events(data_dir: Path = Path("data")) -> list[Event]:
+    """The everyday look-alikes (data/eval/extra_lookalikes.yml) as benign process-creation events.
+
+    The same file the Review page checks every proposal against. The first 7 are the pilot items of
+    the labelling sheet (pilot-1..7 are extra-1..7), so their labels apply here.
+    """
+    return [x.event() for x in load_lookalikes(data_dir)]
 
 
 def rules_to_check(runs_dir: Path, data_dir: Path, split: str, budget: int) -> list[dict]:
@@ -106,9 +94,12 @@ def main() -> int:
     args = p.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
-    events = lookalike_events()
+    events = lookalike_events(args.data_dir)
     labels = (
-        {k: v[0] for k, v in parse_labels(args.labels.read_text(encoding="utf-8")).items()}
+        {
+            k.replace("pilot-", "extra-"): v[0]
+            for k, v in parse_labels(args.labels.read_text(encoding="utf-8")).items()
+        }
         if args.labels
         else {}
     )

@@ -33,7 +33,19 @@ substitution and recoding, which is the pattern Uetz et al. report.
 ## Arm 2: the same rules after agent hardening (the headline)
 
 The agent hardens a rule only when it misses some tuning variation. **3 of the 18 test rules**
-qualified; the other 15 already catch every tuning variation or have none to learn from.
+qualified; the other 15 already catch every tuning variation or have none to learn from, so DetectForge
+keeps them unchanged. Arm 2 is therefore reported two ways:
+
+| View | What it measures | Rules | Unseen variations caught |
+|---|---|---|---|
+| **System view** (vs Arm 1) | What a team gets from DetectForge: the hardened version where the agent worked (mean of its 3 runs), the community rule unchanged elsewhere | 15 test rules with unseen variations | **82% → 86%** |
+| **Agent effect** | What the agent's work did, on the rules it worked on | 3 rules, 9 runs | **50% → 72%** |
+
+The system view is diluted on purpose: 12 of the 15 rules weren't touched, because there was nothing
+the agent could see to improve. Scoring those as "no rule" would punish the system for correctly
+leaving them alone; scoring only the 3 would hide that most rules didn't need it. A rule that should
+have a run but has none (an outage, a crash) is reported as missing, never filled in.
+**[pending: the same two views from the three-arm runner after its fix]**
 
 | Rule | Runs | Unseen, before → after (per run) | Mean after | New false alarms |
 |---|---|---|---|---|
@@ -178,3 +190,11 @@ variations?
 - **Memorization probe (L7):** whether the model recalls each technique's SigmaHQ rule.
 - **Mutation behavior check in the VM (L5):** whether a sample of mutations still runs.
 - **Dev vs test agreement:** dev 77% and test 78% on written rules are consistent, so the dev results predicted the test results.
+
+## Do the numbers hold in a real SIEM?
+
+Yes, with the right export. In a real Elasticsearch 8.15 (`scripts/elastic_parity.py`), every one of the
+27 community rules exported as **EQL fires on exactly the same events** as DetectForge's matcher. The
+**Lucene** export is case-sensitive on command lines and loses 251 event matches; the UI exports EQL by
+default. Agent rules that use regular expressions are the weak spot: Elastic's EQL refuses 21 of the 26
+approved agent rules with regexes. See evaluation.md, SIEM parity.
