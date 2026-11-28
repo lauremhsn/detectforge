@@ -1,8 +1,9 @@
 """The landing page: what DetectForge is, the problem, how it works, the evidence, for whom, scope.
 
 A standalone page in front of the platform (no app tabs), built around DetectForge's own story: a
-replay console in the hero (a real case: a rule catches an attack, misses its disguised version, the
-agent forges a fix, the reviewer rejects it as too broad), the five evasion tricks on real commands,
+replay console in the hero (a real, approved case: a community rule misses two disguised versions of
+an attack, the agent's fix catches both, including a trick it never saw, and stays silent on legitimate
+use), the five evasion tricks on real commands,
 the forge loop, and the measured evidence. Its buttons are plain links into the platform (?page=...).
 
 Every number is computed from the saved results (ui/results.py) the same way as the report; the only
@@ -57,7 +58,7 @@ _CSS = f"""
 .lp-ln code{{color:#F4EFE7;font-family:inherit;overflow:hidden;text-overflow:ellipsis}}
 .lp-ln.note{{display:block;color:#C9B9A4;font-family:Inter,sans-serif;font-size:.84rem;white-space:normal}}
 .tag{{font-weight:800;font-size:.75rem;letter-spacing:.06em;border-radius:.3rem;padding:.1rem .45rem;flex:none}}
-.tag.ok{{background:#23452F;color:#7EE2A0}}.tag.ev{{background:#4A2618;color:#FF9F6B}}.tag.fa{{background:#4A3A12;color:#F7C873}}
+.tag.ok{{background:#23452F;color:#7EE2A0}}.tag.si{{background:#2A3542;color:#A9C4DD}}.tag.ev{{background:#4A2618;color:#FF9F6B}}.tag.fa{{background:#4A3A12;color:#F7C873}}
 .hid{{background:{EMBER};color:#fff;border-radius:.15rem;padding:0 .15rem}}
 .lp-sec{{max-width:1220px;margin:0 auto;padding:4rem 2.4rem 0}}
 .lp-sec h2{{font-size:2.1rem!important;font-weight:800;margin:0 0 .4rem;padding:0!important;color:{INK}}}
@@ -108,16 +109,37 @@ _MATRIX = "".join(
     for i in range(26 * 9)
 )
 
+# Run 1045b6d8 (frozen prompt, approved): the insertion example from Uetz et al., caught after hardening
+# although the agent never saw an insertion, and still silent on legitimate scheduled tasks.
 _CONSOLE = [
-    ("note", "▸ replaying <b>Dumping of Sensitive Hives via reg.exe</b> (SigmaHQ)"),
-    ("ok", "reg save HKLM\\sam C:\\Temp\\sam"),
-    ("ev", "reg s<span class='hid'>&nbsp;</span>ave HKLM\\sam C:\\Temp\\sam"),
-    ("note", "⚒ agent: reads the misses, edits the rule, re-tests on variants it may see…"),
-    ("ok", "reg s<span class='hid'>&nbsp;</span>ave HKLM\\sam C:\\Temp\\sam"),
-    ("fa", "reg query HKLM\\SECURITY\\Policy"),
-    ("note", "🧑‍⚖️ reviewer: <b>rejected</b>, the fix also flags routine admin work. Nothing deployed."),
+    ("note", "▸ replaying <b>Schtasks Creation With SYSTEM Privileges</b> (SigmaHQ)"),
+    ("ok", "schtasks /create /tn Upd /sc onstart /ru system …"),
+    (
+        "ev",
+        "schtasks /<span class='hid'>\"</span>create<span class='hid'>\"</span> /tn Upd /sc onstart /ru system …",
+    ),
+    (
+        "ev",
+        "schtasks <span class='hid'>-</span>create <span class='hid'>-</span>tn Upd <span class='hid'>-</span>sc onstart …",
+    ),
+    ("note", "⚒ agent: reads the misses, edits the rule, re-tests. It never sees the quoted trick."),
+    (
+        "ok",
+        "schtasks /<span class='hid'>\"</span>create<span class='hid'>\"</span> /tn Upd /sc onstart /ru system …",
+    ),
+    (
+        "ok",
+        "schtasks <span class='hid'>-</span>create <span class='hid'>-</span>tn Upd <span class='hid'>-</span>sc onstart …",
+    ),
+    ("si", "schtasks /create /tn CompanyUpdate /sc daily …"),
+    ("note", "🧑‍⚖️ reviewer: <b>approved</b>. Exported to the SIEM as an EQL query."),
 ]
-_TAG = {"ok": ("ok", "DETECTED"), "ev": ("ev", "EVADED"), "fa": ("fa", "FALSE ALARM")}
+_TAG = {
+    "ok": ("ok", "DETECTED"),
+    "ev": ("ev", "EVADED"),
+    "fa": ("fa", "FALSE ALARM"),
+    "si": ("si", "SILENT · LEGIT"),
+}
 
 _TRICKS = [
     (
