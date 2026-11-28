@@ -244,6 +244,14 @@
           ],
           "title": "False Alarm Rate"
         },
+        "incomplete_rules": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Incomplete Rules",
+          "type": "array"
+        },
         "overall_evasion_resistance": {
           "anyOf": [
             {
@@ -331,6 +339,40 @@
         "rules_fully_robust": {
           "title": "Rules Fully Robust",
           "type": "integer"
+        },
+        "runs_per_rule": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runs Per Rule"
+        },
+        "spread": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spread"
         },
         "valid_rules": {
           "title": "Valid Rules",

@@ -738,15 +738,29 @@ def _eval_compare(args: argparse.Namespace) -> int:
 
 
 def _print_comparison(c: arms.ThreeArmComparison) -> None:
-    print(f"{'arm':10} {'evasion':>8} {'tune':>7} {'held-out':>9} {'FP':>6} {'calls/rule':>11}")
+    print(
+        f"{'arm':10} {'evasion':>8} {'spread':>11} {'tune':>7} {'held-out':>9} {'FP':>6} {'calls/rule':>11}"
+    )
+    incomplete: list[str] = []
     for name, a in (("community", c.community), ("adapted", c.adapted), ("written", c.written)):
         calls = a.cost.calls_per_accepted_rule if a.cost else None
         split = a.resistance_by_mutation_split
+        band = f"[{_pct(a.spread[0])}-{_pct(a.spread[1])}]" if a.spread else ""
         print(
-            f"{name:10} {_pct(a.overall_evasion_resistance):>8} {_pct(split.get('tune')):>7} "
+            f"{name:10} {_pct(a.overall_evasion_resistance):>8} {band:>11} {_pct(split.get('tune')):>7} "
             f"{_pct(split.get('heldout')):>9} {_pct(a.false_alarm_rate):>6} "
             f"{('n/a' if calls is None else f'{calls:.1f}'):>11}"
         )
+        incomplete += a.incomplete_rules
+    if c.adapted_effect:
+        e = c.adapted_effect
+        print(
+            f"\nagent's own lift (the {e.touched_rules} rules it changed): "
+            f"{_pct(e.community_resistance)} community -> {_pct(e.adapted_resistance)} adapted"
+        )
+    if incomplete:
+        rules = ", ".join(sorted(set(incomplete)))
+        print(f"heads up: fewer than {arms.REPEATS} runs for {rules}")
 
 
 if __name__ == "__main__":  # also runnable as `python -m detectforge.cli`
