@@ -104,13 +104,47 @@ def test_run_agent_arm_finds_the_saved_run_by_setup_key(tmp_path):
     assert arm.cost.calls_per_accepted_rule == 3.0
 
 
-def test_missing_run_is_a_coverage_gap_not_a_valid_rule(tmp_path):
+def test_missing_harden_run_falls_back_to_the_community_rule(tmp_path):
     index = ReferenceIndex([_ref("r1", LITERAL)], "test")
+    community = arms.run_community_arm(SELECTION, index, EVENTS)
     arm = arms.run_agent_arm(SELECTION, index, EVENTS, tmp_path, "m", mode="harden")
-    assert arm.valid_rules == 0  # no saved run -> not a rule
-    assert arm.overall_evasion_resistance == 0.0  # its attacks all count as evaded
-    assert arm.rules[0].error == "no saved agent run"
+    assert arm.valid_rules == 1  # untouched rule is the community rule, not a gap
+    assert arm.overall_evasion_resistance == community.overall_evasion_resistance
+    assert arm.rules[0].error is None
+    assert arm.incomplete_rules == []  # 0 runs = untouched, not incomplete
     assert arm.cost.model_calls == 0 and arm.cost.calls_per_accepted_rule is None
+
+
+def test_missing_written_run_is_a_coverage_gap(tmp_path):
+    index = ReferenceIndex([_ref("r1", LITERAL)], "test")
+    arm = arms.run_agent_arm(SELECTION, index, EVENTS, tmp_path, "m", mode="write")
+    assert arm.valid_rules == 0  # no written rule -> a real gap
+    assert arm.overall_evasion_resistance == 0.0
+    assert arm.rules[0].error == "no saved agent run"
+
+
+def test_mean_and_spread_over_three_runs(tmp_path):
+    index = ReferenceIndex([_ref("r1", LITERAL)], "test")
+    prov = run_provenance(LITERAL, scope_events(EVENTS, TECH, {"b01"}), None, "m")
+    for i, y in enumerate((ROBUST, ROBUST, LITERAL)):  # two catch all, one is the evaded literal
+        outcome = HardeningOutcome(run=_run(y), heldout_evaluation=None, provenance=prov)
+        (tmp_path / f"run{i}.json").write_text(outcome.model_dump_json(), encoding="utf-8")
+    arm = arms.run_agent_arm(SELECTION, index, EVENTS, tmp_path, "m", mode="harden")
+    assert arm.runs_per_rule == 3
+    assert arm.incomplete_rules == []  # exactly 3 runs
+    lo, hi = arm.spread
+    assert lo < hi  # the literal run drags one slot below the robust ones
+    assert lo <= arm.overall_evasion_resistance <= hi
+
+
+def test_fewer_than_three_runs_is_flagged(tmp_path):
+    index = ReferenceIndex([_ref("r1", LITERAL)], "test")
+    prov = run_provenance(LITERAL, scope_events(EVENTS, TECH, {"b01"}), None, "m")
+    for i in range(2):  # only 2 of the wanted 3
+        outcome = HardeningOutcome(run=_run(ROBUST), heldout_evaluation=None, provenance=prov)
+        (tmp_path / f"run{i}.json").write_text(outcome.model_dump_json(), encoding="utf-8")
+    arm = arms.run_agent_arm(SELECTION, index, EVENTS, tmp_path, "m", mode="harden")
+    assert arm.incomplete_rules == ["r1"]
 
 
 def test_written_mode_starts_from_no_rule(tmp_path):
@@ -150,3 +184,15 @@ def test_three_arm_comparison_names_all_three(tmp_path):
     c = arms.three_arm_comparison(SELECTION, index, EVENTS, tmp_path, "m")
     assert [c.community.arm, c.adapted.arm, c.written.arm] == ["community", "adapted", "written"]
     assert json.loads(c.model_dump_json())["community"]["arm"] == "community"
+    assert c.adapted_effect is None  # no rule was touched
+
+
+def test_adapted_effect_is_only_the_touched_rules(tmp_path):
+    index = ReferenceIndex([_ref("r1", LITERAL)], "test")
+    prov = run_provenance(LITERAL, scope_events(EVENTS, TECH, {"b01"}), None, "m")
+    outcome = HardeningOutcome(run=_run(ROBUST), heldout_evaluation=None, provenance=prov)
+    (tmp_path / "run.json").write_text(outcome.model_dump_json(), encoding="utf-8")
+    c = arms.three_arm_comparison(SELECTION, index, EVENTS, tmp_path, "m")
+    assert c.adapted_effect.touched_rules == 1
+    assert c.adapted_effect.adapted_resistance == 1.0  # the robust rule the agent produced
+    assert c.adapted_effect.community_resistance == c.community.overall_evasion_resistance
